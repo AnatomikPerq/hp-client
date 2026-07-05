@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:onexray/pages/app_update/params.dart';
+import 'package:onexray/service/app_update/service.dart';
+
+abstract final class AppDialogRoutePath {
+  static const appUpdate = "/app-update";
+}
 
 enum AppPrimaryRoute {
   home("/home"),
@@ -24,8 +30,6 @@ enum AppPrimaryRoute {
 enum AppSecondaryDestination {
   overview("overview"),
   nodeInfo("node-info"),
-  outbound("outbound"),
-  raw("raw"),
   qrcode("qrcode"),
   share("share"),
   outboundSelect("outbound-select"),
@@ -39,8 +43,10 @@ enum AppSecondaryDestination {
   selectedApp("selected-app"),
   installedApp("installed-app"),
   xray("xray"),
-  xraySettingSimple("xray-setting-simple"),
-  xraySettingUI("xray-setting-ui"),
+  xrayFullConfig("xray-full-config"),
+  xrayFullConfigOutbounds("xray-full-config-outbounds"),
+  xrayProfileSimple("xray-profile-simple"),
+  xrayProfileUI("xray-profile-ui"),
   xrayLog("xray-log"),
   dns("dns"),
   fakeDns("fake-dns"),
@@ -71,7 +77,8 @@ enum AppSecondaryDestination {
   geoDatShow("geo-data-show"),
   ping("ping"),
   logs("logs"),
-  longText("long-text"),
+  logFile("log-file"),
+  configFileViewer("config-file-viewer"),
   autoUpdate("auto-update"),
   backup("backup"),
   appIcon("app-icon"),
@@ -120,5 +127,12 @@ extension AppNavigationContext on BuildContext {
     Object? extra,
   }) {
     return push<T>(scopedPath(destination), extra: extra);
+  }
+
+  Future<T?> pushAppUpdateDialog<T>(AppUpdateInfo updateInfo) {
+    return push<T>(
+      AppDialogRoutePath.appUpdate,
+      extra: AppUpdateDialogParams(updateInfo: updateInfo),
+    );
   }
 }

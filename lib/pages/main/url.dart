@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:onexray/pages/app_update/dialog.dart';
+import 'package:onexray/pages/app_update/params.dart';
 import 'package:onexray/pages/core/geo_data/add/page.dart';
 import 'package:onexray/pages/core/geo_data/list/page.dart';
 import 'package:onexray/pages/core/geo_data/list/params.dart';
@@ -7,8 +9,10 @@ import 'package:onexray/pages/core/geo_data/select/page.dart';
 import 'package:onexray/pages/core/geo_data/select/params.dart';
 import 'package:onexray/pages/core/geo_data/show/page.dart';
 import 'package:onexray/pages/core/geo_data/show/params.dart';
-import 'package:onexray/pages/core/log/long_text/page.dart';
-import 'package:onexray/pages/core/log/long_text/params.dart';
+import 'package:onexray/pages/core/log/log_file_viewer/page.dart';
+import 'package:onexray/pages/core/log/log_file_viewer/params.dart';
+import 'package:onexray/pages/core/log/config_file_viewer/page.dart';
+import 'package:onexray/pages/core/log/config_file_viewer/params.dart';
 import 'package:onexray/pages/core/log/page.dart';
 import 'package:onexray/pages/core/ping/page.dart';
 import 'package:onexray/pages/core/tun/installed_app/page.dart';
@@ -22,57 +26,60 @@ import 'package:onexray/pages/core/tun/selected_app/params.dart';
 import 'package:onexray/pages/core/tun/ui/page.dart';
 import 'package:onexray/pages/core/xray/outbound/page.dart';
 import 'package:onexray/pages/core/xray/outbound/params.dart';
+import 'package:onexray/pages/core/xray/full_config/outbounds/page.dart';
+import 'package:onexray/pages/core/xray/full_config/outbounds/params.dart';
+import 'package:onexray/pages/core/xray/full_config/page.dart';
+import 'package:onexray/pages/core/xray/full_config/params.dart';
 import 'package:onexray/pages/core/xray/raw/page.dart';
 import 'package:onexray/pages/core/xray/raw/params.dart';
 import 'package:onexray/pages/core/xray/raw_edit/page.dart';
 import 'package:onexray/pages/core/xray/raw_edit/params.dart';
-import 'package:onexray/pages/core/xray/setting/dns/page.dart';
-import 'package:onexray/pages/core/xray/setting/dns/params.dart';
-import 'package:onexray/pages/core/xray/setting/dns_hosts/page.dart';
-import 'package:onexray/pages/core/xray/setting/dns_hosts/params.dart';
-import 'package:onexray/pages/core/xray/setting/dns_server/page.dart';
-import 'package:onexray/pages/core/xray/setting/dns_server/params.dart';
-import 'package:onexray/pages/core/xray/setting/fake_dns/page.dart';
-import 'package:onexray/pages/core/xray/setting/fake_dns/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_http/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_http/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_ping/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_ping/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_socks/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_socks/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_sniffing/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_sniffing/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_tun/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbound_tun/params.dart';
-import 'package:onexray/pages/core/xray/setting/inbounds/page.dart';
-import 'package:onexray/pages/core/xray/setting/inbounds/params.dart';
-import 'package:onexray/pages/core/xray/setting/log/page.dart';
-import 'package:onexray/pages/core/xray/setting/log/params.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_black_hole/page.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_dns/page.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_dns/params.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_fragment/page.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_fragment/params.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_freedom/page.dart';
-import 'package:onexray/pages/core/xray/setting/outbound_freedom/params.dart';
-import 'package:onexray/pages/core/xray/setting/outbounds/page.dart';
-import 'package:onexray/pages/core/xray/setting/outbounds/params.dart';
-import 'package:onexray/pages/core/xray/setting/routing/page.dart';
-import 'package:onexray/pages/core/xray/setting/routing/params.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule/page.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule/params.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_dot/page.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_dot/params.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_out/page.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_out/params.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_query/page.dart';
-import 'package:onexray/pages/core/xray/setting/routing_rule_dns_query/params.dart';
-import 'package:onexray/pages/core/xray/setting/simple/page.dart';
-import 'package:onexray/pages/core/xray/setting/ui/page.dart';
-import 'package:onexray/pages/core/xray/setting/ui/params.dart';
-import 'package:onexray/pages/core/xray/setting_list/page.dart';
-import 'package:onexray/pages/home/home/controller.dart';
-import 'package:onexray/pages/home/home/page.dart';
+import 'package:onexray/pages/core/xray/profile/dns/page.dart';
+import 'package:onexray/pages/core/xray/profile/dns/params.dart';
+import 'package:onexray/pages/core/xray/profile/dns_hosts/page.dart';
+import 'package:onexray/pages/core/xray/profile/dns_hosts/params.dart';
+import 'package:onexray/pages/core/xray/profile/dns_server/page.dart';
+import 'package:onexray/pages/core/xray/profile/dns_server/params.dart';
+import 'package:onexray/pages/core/xray/profile/fake_dns/page.dart';
+import 'package:onexray/pages/core/xray/profile/fake_dns/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_http/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_http/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_ping/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_ping/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_socks/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_socks/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_sniffing/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_sniffing/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_tun/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_tun/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbounds/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbounds/params.dart';
+import 'package:onexray/pages/core/xray/profile/log/page.dart';
+import 'package:onexray/pages/core/xray/profile/log/params.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_black_hole/page.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_dns/page.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_dns/params.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_fragment/page.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_fragment/params.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_freedom/page.dart';
+import 'package:onexray/pages/core/xray/profile/outbound_freedom/params.dart';
+import 'package:onexray/pages/core/xray/profile/outbounds/page.dart';
+import 'package:onexray/pages/core/xray/profile/outbounds/params.dart';
+import 'package:onexray/pages/core/xray/profile/routing/page.dart';
+import 'package:onexray/pages/core/xray/profile/routing/params.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule/page.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule/params.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_dot/page.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_dot/params.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_out/page.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_out/params.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_query/page.dart';
+import 'package:onexray/pages/core/xray/profile/routing_rule_dns_query/params.dart';
+import 'package:onexray/pages/core/xray/profile/simple/page.dart';
+import 'package:onexray/pages/core/xray/profile/ui/page.dart';
+import 'package:onexray/pages/core/xray/profile/ui/params.dart';
+import 'package:onexray/pages/core/xray/profile_list/page.dart';
+import 'package:onexray/pages/home/main/page.dart';
 import 'package:onexray/pages/home/node_info/page.dart';
 import 'package:onexray/pages/home/outbound_select/page.dart';
 import 'package:onexray/pages/home/outbound_select/params.dart';
@@ -83,6 +90,7 @@ import 'package:onexray/pages/launch/first_run/page.dart';
 import 'package:onexray/pages/launch/privacy/page.dart';
 import 'package:onexray/pages/launch/splash/page.dart';
 import 'package:onexray/pages/main/adaptive_shell.dart';
+import 'package:onexray/pages/main/dialog_page.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/settings/app_icon/page.dart';
 import 'package:onexray/pages/settings/auto_update/page.dart';
@@ -121,6 +129,16 @@ abstract final class RouterPath {
       GoRoute(
         path: RouterPath.firstRun,
         builder: (_, _) => const FirstRunPage(),
+      ),
+      GoRoute(
+        path: AppDialogRoutePath.appUpdate,
+        pageBuilder: (_, state) => AppDialogPage<void>(
+          builder: (_) => _withDialogExtra<AppUpdateDialogParams>(
+            state,
+            "AppUpdateDialogParams",
+            (params) => AppUpdateDialog(params: params),
+          ),
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (_, _, navigationShell) {
@@ -181,17 +199,6 @@ _SharedSecondaryRoute _route(
 final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
   _route(AppSecondaryDestination.overview, (_, _) => const HomePage()),
   _route(AppSecondaryDestination.nodeInfo, (_, _) => const NodeInfoPage()),
-  _route(
-    AppSecondaryDestination.outbound,
-    (_, _) => const HomePage(initialWorkspace: HomeWorkspace.nodes),
-  ),
-  _route(
-    AppSecondaryDestination.raw,
-    (_, _) => const HomePage(
-      initialWorkspace: HomeWorkspace.nodes,
-      initialTabIndex: 1,
-    ),
-  ),
   _route(AppSecondaryDestination.qrcode, (_, _) => const QrcodePage()),
   _route(
     AppSecondaryDestination.share,
@@ -233,7 +240,7 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
       (params) => SubscriptionEditPage(params: params),
     ),
   ),
-  _route(AppSecondaryDestination.tun, (_, _) => const TunSettingUIPage()),
+  _route(AppSecondaryDestination.tun, (_, _) => const TunSettingsPage()),
   _route(
     AppSecondaryDestination.onDemandRule,
     (_, state) => _withExtra<OnDemandRuleParams>(
@@ -266,17 +273,33 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
       (params) => InstalledAppPage(params: params),
     ),
   ),
-  _route(AppSecondaryDestination.xray, (_, _) => const XraySettingListPage()),
+  _route(AppSecondaryDestination.xray, (_, _) => const XrayProfileListPage()),
   _route(
-    AppSecondaryDestination.xraySettingSimple,
-    (_, _) => const XraySettingSimplePage(),
+    AppSecondaryDestination.xrayFullConfig,
+    (_, state) => _withExtra<XrayFullConfigParams>(
+      state,
+      AppSecondaryDestination.xrayFullConfig,
+      (params) => XrayFullConfigPage(params: params),
+    ),
   ),
   _route(
-    AppSecondaryDestination.xraySettingUI,
-    (_, state) => _withExtra<XraySettingUIParams>(
+    AppSecondaryDestination.xrayFullConfigOutbounds,
+    (_, state) => _withExtra<XrayFullConfigOutboundsParams>(
       state,
-      AppSecondaryDestination.xraySettingUI,
-      (params) => XraySettingUIPage(params: params),
+      AppSecondaryDestination.xrayFullConfigOutbounds,
+      (params) => XrayFullConfigOutboundsPage(params: params),
+    ),
+  ),
+  _route(
+    AppSecondaryDestination.xrayProfileSimple,
+    (_, _) => const XrayProfileSimplePage(),
+  ),
+  _route(
+    AppSecondaryDestination.xrayProfileUI,
+    (_, state) => _withExtra<XrayProfileUIParams>(
+      state,
+      AppSecondaryDestination.xrayProfileUI,
+      (params) => XrayProfileUIPage(params: params),
     ),
   ),
   _route(
@@ -495,11 +518,19 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
   _route(AppSecondaryDestination.ping, (_, _) => const PingPage()),
   _route(AppSecondaryDestination.logs, (_, _) => const LogPage()),
   _route(
-    AppSecondaryDestination.longText,
-    (_, state) => _withExtra<LongTextParams>(
+    AppSecondaryDestination.logFile,
+    (_, state) => _withExtra<LogFileViewerParams>(
       state,
-      AppSecondaryDestination.longText,
-      (params) => LongTextPage(params: params),
+      AppSecondaryDestination.logFile,
+      (params) => LogFileViewerPage(params: params),
+    ),
+  ),
+  _route(
+    AppSecondaryDestination.configFileViewer,
+    (_, state) => _withExtra<ConfigFileViewerParams>(
+      state,
+      AppSecondaryDestination.configFileViewer,
+      (params) => ConfigFileViewerPage(params: params),
     ),
   ),
   _route(AppSecondaryDestination.autoUpdate, (_, _) => const AutoUpdatePage()),
@@ -508,7 +539,7 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
   _route(AppSecondaryDestination.toolbox, (_, _) => const ToolboxPage()),
   _route(AppSecondaryDestination.theme, (_, _) => const ThemePage()),
   _route(AppSecondaryDestination.language, (_, _) => const LanguagePage()),
-  _route(AppSecondaryDestination.support, (_, _) => const SettingPage()),
+  _route(AppSecondaryDestination.support, (_, _) => const SettingsPage()),
 ];
 
 Widget _withExtra<T>(
@@ -521,6 +552,18 @@ Widget _withExtra<T>(
     return builder(extra);
   }
   return _InvalidRoutePage(destination: destination, expectedType: "$T");
+}
+
+Widget _withDialogExtra<T>(
+  GoRouterState state,
+  String expectedType,
+  Widget Function(T params) builder,
+) {
+  final extra = state.extra;
+  if (extra is T) {
+    return builder(extra);
+  }
+  return _InvalidRouteDialog(expectedType: expectedType);
 }
 
 class _InvalidRoutePage extends StatelessWidget {
@@ -548,6 +591,28 @@ class _InvalidRoutePage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _InvalidRouteDialog extends StatelessWidget {
+  const _InvalidRouteDialog({required this.expectedType});
+
+  final String expectedType;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Invalid route"),
+      content: Text(
+        "Missing or invalid route parameters. Expected $expectedType.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Close"),
+        ),
+      ],
     );
   }
 }

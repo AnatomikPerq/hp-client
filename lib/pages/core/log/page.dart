@@ -16,7 +16,7 @@ class LogPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => LogController(),
-      child: BlocBuilder<LogController, LogCubitState>(
+      child: BlocBuilder<LogController, LogPageState>(
         builder: (context, state) {
           final controller = context.read<LogController>();
           return Scaffold(
@@ -53,18 +53,25 @@ class LogPage extends StatelessWidget {
   }
 
   Widget _logSection(BuildContext context, LogController controller) {
+    final localizations = AppLocalizations.of(context)!;
     return SettingSection(
-      title: AppLocalizations.of(context)!.logPageLogFile,
+      title: localizations.logPageLogFile,
       children: [
         SettingRow(
-          title: AppLocalizations.of(context)!.logPageAccess,
-          trailing: IconMenuPicker(
+          title: localizations.logPageAccess,
+          showChevron: true,
+          onTap: () => controller.gotoLogFile(
+            context,
+            localizations.logPageAccess,
+            XrayStateConstants.accessLogPath,
+          ),
+          trailing: AppMenuButton<IconMenuId>(
             icon: Icons.more_vert,
-            menus: [
+            entries: iconMenuEntries([
               if (!AppPlatform.isLinux) IconMenuId.share,
               IconMenuId.save,
-            ],
-            callback: (menuId) => controller.moreAction(
+            ]),
+            onSelected: (menuId) => controller.moreAction(
               context,
               XrayStateConstants.accessLogPath,
               menuId,
@@ -72,14 +79,20 @@ class LogPage extends StatelessWidget {
           ),
         ),
         SettingRow(
-          title: AppLocalizations.of(context)!.logPageError,
-          trailing: IconMenuPicker(
+          title: localizations.logPageError,
+          showChevron: true,
+          onTap: () => controller.gotoLogFile(
+            context,
+            localizations.logPageError,
+            XrayStateConstants.errorLogPath,
+          ),
+          trailing: AppMenuButton<IconMenuId>(
             icon: Icons.more_vert,
-            menus: [
+            entries: iconMenuEntries([
               if (!AppPlatform.isLinux) IconMenuId.share,
               IconMenuId.save,
-            ],
-            callback: (menuId) => controller.moreAction(
+            ]),
+            onSelected: (menuId) => controller.moreAction(
               context,
               XrayStateConstants.errorLogPath,
               menuId,

@@ -1,5 +1,44 @@
 import Foundation
 
+enum JsonTool {
+    static let decoder = JSONDecoder()
+    static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        return encoder
+    }()
+
+    private static let writingOptions: JSONSerialization.WritingOptions = [
+        .prettyPrinted,
+        .withoutEscapingSlashes,
+    ]
+
+    static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        try decoder.decode(type, from: data)
+    }
+
+    static func decode<T: Decodable>(_ type: T.Type, from text: String) throws -> T {
+        try decode(type, from: Data(text.utf8))
+    }
+
+    static func encode<T: Encodable>(_ value: T) throws -> Data {
+        try encoder.encode(value)
+    }
+
+    static func encodeText<T: Encodable>(_ value: T) throws -> String {
+        let data = try encode(value)
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    static func decodeObject(from data: Data) throws -> [String: Any] {
+        try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    static func encodeObject(_ object: Any) throws -> Data {
+        try JSONSerialization.data(withJSONObject: object, options: writingOptions)
+    }
+}
+
 enum OnDemandRuleMode: String, Codable {
     case connect
     case disconnect
@@ -43,7 +82,7 @@ struct StartVpnRequest: Codable {
 
     private static func fromUrl(_ url: URL) throws -> Self {
         let data = try Data(contentsOf: url)
-        let request = try JSONDecoder().decode(self, from: data)
+        let request = try JsonTool.decode(self, from: data)
         return request
     }
 
@@ -76,40 +115,6 @@ enum LibXrayMethod: String, Codable {
     case getXrayState
 }
 
-struct LibXrayEnvJson: Codable, Hashable {
-    var configLocation: String?
-    var confdirLocation: String?
-    var assetLocation: String?
-    var certLocation: String?
-    var useReadV: String?
-    var useFreedomSplice: String?
-    var useVmessPadding: String?
-    var useCone: String?
-    var useStrictJson: String?
-    var bufferSize: String?
-    var browserDialerAddress: String?
-    var xudpLog: String?
-    var xudpBaseKey: String?
-    var tunFd: String?
-
-    enum CodingKeys: String, CodingKey {
-        case configLocation = "xray.location.config"
-        case confdirLocation = "xray.location.confdir"
-        case assetLocation = "xray.location.asset"
-        case certLocation = "xray.location.cert"
-        case useReadV = "xray.buf.readv"
-        case useFreedomSplice = "xray.buf.splice"
-        case useVmessPadding = "xray.vmess.padding"
-        case useCone = "xray.cone.disabled"
-        case useStrictJson = "xray.json.strict"
-        case bufferSize = "xray.ray.buffer.size"
-        case browserDialerAddress = "xray.browser.dialer"
-        case xudpLog = "xray.xudp.show"
-        case xudpBaseKey = "xray.xudp.basekey"
-        case tunFd = "xray.tun.fd"
-    }
-}
-
 struct RunXrayRequest: Codable, Hashable {
     var configPath: String?
 }
@@ -117,37 +122,24 @@ struct RunXrayRequest: Codable, Hashable {
 struct LibXrayInvokeRequest: Codable, Hashable {
     var apiVersion: Int?
     var method: LibXrayMethod?
-    var env: LibXrayEnvJson?
     var payload: RunXrayRequest?
 
     init(
         apiVersion: Int? = 1,
         method: LibXrayMethod? = nil,
-        env: LibXrayEnvJson? = nil,
         payload: RunXrayRequest? = nil
     ) {
         self.apiVersion = apiVersion
         self.method = method
-        self.env = env
         self.payload = payload
     }
 
     static func fromText(_ text: String) throws -> Self {
-        let data = Data(text.utf8)
-        return try JSONDecoder().decode(Self.self, from: data)
+        try JsonTool.decode(Self.self, from: text)
     }
 
     func toText() throws -> String {
-        let data = try JSONEncoder().encode(self)
-        return String(data: data, encoding: .utf8) ?? "{}"
-    }
-
-    func withTunFd(_ fd: Int32) -> Self {
-        var request = self
-        var env = request.env ?? LibXrayEnvJson()
-        env.tunFd = "\(fd)"
-        request.env = env
-        return request
+        try JsonTool.encodeText(self)
     }
 }
 
@@ -166,8 +158,7 @@ struct LibXrayInvokeResponse: Codable, Hashable {
 
             if let data = text.data(using: .utf8) {
                 do {
-                    let decoder = JSONDecoder()
-                    let model = try decoder.decode(self, from: data)
+                    let model = try JsonTool.decode(self, from: data)
                     return model
                 } catch {}
             }

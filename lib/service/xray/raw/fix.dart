@@ -1,22 +1,24 @@
+import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/network/constants.dart';
+import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/service/core_run_mode/state.dart';
-import 'package:onexray/service/tun_setting/state.dart';
+import 'package:onexray/service/tun_settings/state.dart';
 import 'package:onexray/service/xray/constants.dart';
 import 'package:onexray/service/xray/runtime_inbounds.dart';
-import 'package:onexray/service/xray/setting/enum.dart';
-import 'package:onexray/service/xray/setting/inbounds_state.dart';
-import 'package:onexray/service/xray/setting/log_state.dart';
-import 'package:onexray/service/xray/setting/state.dart';
+import 'package:onexray/service/xray/profile/enum.dart';
+import 'package:onexray/service/xray/profile/inbounds_state.dart';
+import 'package:onexray/service/xray/profile/log_state.dart';
+import 'package:onexray/service/xray/profile/state.dart';
 import 'package:onexray/service/xray/tun_route.dart';
 
 class XrayRawFix {
   static Future<void> fixConfig(
     Map<String, dynamic> jsonMap,
-    XraySettingState settingState,
+    XrayProfileState settingState,
     CoreRunMode mode,
-    TunSettingState tunSettingState,
+    TunSettingsState tunSettingsState,
     XrayPorts ports,
     bool metricsEnabled,
   ) async {
@@ -24,6 +26,7 @@ class XrayRawFix {
 
     settingState.inbounds.ping.port = ports.pingPort;
     settingState.inbounds.ping.auth = ports.pingAuth;
+    fixEnv(jsonMap);
     XrayRuntimeInbounds.applyToRawJson(jsonMap, settingState.inbounds, mode);
     _fixPingRoutingRule(jsonMap);
     fixLog(jsonMap, disableLog: disableLog);
@@ -37,11 +40,25 @@ class XrayRawFix {
       _removeConfigInterface(jsonMap);
       _applyRawTunRouteConfig(
         jsonMap,
-        XrayTunRouteConfig.fromTunSetting(tunSettingState),
+        XrayTunRouteConfig.fromTunSetting(tunSettingsState),
       );
     } else {
       _removeConfigInterface(jsonMap);
     }
+  }
+
+  static void fixEnv(Map<String, dynamic> jsonMap) {
+    final current = jsonMap["env"];
+    final env = current is Map
+        ? Map<String, dynamic>.from(current)
+        : <String, dynamic>{};
+    env.addAll(
+      XrayEnv(
+        assetLocation: VpnConstants.datDir,
+        certLocation: VpnConstants.datDir,
+      ).toJson(),
+    );
+    jsonMap["env"] = env;
   }
 
   static void _removeConfigInterface(Map<String, dynamic> jsonMap) {

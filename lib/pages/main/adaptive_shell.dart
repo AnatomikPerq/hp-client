@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
-import 'package:onexray/pages/home/home/page.dart';
+import 'package:onexray/pages/home/main/page.dart';
 import 'package:onexray/pages/core/main/page.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/settings/main/page.dart';
@@ -98,7 +98,7 @@ class AdaptiveMainShell extends StatelessWidget {
       AppPrimaryRoute.home => localizations.homePageTitle,
       AppPrimaryRoute.subscriptions => localizations.subscriptionListPageTitle,
       AppPrimaryRoute.core => localizations.mainNavigationCore,
-      AppPrimaryRoute.settings => localizations.settingPageTitle,
+      AppPrimaryRoute.settings => localizations.settingsPageTitle,
     };
   }
 }
@@ -114,7 +114,7 @@ class PrimaryRootContent extends StatelessWidget {
       AppPrimaryRoute.home => const HomePage(),
       AppPrimaryRoute.subscriptions => const SubscriptionListPage(),
       AppPrimaryRoute.core => const CorePage(),
-      AppPrimaryRoute.settings => const SettingPage(),
+      AppPrimaryRoute.settings => const SettingsPage(),
     };
   }
 }

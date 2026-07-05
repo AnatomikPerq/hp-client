@@ -13,6 +13,12 @@ extension ConfigReader on CoreConfigData {
         case CoreConfigType.outbound:
           tags.add(_readOutboundTags());
           break;
+        case CoreConfigType.raw:
+          tags.add("JSON");
+          break;
+        case CoreConfigType.full:
+          tags.add("FULL");
+          break;
         default:
           break;
       }

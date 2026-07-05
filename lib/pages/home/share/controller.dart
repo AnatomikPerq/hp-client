@@ -21,13 +21,16 @@ import 'package:onexray/pages/home/share/params.dart';
 import 'package:onexray/service/xray/outbound/state.dart';
 import 'package:onexray/service/xray/outbound/state_reader.dart';
 import 'package:onexray/service/xray/outbound/state_writer.dart';
+import 'package:onexray/service/xray/full_config/state.dart';
+import 'package:onexray/service/xray/full_config/state_reader.dart';
+import 'package:onexray/service/xray/full_config/state_writer.dart';
 import 'package:onexray/service/xray/raw/db.dart';
 import 'package:onexray/service/xray/standard.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import 'package:zxing2/qrcode.dart';
 
-class ShareState {
+class SharePageState {
   final bool showLinkSection;
   final String linkSection;
   final String linkUrl;
@@ -39,7 +42,7 @@ class ShareState {
   final String jsonFileSection;
   final String jsonFileContent;
 
-  const ShareState({
+  const SharePageState({
     required this.showLinkSection,
     required this.linkSection,
     required this.linkUrl,
@@ -52,7 +55,7 @@ class ShareState {
     required this.jsonFileContent,
   });
 
-  factory ShareState.initial() => const ShareState(
+  factory SharePageState.initial() => const SharePageState(
     showLinkSection: false,
     linkSection: "",
     linkUrl: "",
@@ -65,7 +68,7 @@ class ShareState {
     jsonFileContent: "",
   );
 
-  ShareState copyWith({
+  SharePageState copyWith({
     bool? showLinkSection,
     String? linkSection,
     String? linkUrl,
@@ -77,7 +80,7 @@ class ShareState {
     String? jsonFileSection,
     String? jsonFileContent,
   }) {
-    return ShareState(
+    return SharePageState(
       showLinkSection: showLinkSection ?? this.showLinkSection,
       linkSection: linkSection ?? this.linkSection,
       linkUrl: linkUrl ?? this.linkUrl,
@@ -92,9 +95,9 @@ class ShareState {
   }
 }
 
-class ShareController extends Cubit<ShareState> {
+class ShareController extends Cubit<SharePageState> {
   final SharePageParams params;
-  ShareController(this.params) : super(ShareState.initial()) {
+  ShareController(this.params) : super(SharePageState.initial()) {
     _initParams();
   }
 
@@ -132,7 +135,12 @@ class ShareController extends Cubit<ShareState> {
             final text = XrayRawDb.readFromDbData(config);
             await _finishJsonExport(text, config.name);
             break;
-          case CoreConfigType.setting:
+          case CoreConfigType.full:
+            final state = XrayFullConfigState()..readFromDbData(config);
+            final text = JsonTool.encoder.convert(state.xrayJson.toJson());
+            await _finishJsonExport(text, config.name);
+            break;
+          case CoreConfigType.profile:
             final text = _readConfigDataText(config);
             await _finishJsonExport(text, config.name);
             break;
@@ -460,7 +468,7 @@ class ShareController extends Cubit<ShareState> {
 String _readConfigDataText(CoreConfigData config) {
   try {
     final jsonData = JsonTool.decodeBase64ToJson(config.data ?? "");
-    return JsonTool.encoderForFile.convert(jsonData);
+    return JsonTool.encoder.convert(jsonData);
   } catch (_) {
     try {
       return utf8.decode(base64Decode(config.data ?? ""));
@@ -473,7 +481,7 @@ String _readConfigDataText(CoreConfigData config) {
 String _formatJsonText(String text) {
   try {
     final jsonData = JsonTool.decoder.convert(text);
-    return JsonTool.encoderForFile.convert(jsonData);
+    return JsonTool.encoder.convert(jsonData);
   } catch (_) {
     return text;
   }

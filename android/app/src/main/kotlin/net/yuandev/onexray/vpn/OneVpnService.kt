@@ -18,12 +18,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import libXray.DialerController
 import libXray.LibXray
 import net.yuandev.onexray.MainActivity
 import net.yuandev.onexray.R
-import net.yuandev.onexray.pigeon.LibXrayEnvJson
+import net.yuandev.onexray.pigeon.JsonTool
 import net.yuandev.onexray.pigeon.LibXrayInvokeRequest
 import net.yuandev.onexray.pigeon.LibXrayInvokeResponse
 import net.yuandev.onexray.pigeon.LibXrayMethod
@@ -65,10 +69,6 @@ class OneVpnService : VpnService() {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val invokeJson = Json {
-        explicitNulls = false
-        ignoreUnknownKeys = true
-    }
 
     class VPNController : DialerController {
         var vpn: OneVpnService? = null
@@ -142,11 +142,7 @@ class OneVpnService : VpnService() {
         val runPath = File(this.filesDir.path, "run")
         val file = File(runPath.path, "start.json")
         val data = file.readText()
-        val decoder = Json {
-            explicitNulls = false
-            ignoreUnknownKeys = true
-        }
-        return decoder.decodeFromString<StartVpnRequest>(data)
+        return JsonTool.json.decodeFromString<StartVpnRequest>(data)
     }
 
     private fun stopTun() {
@@ -399,7 +395,7 @@ class OneVpnService : VpnService() {
     }
 
     private fun validateRunXrayResult(result: String) {
-        val response = invokeJson.decodeFromString<LibXrayInvokeResponse>(result)
+        val response = JsonTool.json.decodeFromString<LibXrayInvokeResponse>(result)
         if (response.success != true) {
             val error = response.error ?: "runXray failed"
             throw IllegalStateException(error)
@@ -408,12 +404,32 @@ class OneVpnService : VpnService() {
 
     private fun stopXray() {
         val request = LibXrayInvokeRequest(method = LibXrayMethod.STOP_XRAY)
-        LibXray.invoke(invokeJson.encodeToString(request))
+        LibXray.invoke(JsonTool.json.encodeToString(request))
     }
 
     private fun withTunFd(requestJson: String, fd: Int): String {
-        val request = invokeJson.decodeFromString<LibXrayInvokeRequest>(requestJson)
-        val env = (request.env ?: LibXrayEnvJson()).copy(tunFd = fd.toString())
-        return invokeJson.encodeToString(request.copy(env = env))
+        val request = JsonTool.json.decodeFromString<LibXrayInvokeRequest>(requestJson)
+        val configPath = request.payload?.configPath
+            ?: throw IllegalStateException("configPath is empty")
+        if (configPath.isEmpty()) {
+            throw IllegalStateException("configPath is empty")
+        }
+        val configFile = File(configPath)
+        val root = JsonTool.json.parseToJsonElement(configFile.readText()).jsonObject
+        val currentEnv = root["env"]?.jsonObject ?: JsonObject(emptyMap())
+        val env = buildJsonObject {
+            currentEnv.forEach { (key, value) -> put(key, value) }
+            put("xray.tun.fd", JsonPrimitive(fd.toString()))
+        }
+        val updated = buildJsonObject {
+            root.forEach { (key, value) ->
+                if (key != "env") {
+                    put(key, value)
+                }
+            }
+            put("env", env)
+        }
+        configFile.writeText(JsonTool.json.encodeToString(updated))
+        return JsonTool.json.encodeToString(request)
     }
 }

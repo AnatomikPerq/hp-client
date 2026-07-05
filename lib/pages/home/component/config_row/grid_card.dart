@@ -5,37 +5,39 @@ import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/home/component/config_row/controller.dart';
 import 'package:onexray/pages/home/component/config_row/enum.dart';
-import 'package:onexray/pages/home/home/controller.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/widget/menu_picker.dart';
 import 'package:onexray/service/db/config_reader.dart';
 import 'package:onexray/service/event_bus/service.dart';
 
 class SelectableConfigGridCard extends StatelessWidget {
-  const SelectableConfigGridCard({super.key, required this.item});
+  const SelectableConfigGridCard({
+    super.key,
+    required this.item,
+    required this.onSelect,
+    this.selectedId,
+  });
 
   final ConfigItem item;
+  final int? selectedId;
+  final ValueChanged<CoreConfigData> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final data = item.config;
-    final homeController = context.read<HomeController>();
-    final selectedConfigId = context.select<HomeController, int>(
-      (controller) => controller.state.configId,
-    );
     final runningId = context.select<AppEventBus, int>(
       (eventBus) => eventBus.state.runningId,
     );
     final status = data.id == runningId
         ? ConfigRowStatus.running
-        : data.id == selectedConfigId
+        : data.id == selectedId
         ? ConfigRowStatus.selected
         : ConfigRowStatus.unselected;
     return ConfigGridCard(
       data: data,
       status: status,
       moreMenus: _moreMenus(),
-      tapCallback: () => homeController.updateConfigId(context, data.id),
+      tapCallback: () => onSelect(data),
     );
   }
 
@@ -134,10 +136,10 @@ class ConfigGridCard extends StatelessWidget {
                     size: 20,
                     color: ColorManager.secondaryText(context),
                   ),
-                  child: IconMenuPicker(
+                  child: AppMenuButton<IconMenuId>(
                     icon: Icons.more_vert,
-                    menus: moreMenus,
-                    callback: (menuId) =>
+                    entries: iconMenuEntries(moreMenus),
+                    onSelected: (menuId) =>
                         _controller.moreAction(context, data, menuId),
                   ),
                 ),

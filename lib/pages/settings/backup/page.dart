@@ -18,7 +18,7 @@ class BackupPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => BackupController(),
-      child: BlocBuilder<BackupController, BackupState>(
+      child: BlocBuilder<BackupController, BackupPageState>(
         builder: (context, state) {
           final controller = context.read<BackupController>();
           return Scaffold(
@@ -42,7 +42,7 @@ class BackupPage extends StatelessWidget {
 
   Widget _body(
     BuildContext context,
-    BackupState state,
+    BackupPageState state,
     BackupController controller,
   ) {
     return DefaultTextStyle.merge(
@@ -62,7 +62,7 @@ class BackupPage extends StatelessWidget {
 
   Widget _fileList(
     BuildContext context,
-    BackupState state,
+    BackupPageState state,
     BackupController controller,
   ) {
     if (state.files.isEmpty) {
@@ -84,7 +84,7 @@ class BackupPage extends StatelessWidget {
 
   Widget _itemRow(
     BuildContext context,
-    BackupState state,
+    BackupPageState state,
     BackupController controller,
     int index,
   ) {
@@ -97,14 +97,15 @@ class BackupPage extends StatelessWidget {
       trailing: ActionCluster(
         children: [
           Radio<String>(value: file.name, toggleable: true),
-          IconMenuPicker(
+          AppMenuButton<IconMenuId>(
             icon: Icons.more_vert,
-            menus: [
+            entries: iconMenuEntries([
               if (!AppPlatform.isLinux) IconMenuId.share,
               IconMenuId.save,
               IconMenuId.delete,
-            ],
-            callback: (menuId) => controller.moreAction(context, file, menuId),
+            ]),
+            onSelected: (menuId) =>
+                controller.moreAction(context, file, menuId),
           ),
         ],
       ),
@@ -113,7 +114,7 @@ class BackupPage extends StatelessWidget {
 
   Widget _bottomButton(
     BuildContext context,
-    BackupState state,
+    BackupPageState state,
     BackupController controller,
   ) {
     final processing = state.backingUp || state.restoring;

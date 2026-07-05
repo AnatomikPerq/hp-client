@@ -6,21 +6,22 @@ import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/pages/core/tun/installed_app/params.dart';
 import 'package:onexray/pages/core/tun/selected_app/params.dart';
 import 'package:onexray/pages/main/navigation.dart';
+import 'package:onexray/pages/widget/menu_picker.dart';
 
-class SelectedAppState {
+class SelectedAppPageState {
   final List<AndroidAppInfo> apps;
 
-  const SelectedAppState({this.apps = const []});
+  const SelectedAppPageState({this.apps = const []});
 
-  SelectedAppState copyWith({List<AndroidAppInfo>? apps}) {
-    return SelectedAppState(apps: apps ?? this.apps);
+  SelectedAppPageState copyWith({List<AndroidAppInfo>? apps}) {
+    return SelectedAppPageState(apps: apps ?? this.apps);
   }
 }
 
-class SelectedAppController extends Cubit<SelectedAppState> {
+class SelectedAppController extends Cubit<SelectedAppPageState> {
   final SelectedAppParams params;
 
-  SelectedAppController(this.params) : super(const SelectedAppState()) {
+  SelectedAppController(this.params) : super(const SelectedAppPageState()) {
     _initParams();
     _queryApps();
   }
@@ -58,7 +59,11 @@ class SelectedAppController extends Cubit<SelectedAppState> {
     emit(state.copyWith(apps: selectedApps));
   }
 
-  void moreAction(BuildContext context, AndroidAppInfo appInfo, String menuId) {
+  void moreAction(
+    BuildContext context,
+    AndroidAppInfo appInfo,
+    IconMenuId menuId,
+  ) {
     _selections.remove(appInfo.packageName);
     final newApps = List<AndroidAppInfo>.from(state.apps)..remove(appInfo);
     emit(state.copyWith(apps: newApps));

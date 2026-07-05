@@ -6,7 +6,6 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
-import 'package:onexray/pages/app_update/dialog.dart';
 import 'package:onexray/pages/core/geo_data/list/params.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/mixin/alert.dart';
@@ -17,26 +16,26 @@ import 'package:onexray/service/event_bus/service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class SettingState {
+class SettingsPageState {
   final String appVersion;
   final String xrayVersion;
   final bool checkingUpdate;
   final bool clearingData;
 
-  const SettingState({
+  const SettingsPageState({
     this.appVersion = "",
     this.xrayVersion = "",
     this.checkingUpdate = false,
     this.clearingData = false,
   });
 
-  SettingState copyWith({
+  SettingsPageState copyWith({
     String? appVersion,
     String? xrayVersion,
     bool? checkingUpdate,
     bool? clearingData,
   }) {
-    return SettingState(
+    return SettingsPageState(
       appVersion: appVersion ?? this.appVersion,
       xrayVersion: xrayVersion ?? this.xrayVersion,
       checkingUpdate: checkingUpdate ?? this.checkingUpdate,
@@ -45,8 +44,8 @@ class SettingState {
   }
 }
 
-class SettingController extends Cubit<SettingState> {
-  SettingController() : super(const SettingState()) {
+class SettingsController extends Cubit<SettingsPageState> {
+  SettingsController() : super(const SettingsPageState()) {
     _readVersion();
   }
 
@@ -59,7 +58,7 @@ class SettingController extends Cubit<SettingState> {
     }
   }
 
-  void gotoTunSetting(BuildContext context) {
+  void gotoTunSettings(BuildContext context) {
     context.goScoped(AppSecondaryDestination.tun);
   }
 
@@ -135,7 +134,7 @@ class SettingController extends Cubit<SettingState> {
     BuildContext context,
     AppUpdateInfo updateInfo,
   ) async {
-    await AppUpdateDialog.show(context, updateInfo);
+    await context.pushAppUpdateDialog(updateInfo);
   }
 
   Future<void> clearData(BuildContext context) async {
@@ -173,7 +172,7 @@ class SettingController extends Cubit<SettingState> {
     ContextAlert.showToast(
       context,
       localizations.actionResult(
-        localizations.settingPageClearData,
+        localizations.settingsPageClearData,
         success ? localizations.resultSuccess : localizations.resultFailed,
       ),
     );
@@ -187,8 +186,8 @@ class SettingController extends Cubit<SettingState> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(localizations.settingPageClearDataDialogTitle),
-        content: Text(localizations.settingPageClearDataDialogContent),
+        title: Text(localizations.settingsPageClearDataDialogTitle),
+        content: Text(localizations.settingsPageClearDataDialogContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

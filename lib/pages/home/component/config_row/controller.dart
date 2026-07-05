@@ -3,25 +3,22 @@ import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/pages/home/share/params.dart';
 import 'package:onexray/pages/core/xray/outbound/params.dart';
+import 'package:onexray/pages/core/xray/full_config/params.dart';
 import 'package:onexray/pages/core/xray/raw/params.dart';
-import 'package:onexray/pages/core/xray/setting/ui/params.dart';
+import 'package:onexray/pages/core/xray/profile/ui/params.dart';
 import 'package:onexray/pages/widget/menu_picker.dart';
 import 'package:onexray/service/xray/outbound/state.dart';
-import 'package:onexray/service/xray/setting/simple_state.dart';
+import 'package:onexray/service/xray/profile/simple_state.dart';
 import 'package:onexray/pages/main/navigation.dart';
 
 class ConfigRowController {
   Future<void> moreAction(
     BuildContext context,
     CoreConfigData config,
-    String menuId,
+    IconMenuId menuId,
   ) async {
-    final id = IconMenuId.fromString(menuId);
-    if (id == null) {
-      return;
-    }
     final db = AppDatabase();
-    switch (id) {
+    switch (menuId) {
       case IconMenuId.edit:
         _gotoConfig(context, config);
         break;
@@ -56,13 +53,20 @@ class ConfigRowController {
         final params = XrayRawParams(config.id);
         context.pushScoped(AppSecondaryDestination.xrayRaw, extra: params);
         break;
-      case CoreConfigType.setting:
-        if (config.id == XraySettingSimple.simpleId) {
-          context.pushScoped(AppSecondaryDestination.xraySettingSimple);
+      case CoreConfigType.full:
+        final params = XrayFullConfigParams(config.id);
+        context.pushScoped(
+          AppSecondaryDestination.xrayFullConfig,
+          extra: params,
+        );
+        break;
+      case CoreConfigType.profile:
+        if (config.id == XrayProfileSimple.simpleId) {
+          context.pushScoped(AppSecondaryDestination.xrayProfileSimple);
         } else {
-          final params = XraySettingUIParams(config.id);
+          final params = XrayProfileUIParams(config.id);
           context.pushScoped(
-            AppSecondaryDestination.xraySettingUI,
+            AppSecondaryDestination.xrayProfileUI,
             extra: params,
           );
         }
