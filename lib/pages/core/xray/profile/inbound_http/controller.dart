@@ -27,14 +27,19 @@ class InboundHttpController extends Cubit<InboundHttpPageState> {
   final passController = TextEditingController();
 
   void _initParams() {
-    final state = params.state;
-    portController.text = state.port;
-    userController.text = state.user;
-    passController.text = state.pass;
-    emit(InboundHttpPageState(httpState: state));
+    final httpState = params.state.copy();
+    portController.text = httpState.port;
+    userController.text = httpState.user;
+    passController.text = httpState.pass;
+    emit(InboundHttpPageState(httpState: httpState));
   }
 
-  void save(BuildContext context) {
+  void updateListen(String value) {
+    state.httpState.listen = value;
+    emit(InboundHttpPageState(httpState: state.httpState));
+  }
+
+  Future<void> save(BuildContext context) async {
     final port = portController.text.trim();
     final portValue = int.tryParse(port);
     if (portValue == null || portValue <= 0 || portValue > 65535) {
@@ -48,7 +53,39 @@ class InboundHttpController extends Cubit<InboundHttpPageState> {
     httpState.user = userController.text.trim();
     httpState.pass = passController.text.trim();
     httpState.removeWhitespace();
+    if (_needsOpenProxyConfirmation(httpState)) {
+      final confirmed = await _showOpenProxyDialog(context);
+      if (confirmed != true || !context.mounted) {
+        return;
+      }
+    }
     context.pop<InboundHttpState>(httpState);
+  }
+
+  bool _needsOpenProxyConfirmation(InboundHttpState httpState) {
+    return httpState.listen == InboundHttpState.allInterfacesListen &&
+        !httpState.authEnabled;
+  }
+
+  Future<bool?> _showOpenProxyDialog(BuildContext context) {
+    final localizations = appLocalizationsNoContext();
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(localizations.inboundProxyPageOpenProxyWarningTitle),
+        content: Text(localizations.inboundProxyPageOpenProxyWarningContent),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(localizations.buttonCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(localizations.buttonOK),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

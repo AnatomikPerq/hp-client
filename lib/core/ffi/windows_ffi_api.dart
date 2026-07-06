@@ -19,64 +19,68 @@ class WindowsFfiApi extends BaseFfiApi {
   //===================================
 
   static const _coreExe = "OneXrayCore.exe";
+  static const _waitObject0 = 0;
+  static const _waitTimeout = 258;
+  static const _waitFailed = 0xFFFFFFFF;
+  static const _stopProxyCoreFailed = "stop proxy core failed";
 
-  HANDLE? _coreProcess;
+  HANDLE? _processHandle;
 
   @override
   Future<bool> startCore(LibXrayRunConfig request) async {
-    try {
-      final xrayConfigPath = request.request.configPath;
-      if (xrayConfigPath == null || xrayConfigPath.isEmpty) {
-        ygLogger("start core failed: configPath is empty");
-        return false;
-      }
-
-      final parameters = <String>[
-        "run",
-        "-config",
-        _quoteArg(xrayConfigPath),
-      ].join(" ");
-      final result = _runCommand(Tuple3("runas", corePath, parameters));
-      if (!result.item1) {
-        final errorCode = GetLastError();
-        ygLogger("Start core failed. errorCode=$errorCode");
-        return false;
-      }
-      _coreProcess = result.item2;
-      ygLogger("Core process started with handle: $_coreProcess");
-    } catch (e) {
-      ygLogger("start core failed: $e");
+    final xrayConfigPath = request.request.configPath;
+    if (xrayConfigPath == null || xrayConfigPath.isEmpty) {
+      ygLogger("start core failed: configPath is empty");
       return false;
     }
 
-    await Future.delayed(Duration(seconds: 1));
-    return true;
+    return _startCoreProcess(
+      label: "core",
+      verb: "runas",
+      configPath: xrayConfigPath,
+      verifyRunning: false,
+    );
+  }
+
+  Future<bool> startProxyCore(String configPath) async {
+    if (configPath.isEmpty) {
+      ygLogger("start proxy core failed: configPath is empty");
+      return false;
+    }
+
+    if (!await _killExistingCoreProcesses()) {
+      return false;
+    }
+    if (_existingCoreProcessRunning()) {
+      ygLogger("start proxy core failed: existing $_coreExe is still running");
+      return false;
+    }
+    return _startCoreProcess(
+      label: "proxy core",
+      verb: "open",
+      configPath: configPath,
+      verifyRunning: true,
+      isRunning: () => _processRunning(label: "proxy core"),
+    );
   }
 
   @override
   void stopCore() {
-    if (_coreProcess == null) {
-      return;
-    }
+    _stopProcess(label: "core");
+  }
 
-    final processHandle = _coreProcess!;
-    ygLogger("Stopping core process with handle: $processHandle");
+  Future<String> stopProxyCore() async {
+    final stopped = _processHandle == null
+        ? _killExistingCoreProcessesSync()
+        : _stopProcess(label: "proxy core");
+    return stopped ? "" : _stopProxyCoreFailed;
+  }
 
-    final terminateResult = TerminateProcess(processHandle, 0);
-    if (terminateResult.value) {
-      final waitResult = WaitForSingleObject(processHandle, 3000);
-      ygLogger("Core process termination wait result: $waitResult");
-    } else {
-      final errorCode = GetLastError();
-      ygLogger("TerminateProcess failed. errorCode=$errorCode");
+  bool proxyCoreRunning() {
+    if (_processRunning(label: "proxy core")) {
+      return true;
     }
-
-    final closeResult = CloseHandle(processHandle);
-    if (!closeResult.value) {
-      final errorCode = GetLastError();
-      ygLogger("CloseHandle failed. errorCode=$errorCode");
-    }
-    _coreProcess = null;
+    return _existingCoreProcessRunning();
   }
 
   String get corePath {
@@ -110,6 +114,172 @@ class WindowsFfiApi extends BaseFfiApi {
       free(lpVerb);
       free(lpFile);
       free(lpParameters);
+    }
+  }
+
+  Future<bool> _startCoreProcess({
+    required String label,
+    required String verb,
+    required String configPath,
+    required bool verifyRunning,
+    bool Function()? isRunning,
+  }) async {
+    if (!_stopProcess(label: label)) {
+      return false;
+    }
+
+    try {
+      final result = _runCommand(
+        Tuple3(verb, corePath, _buildRunParameters(configPath)),
+      );
+      if (!result.item1) {
+        final errorCode = GetLastError();
+        ygLogger("Start $label failed. errorCode=$errorCode");
+        return false;
+      }
+      _processHandle = result.item2;
+      ygLogger("$label process started with handle: ${result.item2}");
+    } catch (e) {
+      ygLogger("start $label failed: $e");
+      return false;
+    }
+
+    await Future.delayed(Duration(seconds: 1));
+    return verifyRunning ? isRunning?.call() ?? false : true;
+  }
+
+  String _buildRunParameters(String configPath) {
+    return <String>["run", "-config", _quoteArg(configPath)].join(" ");
+  }
+
+  Future<bool> _killExistingCoreProcesses() async {
+    try {
+      final result = await Process.run("taskkill", ["/F", "/IM", _coreExe]);
+      return _handleKillExistingCoreProcessesResult(result);
+    } catch (e) {
+      ygLogger("kill existing core processes failed: $e");
+      return !_existingCoreProcessRunning();
+    }
+  }
+
+  bool _killExistingCoreProcessesSync() {
+    try {
+      final result = Process.runSync("taskkill", ["/F", "/IM", _coreExe]);
+      return _handleKillExistingCoreProcessesResult(result);
+    } catch (e) {
+      ygLogger("kill existing core processes failed: $e");
+      return !_existingCoreProcessRunning();
+    }
+  }
+
+  bool _handleKillExistingCoreProcessesResult(ProcessResult result) {
+    if (result.exitCode == 0) {
+      ygLogger("Killed existing $_coreExe processes");
+      return true;
+    }
+    if (!_existingCoreProcessRunning()) {
+      return true;
+    }
+    ygLogger(
+      "kill existing core processes failed. "
+      "exitCode=${result.exitCode} stderr=${result.stderr}",
+    );
+    return false;
+  }
+
+  bool _existingCoreProcessRunning() {
+    try {
+      final result = Process.runSync("tasklist", [
+        "/FI",
+        "IMAGENAME eq $_coreExe",
+        "/NH",
+      ]);
+      if (result.exitCode != 0) {
+        return false;
+      }
+      final output = result.stdout.toString().toLowerCase();
+      final coreExe = _coreExe.toLowerCase();
+      return output
+          .split("\n")
+          .map((line) => line.trim())
+          .any((line) => line.startsWith(coreExe));
+    } catch (e) {
+      ygLogger("check existing core process failed: $e");
+      return false;
+    }
+  }
+
+  bool _stopProcess({required String label}) {
+    final processHandle = _processHandle;
+    if (processHandle == null) {
+      return true;
+    }
+
+    ygLogger("Stopping $label process with handle: $processHandle");
+    final currentWaitResult = WaitForSingleObject(processHandle, 0);
+    if (currentWaitResult.value == _waitObject0) {
+      ygLogger(
+        "$label process already stopped. wait result: $currentWaitResult",
+      );
+      _closeProcessHandle(label, processHandle);
+      _processHandle = null;
+      return true;
+    }
+    if (currentWaitResult.value != _waitTimeout) {
+      _logWaitError(label, currentWaitResult.value);
+      return false;
+    }
+
+    final terminateResult = TerminateProcess(processHandle, 0);
+    if (terminateResult.value) {
+      final waitResult = WaitForSingleObject(processHandle, 3000);
+      ygLogger("$label process termination wait result: $waitResult");
+      if (waitResult.value != _waitObject0) {
+        return false;
+      }
+    } else {
+      final errorCode = GetLastError();
+      ygLogger("Terminate $label process failed. errorCode=$errorCode");
+      return false;
+    }
+
+    _closeProcessHandle(label, processHandle);
+    _processHandle = null;
+    return true;
+  }
+
+  bool _processRunning({required String label}) {
+    final processHandle = _processHandle;
+    if (processHandle == null) {
+      return false;
+    }
+
+    final waitResult = WaitForSingleObject(processHandle, 0);
+    if (waitResult.value == _waitTimeout) {
+      return true;
+    }
+    if (waitResult.value != _waitObject0) {
+      _logWaitError(label, waitResult.value);
+      return true;
+    }
+
+    _closeProcessHandle(label, processHandle);
+    _processHandle = null;
+    return false;
+  }
+
+  void _logWaitError(String label, int waitResult) {
+    final errorCode = waitResult == _waitFailed ? GetLastError() : null;
+    ygLogger(
+      "Wait $label process failed. waitResult=$waitResult errorCode=$errorCode",
+    );
+  }
+
+  void _closeProcessHandle(String label, HANDLE processHandle) {
+    final closeResult = CloseHandle(processHandle);
+    if (!closeResult.value) {
+      final errorCode = GetLastError();
+      ygLogger("Close $label process handle failed. errorCode=$errorCode");
     }
   }
 

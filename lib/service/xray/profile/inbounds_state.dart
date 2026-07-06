@@ -218,7 +218,17 @@ class InboundPingState {
 }
 
 class InboundSocksState {
-  final listen = NetConstants.proxyHost;
+  static const allInterfacesListen = "";
+  static final localListen = NetConstants.proxyHost;
+  static const _localhostListen = "localhost";
+  static const _ipv6LoopbackListen = "::1";
+  static const _bracketedIpv6LoopbackListen = "[::1]";
+  static const _ipv4AllInterfacesListen = "0.0.0.0";
+  static const _ipv6AllInterfacesListen = "::";
+  static const _bracketedIpv6AllInterfacesListen = "[::]";
+  static final listenValues = <String>[allInterfacesListen, localListen];
+
+  var listen = localListen;
   final protocol = XrayInboundProtocol.socks;
   final tag = RoutingInboundTag.socksIn;
   final defaultPort = "11024";
@@ -227,7 +237,16 @@ class InboundSocksState {
   var user = "";
   var pass = "";
 
+  InboundSocksState copy() {
+    return InboundSocksState()
+      ..listen = listen
+      ..port = port
+      ..user = user
+      ..pass = pass;
+  }
+
   void removeWhitespace() {
+    listen = listen.removeWhitespace;
     port = port.removeWhitespace;
     user = user.removeWhitespace;
     pass = pass.removeWhitespace;
@@ -241,6 +260,7 @@ class InboundSocksState {
     if (EmptyTool.checkString(inbound.port)) {
       port = inbound.port!;
     }
+    listen = _normalizeListen(inbound.listen);
     final settings = inbound.settings;
     if (settings == null) {
       return;
@@ -274,11 +294,30 @@ class InboundSocksState {
     }
   }
 
+  String _normalizeListen(String? value) {
+    final listen = (value?.removeWhitespace ?? "").toLowerCase();
+    if (listen.isEmpty ||
+        listen == _ipv4AllInterfacesListen ||
+        listen == _ipv6AllInterfacesListen ||
+        listen == _bracketedIpv6AllInterfacesListen) {
+      return allInterfacesListen;
+    }
+    if (listen == localListen ||
+        listen == _localhostListen ||
+        listen == _ipv6LoopbackListen ||
+        listen == _bracketedIpv6LoopbackListen) {
+      return localListen;
+    }
+    return localListen;
+  }
+
   bool get authEnabled => user.isNotEmpty || pass.isNotEmpty;
 
   XrayInbound get xrayJson {
     final inbound = XrayInboundStandard.standard;
-    inbound.listen = listen;
+    if (listen == localListen) {
+      inbound.listen = listen;
+    }
     inbound.port = port.isEmpty ? defaultPort : port;
     inbound.protocol = protocol.name;
     inbound.tag = tag.name;
@@ -292,7 +331,17 @@ class InboundSocksState {
 }
 
 class InboundHttpState {
-  final listen = NetConstants.proxyHost;
+  static const allInterfacesListen = "";
+  static final localListen = NetConstants.proxyHost;
+  static const _localhostListen = "localhost";
+  static const _ipv6LoopbackListen = "::1";
+  static const _bracketedIpv6LoopbackListen = "[::1]";
+  static const _ipv4AllInterfacesListen = "0.0.0.0";
+  static const _ipv6AllInterfacesListen = "::";
+  static const _bracketedIpv6AllInterfacesListen = "[::]";
+  static final listenValues = <String>[allInterfacesListen, localListen];
+
+  var listen = localListen;
   final protocol = XrayInboundProtocol.http;
   final tag = RoutingInboundTag.httpIn;
   final defaultPort = "11025";
@@ -300,7 +349,16 @@ class InboundHttpState {
   var user = "";
   var pass = "";
 
+  InboundHttpState copy() {
+    return InboundHttpState()
+      ..listen = listen
+      ..port = port
+      ..user = user
+      ..pass = pass;
+  }
+
   void removeWhitespace() {
+    listen = listen.removeWhitespace;
     port = port.removeWhitespace;
     user = user.removeWhitespace;
     pass = pass.removeWhitespace;
@@ -314,6 +372,7 @@ class InboundHttpState {
     if (EmptyTool.checkString(inbound.port)) {
       port = inbound.port!;
     }
+    listen = _normalizeListen(inbound.listen);
     final settings = inbound.settings;
     if (settings == null) {
       return;
@@ -347,11 +406,30 @@ class InboundHttpState {
     }
   }
 
+  String _normalizeListen(String? value) {
+    final listen = (value?.removeWhitespace ?? "").toLowerCase();
+    if (listen.isEmpty ||
+        listen == _ipv4AllInterfacesListen ||
+        listen == _ipv6AllInterfacesListen ||
+        listen == _bracketedIpv6AllInterfacesListen) {
+      return allInterfacesListen;
+    }
+    if (listen == localListen ||
+        listen == _localhostListen ||
+        listen == _ipv6LoopbackListen ||
+        listen == _bracketedIpv6LoopbackListen) {
+      return localListen;
+    }
+    return localListen;
+  }
+
   bool get authEnabled => user.isNotEmpty || pass.isNotEmpty;
 
   XrayInbound get xrayJson {
     final inbound = XrayInboundStandard.standard;
-    inbound.listen = listen;
+    if (listen == localListen) {
+      inbound.listen = listen;
+    }
     inbound.port = port.isEmpty ? defaultPort : port;
     inbound.protocol = protocol.name;
     inbound.tag = tag.name;

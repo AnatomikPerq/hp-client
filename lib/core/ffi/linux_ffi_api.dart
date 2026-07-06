@@ -16,11 +16,12 @@ class LinuxFfiApi extends BaseFfiApi {
   factory LinuxFfiApi() => _singleton;
 
   LinuxFfiApi._internal() {
-    _killAll();
+    unawaited(_killAll());
   }
 
   //===================================
   static const _coreBin = "OneXrayCore";
+  static const _stopProxyCoreFailed = "stop proxy core failed";
   final _processManager = LocalProcessManager();
 
   @override
@@ -29,27 +30,31 @@ class LinuxFfiApi extends BaseFfiApi {
     return super.startVpn();
   }
 
-  Future<void> _killAll() async {
+  Future<bool> _killAll() async {
+    var success = true;
     final names = <String>[_coreBin];
     for (final name in names) {
-      await _killProcesses(name);
+      success = await _killProcesses(name) && success;
     }
+    return success;
   }
 
-  Future<void> _killProcesses(String name) async {
+  Future<bool> _killProcesses(String name) async {
     final command = <String>["pgrep", name];
     final p = await _processManager.run(command);
     final String stdout = p.stdout;
     final processes = stdout.trim().split("\n");
+    var success = true;
     for (final process in processes) {
       final pid = int.tryParse(process);
       if (pid != null) {
-        _processManager.killPid(pid);
+        success = _processManager.killPid(pid) && success;
       }
     }
+    return success;
   }
 
-  var _coreProcess = 0;
+  Process? _coreProcess;
 
   @override
   Future<bool> startCore(LibXrayRunConfig request) async {
@@ -64,7 +69,8 @@ class LinuxFfiApi extends BaseFfiApi {
       ygLogger("Running command: ${command.join(" ")}");
       final process = await _processManager.start(command);
       _bindProcess(process);
-      _coreProcess = process.pid;
+      _coreProcess = process;
+      _trackProcess(process);
     } catch (e) {
       ygLogger("start core failed: $e");
       return false;
@@ -72,14 +78,46 @@ class LinuxFfiApi extends BaseFfiApi {
 
     await Future.delayed(Duration(seconds: 1));
 
-    return true;
+    return proxyCoreRunning();
+  }
+
+  Future<bool> startProxyCore(String configPath) async {
+    await _killAll();
+    return startCore(LibXrayRunConfig(RunXrayRequest(configPath)));
   }
 
   @override
   void stopCore() {
-    if (_coreProcess != 0) {
-      _processManager.killPid(_coreProcess);
-      _coreProcess = 0;
+    final process = _coreProcess;
+    if (process != null) {
+      process.kill();
+      _coreProcess = null;
+    }
+  }
+
+  Future<String> stopProxyCore() async {
+    final stopped = await _stopProxyCore();
+    return stopped ? "" : _stopProxyCoreFailed;
+  }
+
+  bool proxyCoreRunning() {
+    return _coreProcess != null;
+  }
+
+  Future<bool> _stopProxyCore() async {
+    final process = _coreProcess;
+    if (process == null) {
+      return _killAll();
+    }
+    if (!process.kill()) {
+      return false;
+    }
+    try {
+      await process.exitCode.timeout(Duration(seconds: 3));
+      _coreProcess = null;
+      return true;
+    } on TimeoutException {
+      return false;
     }
   }
 
@@ -97,12 +135,24 @@ class LinuxFfiApi extends BaseFfiApi {
     }
   }
 
-  void _bindProcess(Process p) {
-    if (!kReleaseMode) {
-      p.stdout.listen((data) {
-        final text = utf8.decode(data);
-        ygLogger(text);
-      });
-    }
+  void _bindProcess(Process process) {
+    process.stdout.listen((data) {
+      if (!kReleaseMode) {
+        ygLogger(utf8.decode(data));
+      }
+    });
+    process.stderr.listen((data) {
+      if (!kReleaseMode) {
+        ygLogger(utf8.decode(data));
+      }
+    });
+  }
+
+  void _trackProcess(Process process) {
+    process.exitCode.then((_) {
+      if (identical(_coreProcess, process)) {
+        _coreProcess = null;
+      }
+    });
   }
 }
