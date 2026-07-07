@@ -9,16 +9,20 @@ import 'package:onexray/service/xray/raw/writer.dart';
 import 'package:onexray/service/xray/profile/inbounds_state.dart';
 
 class XrayRawPing {
-  static Future<int> ping(String rawText, PingState pingState) async {
+  static Future<int> ping(
+    String rawText,
+    PingState pingState, {
+    int fallbackDelay = PingDelayConstants.unknown,
+  }) async {
     final ports = await XrayPorts.getPorts();
     if (ports == null) {
-      return PingDelayConstants.unknown;
+      return fallbackDelay;
     }
     final jsonMap = JsonTool.decoder.convert(rawText);
     //remove metrics
     XrayRawFix.fixMetrics(jsonMap);
     XrayRawFix.fixInboundsTun(jsonMap);
-    XrayRawFix.fixEnv(jsonMap);
+    XrayRawFix.removeEnv(jsonMap);
     XrayRawFix.fixInboundsPort(jsonMap, ports);
     XrayRawFix.fixLog(jsonMap);
     final text = JsonTool.encoder.convert(jsonMap);

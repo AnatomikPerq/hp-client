@@ -21,7 +21,7 @@ import 'package:onexray/service/xray/outbound/state_reader.dart';
 import 'package:onexray/service/xray/outbound/state_validator.dart';
 import 'package:onexray/service/xray/outbound/state_writer.dart';
 import 'package:onexray/service/xray/profile/enum.dart';
-import 'package:onexray/service/xray/standard.dart';
+import 'package:onexray/core/model/xray_standard.dart';
 import 'package:onexray/pages/main/navigation.dart';
 
 class OutboundUIPageState {
@@ -540,7 +540,10 @@ class OutboundUIController extends Cubit<OutboundUIPageState> {
       eventBus.updatePinging(true);
       final pingState = PingState();
       await pingState.readFromPreferences();
-      final res = await state.outboundState.ping(pingState);
+      final res = await state.outboundState.ping(
+        pingState,
+        fallbackDelay: PingDelayConstants.error,
+      );
       eventBus.updatePinging(false);
       if (context.mounted) {
         await ContextAlert.showPingResultDialog(context, res);
