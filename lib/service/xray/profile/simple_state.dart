@@ -11,7 +11,7 @@ class XrayProfileSimple {
   var dns = SimpleDns.cloudflareProxy;
   var enableLog = false;
   var fakeDns = false;
-  int? chainProxyOutboundId;
+  int? finalOutboundId;
 
   Future<void> readFromPreferences() async {
     final jsonMap = await PreferencesKey().readXrayProfileSimple();
@@ -29,8 +29,8 @@ class XrayProfileSimple {
     if (model.fakeDns != null) {
       fakeDns = model.fakeDns!;
     }
-    if (model.chainProxyOutboundId != null) {
-      chainProxyOutboundId = model.chainProxyOutboundId;
+    if (model.finalOutboundId != null) {
+      finalOutboundId = model.finalOutboundId;
     }
   }
 
@@ -43,13 +43,12 @@ class XrayProfileSimple {
     dns.id,
     enableLog,
     fakeDns,
-    chainProxyOutboundId,
+    finalOutboundId,
   );
 }
 
 class SimpleRouting {
   var domainStrategy = RoutingDomainStrategy.ipIfNonMatch;
-  var queryStrategy = DnsQueryStrategy.useIPv4;
   var directSet = SimpleCountry.cn;
   var appleDirect = true;
   var localDirect = true;
@@ -69,12 +68,6 @@ class SimpleRouting {
       );
       if (domainStrategy != null) {
         this.domainStrategy = domainStrategy;
-      }
-    }
-    if (EmptyTool.checkString(routing.queryStrategy)) {
-      final queryStrategy = DnsQueryStrategy.fromString(routing.queryStrategy!);
-      if (queryStrategy != null) {
-        this.queryStrategy = queryStrategy;
       }
     }
     if (EmptyTool.checkString(routing.directSet)) {
@@ -102,7 +95,7 @@ class SimpleRouting {
 
   SimpleRoutingModel get model => SimpleRoutingModel(
     domainStrategy.name,
-    queryStrategy.name,
+    null,
     directSet.name,
     appleDirect,
     localDirect,

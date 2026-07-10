@@ -51,7 +51,7 @@ class XrayProfileSimplePage extends StatelessWidget {
                 child: Column(
                   children: [
                     _logSection(context, controller, state),
-                    _chainProxySection(context, controller, state),
+                    _finalOutboundSection(context, controller, state),
                     _proxySection(context, state),
                     _routingSection(context, controller, state),
                     _fakeDnsSection(context, controller, state),
@@ -125,7 +125,6 @@ class XrayProfileSimplePage extends StatelessWidget {
       title: AppLocalizations.of(context)!.xrayProfileSimplePageRouting,
       children: [
         _domainStrategy(context, controller, state),
-        _queryStrategy(context, controller, state),
         _directSet(context, controller, state),
         _appleDirect(context, controller, state),
         _localDirect(context, controller, state),
@@ -153,26 +152,28 @@ class XrayProfileSimplePage extends StatelessWidget {
     );
   }
 
-  Widget _chainProxySection(
+  Widget _finalOutboundSection(
     BuildContext context,
     XrayProfileSimpleController controller,
     XrayProfileSimplePageState state,
   ) {
-    final chainProxyName = state.chainProxyName.isEmpty
-        ? AppLocalizations.of(context)!.chainProxyPageDisabled
-        : state.chainProxyName;
+    final finalOutboundName = state.finalOutboundName.isEmpty
+        ? AppLocalizations.of(context)!.finalOutboundPageDisabled
+        : state.finalOutboundName;
     return SettingSection(
-      title: AppLocalizations.of(context)!.xrayProfileSimplePageChainProxy,
+      title: AppLocalizations.of(context)!.xrayProfileSimplePageFinalOutbound,
       children: [
         SettingRow(
-          title: AppLocalizations.of(context)!.xrayProfileSimplePageChainProxy,
-          value: chainProxyName,
-          onTap: () => controller.editChainProxy(context),
-          showChevron: state.xrayProfile.chainProxyOutboundId == null,
-          trailing: state.xrayProfile.chainProxyOutboundId == null
+          title: AppLocalizations.of(
+            context,
+          )!.xrayProfileSimplePageFinalOutbound,
+          value: finalOutboundName,
+          onTap: () => controller.editFinalOutbound(context),
+          showChevron: state.xrayProfile.finalOutboundId == null,
+          trailing: state.xrayProfile.finalOutboundId == null
               ? null
               : IconButton(
-                  onPressed: () => controller.clearChainProxy(),
+                  onPressed: () => controller.clearFinalOutbound(),
                   icon: const Icon(Icons.clear),
                 ),
         ),
@@ -190,19 +191,6 @@ class XrayProfileSimplePage extends StatelessWidget {
       value: state.xrayProfile.routing.domainStrategy.name,
       selections: RoutingDomainStrategy.simpleStrategy,
       onSelected: (value) => controller.updateDomainStrategy(value),
-    );
-  }
-
-  Widget _queryStrategy(
-    BuildContext context,
-    XrayProfileSimpleController controller,
-    XrayProfileSimplePageState state,
-  ) {
-    return SelectSettingRow(
-      title: AppLocalizations.of(context)!.xrayProfileSimplePageQueryStrategy,
-      value: state.xrayProfile.routing.queryStrategy.name,
-      selections: DnsQueryStrategy.names,
-      onSelected: (value) => controller.updateQueryStrategy(value),
     );
   }
 
@@ -285,7 +273,7 @@ class XrayProfileSimplePage extends StatelessWidget {
     XrayProfileSimplePageState state,
   ) {
     final children = SimpleDns.values
-        .map((e) => _simpleDns(controller, state, e))
+        .map((e) => _simpleDns(controller, e))
         .toList();
     return RadioGroup<int>(
       groupValue: state.xrayProfile.dns.id,
@@ -297,20 +285,10 @@ class XrayProfileSimplePage extends StatelessWidget {
     );
   }
 
-  Widget _simpleDns(
-    XrayProfileSimpleController controller,
-    XrayProfileSimplePageState state,
-    SimpleDns dns,
-  ) {
-    final queryStrategy = state.xrayProfile.routing.queryStrategy;
+  Widget _simpleDns(XrayProfileSimpleController controller, SimpleDns dns) {
     return SettingRow(
       title: dns.address,
-      subtitleWidget: Row(
-        children: [
-          TagView(tag: dns.outbound.name),
-          TagView(tag: queryStrategy.name),
-        ],
-      ),
+      subtitleWidget: Row(children: [TagView(tag: dns.outbound.name)]),
       onTap: () => controller.updateDnsId(dns.id),
       trailing: Radio<int>(value: dns.id),
     );

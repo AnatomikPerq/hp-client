@@ -30,6 +30,7 @@ extension XrayProfileSimpleWriter on XrayProfileSimple {
     }
 
     state.routing.dnsQueryRule.outboundTag = RoutingOutboundTag.proxy.name;
+    state.outbounds.dns.dialerProxy = RoutingOutboundTag.proxy.name;
 
     return state;
   }
@@ -86,22 +87,19 @@ extension XrayProfileSimpleWriter on XrayProfileSimple {
 
   DnsState _dnsState(List<String> domain) {
     final state = DnsState();
-    state.queryStrategy = routing.queryStrategy;
 
     final server = DnsServerState();
     server.address = dns.address;
-    server.queryStrategy = state.queryStrategy;
     server.tag = DNSServerTag.defaultDns;
 
     final servers = <DnsServerState>[];
     if (fakeDns) {
-      servers.add(_fakeDnsServer(state.queryStrategy));
+      servers.add(_fakeDnsServer());
     }
     servers.add(server);
     if (routing.localDns) {
       final localServer = _localDns(domain);
       localServer.tag = DNSServerTag.localDns;
-      localServer.queryStrategy = state.queryStrategy;
       servers.add(localServer);
       state.disableFallbackIfMatch = true;
     }
@@ -110,10 +108,9 @@ extension XrayProfileSimpleWriter on XrayProfileSimple {
     return state;
   }
 
-  DnsServerState _fakeDnsServer(DnsQueryStrategy queryStrategy) {
+  DnsServerState _fakeDnsServer() {
     final server = DnsServerState();
     server.address = "fakedns";
-    server.queryStrategy = queryStrategy;
     return server;
   }
 

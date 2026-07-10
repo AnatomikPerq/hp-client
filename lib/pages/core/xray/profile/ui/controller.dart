@@ -198,19 +198,18 @@ class XrayProfileUIController extends Cubit<XrayProfileUIPageState> {
 
   String dnsSummary(BuildContext context) {
     final dns = _xrayProfileState.dns;
-    return dns.queryStrategy.name;
+    if (dns.servers.isEmpty) {
+      return AppLocalizations.of(context)!.finalOutboundPageDisabled;
+    }
+    final firstServer = dns.servers.first.address;
+    if (dns.servers.length == 1) {
+      return firstServer;
+    }
+    return "$firstServer (+${dns.servers.length - 1})";
   }
 
   String fakeDnsSummary(BuildContext context) {
-    final queryStrategy = _xrayProfileState.dns.queryStrategy;
-    switch (queryStrategy) {
-      case DnsQueryStrategy.useIP:
-        return "IPv4 + IPv6";
-      case DnsQueryStrategy.useIPv4:
-        return "IPv4";
-      case DnsQueryStrategy.useIPv6:
-        return "IPv6";
-    }
+    return AppLocalizations.of(context)!.xrayProfileDnsControlledByTunIPv6;
   }
 
   String routingSummary(BuildContext context) {
@@ -222,15 +221,15 @@ class XrayProfileUIController extends Cubit<XrayProfileUIPageState> {
     final sniffing = _xrayProfileState.inbounds.tun.sniffing;
     return sniffing.enabled
         ? AppLocalizations.of(context)!.switchEnabled
-        : AppLocalizations.of(context)!.chainProxyPageDisabled;
+        : AppLocalizations.of(context)!.finalOutboundPageDisabled;
   }
 
   String outboundsSummary(BuildContext context) {
-    final chainProxy = _xrayProfileState.outbounds.chainProxy;
-    if (chainProxy == null) {
-      return AppLocalizations.of(context)!.chainProxyPageDisabled;
+    final finalOutbound = _xrayProfileState.outbounds.finalOutbound;
+    if (finalOutbound == null) {
+      return AppLocalizations.of(context)!.finalOutboundPageDisabled;
     }
-    return chainProxy.name;
+    return finalOutbound.name;
   }
 
   Future<void> save(BuildContext context) async {

@@ -4,13 +4,17 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import androidx.core.content.ContextCompat
 import com.elvishew.xlog.XLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,19 +22,24 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import libXray.DialerController
 import libXray.LibXray
 import net.yuandev.onexray.MainActivity
 import net.yuandev.onexray.R
 import net.yuandev.onexray.pigeon.JsonTool
-import net.yuandev.onexray.pigeon.LibXrayEnvJson
 import net.yuandev.onexray.pigeon.LibXrayInvokeRequest
 import net.yuandev.onexray.pigeon.LibXrayInvokeResponse
 import net.yuandev.onexray.pigeon.LibXrayMethod
 import net.yuandev.onexray.pigeon.PerAppVPNMode
 import net.yuandev.onexray.pigeon.StartVpnRequest
 import net.yuandev.onexray.pigeon.TunJson
+import net.yuandev.onexray.pigeon.XrayEnv
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 
@@ -38,6 +47,7 @@ class OneVpnService : VpnService() {
     companion object {
         const val ACTION_START: String = "vpn_start"
         const val ACTION_STOP: String = "vpn_stop"
+        const val ACTION_STOP_REQUEST: String = "net.yuandev.onexray.VPN_STOP_REQUEST"
 
         const val IPV4_ADDRESS = "198.18.0.1"
         const val IPV6_ADDRESS = "fc00::1"
@@ -54,6 +64,7 @@ class OneVpnService : VpnService() {
     @Volatile
     private var running = false
     private val startGeneration = AtomicInteger(0)
+    private val released = AtomicBoolean(true)
 
     private fun sendStatusBroadcast(running: Boolean) {
         val intent = Intent(ACTION_VPN_STATUS).apply {
@@ -65,6 +76,15 @@ class OneVpnService : VpnService() {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val stopRequestReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_STOP_REQUEST) {
+                XLog.d("OneVpnService: received stop request")
+                stopTun()
+            }
+        }
+    }
+    private var stopRequestReceiverRegistered = false
 
     class VPNController : DialerController {
         var vpn: OneVpnService? = null
@@ -77,22 +97,34 @@ class OneVpnService : VpnService() {
 
     private var controllerInit = false
     private val controller = VPNController()
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+    override fun onCreate() {
+        super.onCreate()
         initService()
+        val filter = IntentFilter(ACTION_STOP_REQUEST)
+        ContextCompat.registerReceiver(
+            this,
+            stopRequestReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        stopRequestReceiverRegistered = true
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         XLog.d("OneVpnService: onStartCommand ${intent?.action}")
         if (intent != null && intent.action == ACTION_STOP) {
             XLog.d("OneVpnService: onStartCommand $ACTION_STOP running=$running")
-            if (running || tunnel != null) {
-                stopTun()
-            } else {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                sendStatusBroadcast(false)
-                stopSelf()
-            }
+            stopTun()
             return START_NOT_STICKY
         }
         if (intent != null && intent.action == ACTION_START) {
             XLog.d("OneVpnService: onStartCommand $ACTION_START running=$running")
+            if (VpnController.consumeStopRequest(this)) {
+                XLog.d("OneVpnService: start cancelled by pending stop request")
+                stopTun()
+                return START_NOT_STICKY
+            }
             if (!running && tunnel == null) {
                 startTun(startId)
             }
@@ -102,8 +134,16 @@ class OneVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        if (stopRequestReceiverRegistered) {
+            try {
+                unregisterReceiver(stopRequestReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            stopRequestReceiverRegistered = false
+        }
+        releaseTun()
         scope.cancel()
+        super.onDestroy()
     }
 
     private fun initService() {
@@ -112,25 +152,17 @@ class OneVpnService : VpnService() {
 
     private fun startTun(startId: Int) {
         XLog.d("OneVpnService: startTun $startId")
-        if (tunnel != null) {
-            XLog.d("OneVpnService: startTun ignored because tunnel already exists")
+        if (!released.compareAndSet(true, false)) {
+            XLog.d("OneVpnService: startTun ignored because VPN resources are active")
             return
         }
         val generation = startGeneration.incrementAndGet()
-
-        showNotification(startId)
-
-        val model = try {
-            readStartRequest()
-        } catch (e: Exception) {
-            failStart("OneVpnService: startTun failed to read/parse start.json", e, generation)
-            return
-        }
-
         try {
+            showNotification(startId)
+            val model = readStartRequest()
             runTun(model, generation)
         } catch (e: Exception) {
-            failStart("OneVpnService: startTun failed to establish tunnel", e, generation)
+            failStart("OneVpnService: startTun failed", e, generation)
         }
     }
 
@@ -142,18 +174,26 @@ class OneVpnService : VpnService() {
     }
 
     private fun stopTun() {
-        startGeneration.incrementAndGet()
-        if (tunnel == null) {
+        if (!releaseTun()) {
             stopForeground(STOP_FOREGROUND_REMOVE)
-            controller.vpn = null
-            running = false
             sendStatusBroadcast(false)
-            stopSelf()
-            return
         }
+        stopSelf()
+    }
+
+    private fun releaseTun(): Boolean {
+        if (!released.compareAndSet(false, true)) {
+            return false
+        }
+        startGeneration.incrementAndGet()
         XLog.d("OneVpnService: stopTun")
         stopForeground(STOP_FOREGROUND_REMOVE)
-        stopXray()
+        try {
+            stopXray()
+        } catch (e: Exception) {
+            XLog.d("OneVpnService: stopTun stopXray exception")
+            XLog.d(e)
+        }
         try {
             tunnel?.close()
         } catch (e: Exception) {
@@ -164,6 +204,7 @@ class OneVpnService : VpnService() {
         controller.vpn = null
         running = false
         sendStatusBroadcast(false)
+        return true
     }
 
     private fun failStart(message: String, error: Exception, generation: Int? = null) {
@@ -172,25 +213,8 @@ class OneVpnService : VpnService() {
             XLog.d(error)
             return
         }
-        startGeneration.incrementAndGet()
         XLog.e(message, error)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        try {
-            stopXray()
-        } catch (e: Exception) {
-            XLog.d("OneVpnService: failStart stopXray exception")
-            XLog.d(e)
-        }
-        try {
-            tunnel?.close()
-        } catch (e: Exception) {
-            XLog.d("OneVpnService: failStart close tunnel exception")
-            XLog.d(e)
-        }
-        tunnel = null
-        controller.vpn = null
-        running = false
-        sendStatusBroadcast(false)
+        releaseTun()
         stopSelf()
     }
 
@@ -372,7 +396,7 @@ class OneVpnService : VpnService() {
                 if (generation != startGeneration.get() || tunnel !== establishedTunnel) {
                     return@launch
                 }
-                val result = LibXray.invoke(withTunFd(coreInvokeText, establishedTunnel.fd))
+                val result = LibXray.invoke(patchRuntimeEnv(coreInvokeText, establishedTunnel.fd))
                 validateRunXrayResult(result)
                 if (generation != startGeneration.get() || tunnel !== establishedTunnel) {
                     XLog.d("OneVpnService: stale runXray result ignored")
@@ -403,11 +427,28 @@ class OneVpnService : VpnService() {
         LibXray.invoke(JsonTool.json.encodeToString(request))
     }
 
-    private fun withTunFd(requestJson: String, fd: Int): String {
+    private fun patchRuntimeEnv(requestJson: String, fd: Int): String {
         val request = JsonTool.json.decodeFromString<LibXrayInvokeRequest>(requestJson)
-        val env = request.env ?: LibXrayEnvJson()
-        return JsonTool.json.encodeToString(
-            request.copy(env = env.copy(tunFd = fd.toString()))
-        )
+        val configPath = request.payload?.configPath
+            ?: throw IllegalStateException("configPath is empty")
+        if (configPath.isEmpty()) {
+            throw IllegalStateException("configPath is empty")
+        }
+        val configFile = File(configPath)
+        val root = JsonTool.json.parseToJsonElement(configFile.readText()).jsonObject
+        val currentEnv = root["env"]?.let {
+            JsonTool.json.decodeFromJsonElement<XrayEnv>(it)
+        } ?: XrayEnv()
+        val env = currentEnv.copy(tunFd = fd.toString())
+        val updated = buildJsonObject {
+            root.forEach { (key, value) ->
+                if (key != "env") {
+                    put(key, value)
+                }
+            }
+            put("env", JsonTool.json.encodeToJsonElement(env))
+        }
+        configFile.writeText(JsonTool.json.encodeToString(updated))
+        return JsonTool.json.encodeToString(request)
     }
 }

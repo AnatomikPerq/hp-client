@@ -67,7 +67,10 @@ class OutboundsController extends Cubit<OutboundsPageState> {
   }
 
   Future<void> editDns(BuildContext context) async {
-    final params = OutboundDnsParams(state.outboundsState.dns);
+    final params = OutboundDnsParams(
+      state.outboundsState.dns,
+      state.outboundsState.dnsDialerProxyTags,
+    );
     final dns = await context.pushScoped<OutboundDnsState>(
       AppSecondaryDestination.outboundDns,
       extra: params,
@@ -78,7 +81,7 @@ class OutboundsController extends Cubit<OutboundsPageState> {
     }
   }
 
-  Future<void> importChainProxy(BuildContext context) async {
+  Future<void> importFinalOutbound(BuildContext context) async {
     final outbound = await context.pushScoped<CoreConfigData>(
       AppSecondaryDestination.outboundSelect,
       extra: OutboundSelectParams(),
@@ -86,10 +89,10 @@ class OutboundsController extends Cubit<OutboundsPageState> {
     if (outbound == null) {
       return;
     }
-    final chainProxy = OutboundState();
+    final finalOutbound = OutboundState();
     var valid = false;
     try {
-      valid = chainProxy.readFromDbData(outbound);
+      valid = finalOutbound.readFromDbData(outbound);
     } catch (_) {
       valid = false;
     }
@@ -97,20 +100,21 @@ class OutboundsController extends Cubit<OutboundsPageState> {
       if (context.mounted) {
         ContextAlert.showToast(
           context,
-          AppLocalizations.of(context)!.chainProxyValidationInvalid,
+          AppLocalizations.of(context)!.finalOutboundValidationInvalid,
         );
       }
       return;
     }
-    chainProxy.name = outbound.name;
-    chainProxy.tag = RoutingOutboundTag.chainProxy.name;
-    chainProxy.dialerProxy = "";
-    state.outboundsState.chainProxy = chainProxy;
+    finalOutbound.name = outbound.name;
+    finalOutbound.tag = RoutingOutboundTag.chainProxy.name;
+    finalOutbound.dialerProxy = "";
+    state.outboundsState.finalOutbound = finalOutbound;
     emit(state.bumped());
   }
 
-  void deleteChainProxy() {
-    state.outboundsState.chainProxy = null;
+  void deleteFinalOutbound() {
+    state.outboundsState.finalOutbound = null;
+    state.outboundsState.fixDnsDialerProxy();
     emit(state.bumped());
   }
 

@@ -98,6 +98,7 @@ class OutboundDnsState {
   var address = "";
   var port = "";
   var rules = defaultRules;
+  var dialerProxy = RoutingOutboundTag.direct.name;
 
   static List<XrayOutboundDnsRule> get defaultRules => [
     XrayOutboundDnsRule("hijack", "1,28", null, null),
@@ -107,6 +108,7 @@ class OutboundDnsState {
   void removeWhitespace() {
     address = address.removeWhitespace;
     port = port.removeWhitespace;
+    dialerProxy = dialerProxy.removeWhitespace;
   }
 
   XrayOutbound get xrayJson {
@@ -128,13 +130,21 @@ class OutboundDnsState {
     }
     outbound.settings = settings.toJson();
 
+    if (dialerProxy.isNotEmpty) {
+      final sockopt = XraySockoptStandard.standard;
+      sockopt.dialerProxy = dialerProxy;
+      final streamSettings = XrayStreamSettingsStandard.standard;
+      streamSettings.sockopt = sockopt;
+      outbound.streamSettings = streamSettings;
+    }
+
     return outbound;
   }
 }
 
 class OutboundsState {
   final outbounds = <OutboundState>[];
-  OutboundState? chainProxy;
+  OutboundState? finalOutbound;
 
   var freedom = OutboundFreedomState();
   var fragment = OutboundFragmentState();
@@ -145,7 +155,7 @@ class OutboundsState {
     for (final outbound in outbounds) {
       outbound.removeWhitespace();
     }
-    chainProxy?.removeWhitespace();
+    finalOutbound?.removeWhitespace();
     freedom.removeWhitespace();
     fragment.removeWhitespace();
     dns.removeWhitespace();
@@ -175,17 +185,17 @@ class OutboundsState {
           continue;
         }
         if (outbound.tag == RoutingOutboundTag.chainProxy.name) {
-          final chainProxy = OutboundState();
+          final finalOutbound = OutboundState();
           var valid = false;
           try {
-            valid = chainProxy.readFromOutbound(outbound);
+            valid = finalOutbound.readFromOutbound(outbound);
           } catch (_) {
             valid = false;
           }
           if (valid) {
-            chainProxy.tag = RoutingOutboundTag.chainProxy.name;
-            chainProxy.dialerProxy = "";
-            this.chainProxy = chainProxy;
+            finalOutbound.tag = RoutingOutboundTag.chainProxy.name;
+            finalOutbound.dialerProxy = "";
+            this.finalOutbound = finalOutbound;
           }
           continue;
         }
@@ -200,6 +210,7 @@ class OutboundsState {
           this.outbounds.add(customOutbound);
         }
       }
+      fixDnsDialerProxy();
     }
   }
 
@@ -260,6 +271,16 @@ class OutboundsState {
     } else {
       dns.rules = OutboundDnsState.defaultRules;
     }
+    final dialerProxy = outbound.streamSettings?.sockopt?.dialerProxy;
+    if (EmptyTool.checkString(dialerProxy)) {
+      dns.dialerProxy = dialerProxy!;
+    }
+  }
+
+  void fixDnsDialerProxy() {
+    if (!dnsDialerProxyTags.contains(dns.dialerProxy)) {
+      dns.dialerProxy = RoutingOutboundTag.direct.name;
+    }
   }
 
   List<XrayOutbound> get xrayJson {
@@ -272,11 +293,11 @@ class OutboundsState {
         otherOutbounds.add(outbound);
       }
     }
-    if (chainProxy != null) {
-      final chainProxy = this.chainProxy!;
-      chainProxy.tag = RoutingOutboundTag.chainProxy.name;
-      chainProxy.dialerProxy = "";
-      outbounds.add(chainProxy.xrayJson);
+    if (finalOutbound != null) {
+      final finalOutbound = this.finalOutbound!;
+      finalOutbound.tag = RoutingOutboundTag.chainProxy.name;
+      finalOutbound.dialerProxy = "";
+      outbounds.add(finalOutbound.xrayJson);
     }
     if (otherOutbounds.isNotEmpty) {
       for (final outbound in otherOutbounds) {
@@ -305,7 +326,7 @@ class OutboundsState {
       if (!customTags.contains(RoutingOutboundTag.proxy.name))
         RoutingOutboundTag.proxy.name,
       ...customTags,
-      if (chainProxy != null) RoutingOutboundTag.chainProxy.name,
+      if (finalOutbound != null) RoutingOutboundTag.chainProxy.name,
       freedom.tag.name,
       fragment.tag.name,
       blackHole.tag.name,
@@ -314,4 +335,10 @@ class OutboundsState {
 
     return tags;
   }
+
+  List<String> get dnsDialerProxyTags => outboundTags
+      .where((tag) => tag != RoutingOutboundTag.fragment.name)
+      .where((tag) => tag != RoutingOutboundTag.block.name)
+      .where((tag) => tag != RoutingOutboundTag.dnsOut.name)
+      .toList();
 }
