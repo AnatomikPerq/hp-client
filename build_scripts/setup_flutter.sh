@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-flutter_channel="${FLUTTER_CHANNEL:-stable}"
-flutter_root="${FLUTTER_ROOT:-$HOME/flutter/$flutter_channel}"
+flutter_channel="stable"
+flutter_root="${ONEXRAY_FLUTTER_ROOT:-$HOME/flutter/$flutter_channel}"
 flutter_bin_dir="$flutter_root/bin"
 
 uname_s="$(uname -s)"

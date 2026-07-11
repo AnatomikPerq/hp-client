@@ -70,7 +70,11 @@ Common validation commands:
 ```shell
 flutter gen-l10n
 dart run build_runner build --delete-conflicting-outputs
+dart run tool/check_native_model_contract.dart
+dart run tool/check_layer_dependencies.dart
+dart format --output=none --set-exit-if-changed <changed Dart files>
 flutter analyze
+flutter test
 flutter build macos --debug
 git diff --check
 ```

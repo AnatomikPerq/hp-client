@@ -8,6 +8,7 @@ enum TunnelError: Error {
     case noGroupContainer
     case noXrayConfigPath
     case startXrayTimeout
+    case startXrayFailed(String)
 }
 
 final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
@@ -65,7 +66,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         let settings = buildSettings(request: request)
         try await setTunnelNetworkSettings(settings)
         if let coreInvokeText = request.coreInvokeText {
-            try startXray(coreInvokeText)
+            try await startXray(coreInvokeText)
         }
         YGLog("startTunnel finished")
     }
@@ -119,7 +120,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         try await setTunnelNetworkSettings(settings)
 
         if let coreInvokeText = request.coreInvokeText {
-            try startXray(coreInvokeText)
+            try await startXray(coreInvokeText)
         }
     }
 
@@ -321,7 +322,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
 
     // MARK: - Xray lifecycle
 
-    private func startXray(_ requestJson: String) throws {
+    private func startXray(_ requestJson: String) async throws {
         guard let fd = self.tunnelFileDescriptor else {
             YGLog("PacketTunnelProvider TunnelError.noSocketFd")
             throw TunnelError.noSocketFd
@@ -330,17 +331,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         try patchRuntimeEnv(fd: fd, request: request)
         let requestText = try request.toText()
 
-        Task {
-            let res = requestText.withCString { p in
+        let responseText = await Task.detached(priority: .userInitiated) {
+            requestText.withCString { p -> String? in
                 let p0 = UnsafeMutablePointer(mutating: p)
-                return CGoInvoke(p0)
+                guard let response = CGoInvoke(p0) else { return nil }
+                defer { CGoFree(response) }
+                return String(cString: response)
             }
-            let result = LibXrayInvokeResponse.fromResponse(res)
-            if !result.isSuccess {
-                let error = result.error ?? "unknown error"
-                YGLog("PacketTunnelProvider startXray \(error)")
-                killProcess()
-            }
+        }.value
+        let result = LibXrayInvokeResponse.fromText(responseText)
+        if !result.isSuccess {
+            let error = result.error
+            YGLog("PacketTunnelProvider startXray \(error)")
+            throw TunnelError.startXrayFailed(error)
         }
     }
 
@@ -376,7 +379,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
             }
             let result = LibXrayInvokeResponse.fromResponse(res)
             if !result.isSuccess {
-                let error = result.error ?? "unknown error"
+                let error = result.error
                 YGLog("PacketTunnelProvider stopXray \(error)")
                 killProcess()
             }
