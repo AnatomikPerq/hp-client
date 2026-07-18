@@ -31,13 +31,6 @@
 #     ANDROID_KEY_ALIAS                 key alias
 #     ANDROID_PLAY_SERVICE_JSON_BASE64  base64 of fastlane service account JSON
 #
-#   Firebase / Google Services (base64 of the file contents):
-#     FIREBASE_JSON_BASE64
-#     FIREBASE_OPTIONS_DART_BASE64
-#     ANDROID_GOOGLE_SERVICES_JSON_BASE64
-#     APPLE_GOOGLE_SERVICE_INFO_PLIST_BASE64      shared by iOS + MAS macOS (same bundle id net.yuandev.onexray)
-#     MACOS_SE_GOOGLE_SERVICE_INFO_PLIST_BASE64   for the SE build  (swift/macOSSE/GoogleService-Info.plist)
-#
 # Layout:
 #   build_scripts/app/builder.py#build_core expects XTLS/libXray and
 #   XTLS/Xray-core to live as siblings of this repo. Every job therefore checks
@@ -146,23 +139,8 @@ jobs:
       - name: Setup Flutter
         run: bash build_scripts/setup_flutter.sh
 
-      - name: Install FlutterFire CLI
-        run: |
-          dart pub global activate flutterfire_cli
-          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
-
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
-
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-          IOS_GSI_PLIST_B64: ${{ secrets.APPLE_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
-          echo "$IOS_GSI_PLIST_B64" | base64 -d > swift/AppStore/GoogleService-Info.plist
 
       - name: Restore App Store Connect API key
         env:
@@ -238,23 +216,8 @@ jobs:
       - name: Setup Flutter
         run: bash build_scripts/setup_flutter.sh
 
-      - name: Install FlutterFire CLI
-        run: |
-          dart pub global activate flutterfire_cli
-          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
-
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
-
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-          MACOS_GSI_PLIST_B64: ${{ secrets.APPLE_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
-          echo "$MACOS_GSI_PLIST_B64" | base64 -d > swift/AppStore/GoogleService-Info.plist
 
       - name: Restore App Store Connect API key
         env:
@@ -334,23 +297,8 @@ jobs:
       - name: Setup Flutter
         run: bash build_scripts/setup_flutter.sh
 
-      - name: Install FlutterFire CLI
-        run: |
-          dart pub global activate flutterfire_cli
-          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
-
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
-
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-          MACOSSE_GSI_PLIST_B64: ${{ secrets.MACOS_SE_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
-          echo "$MACOSSE_GSI_PLIST_B64" | base64 -d > swift/macOSSE/GoogleService-Info.plist
 
       - name: Restore App Store Connect API key
         env:
@@ -437,16 +385,6 @@ jobs:
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
 
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-          ANDROID_GSJ_B64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
-          echo "$ANDROID_GSJ_B64" | base64 -d > android/app/google-services.json
-
       - name: Restore Play Store service account
         env:
           PLAY_SA_B64: ${{ secrets.ANDROID_PLAY_SERVICE_JSON_BASE64 }}
@@ -482,15 +420,30 @@ jobs:
           if-no-files-found: error
 
   # =================================================================
-  # Windows x64 — fastforge .zip + .exe
-  #   Pinned to windows-2022 for Visual Studio 2022 (any edition —
-  #   the runner ships Enterprise, VS 2022 Community is equivalent
-  #   for C++ desktop workloads).
+  # Windows x64 and arm64 — fastforge .zip + .exe, plus Store .msix
+  #   x64 stays on Windows Server 2022; arm64 uses GitHub's native
+  #   Windows 11 arm64 runner so Flutter, libXray, Xray-core, and Wintun
+  #   all match the target architecture.
   # =================================================================
   windows:
     if: github.event_name == 'push' || inputs.target == 'all'
-    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            goarch: amd64
+            package_suffix: windows-amd64
+            runner: windows-2022
+          - arch: arm64
+            goarch: arm64
+            package_suffix: windows-arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      GOARCH: ${{ matrix.goarch }}
+      ONEXRAY_WINDOWS_ARCH: ${{ matrix.arch }}
     defaults:
       run:
         shell: bash
@@ -528,14 +481,6 @@ jobs:
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
 
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
-
       - name: Install fastforge
         run: |
           dart pub global activate fastforge
@@ -550,10 +495,17 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: windows-x64
+          name: windows-${{ matrix.arch }}
           path: |
-            output/OneXray-*.zip
-            output/OneXray-*.exe
+            output/OneXray-${{ matrix.package_suffix }}.zip
+            output/OneXray-${{ matrix.package_suffix }}.exe
+          if-no-files-found: error
+
+      - name: Upload Microsoft Store artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-store-${{ matrix.arch }}
+          path: output/OneXray-${{ matrix.package_suffix }}.msix
           if-no-files-found: error
 
   # =================================================================
@@ -617,18 +569,10 @@ jobs:
             ninja-build clang cmake pkg-config \
             libgtk-3-dev liblzma-dev libblkid-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
-            file
+            file lintian
 
       - name: Install Python build deps
         run: python -m pip install --upgrade pip pyyaml requests typer
-
-      - name: Restore Firebase configs
-        env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_JSON_BASE64 }}
-          FIREBASE_OPTIONS_B64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-        run: |
-          echo "$FIREBASE_JSON_B64" | base64 -d > firebase.json
-          echo "$FIREBASE_OPTIONS_B64" | base64 -d > lib/firebase_options.dart
 
       - name: Install fastforge
         run: |
@@ -637,6 +581,15 @@ jobs:
 
       - name: Build
         run: python3 build_scripts/main.py OneXray linux
+
+      - name: Verify Debian package
+        run: |
+          deb_file="$(find output -maxdepth 1 -type f -name 'OneXray-*.deb' -print -quit)"
+          test -n "$deb_file"
+          test "$(dpkg-deb --field "$deb_file" Package)" = "onexray"
+          dpkg-deb --contents "$deb_file" | grep -q '/opt/onexray/bin/OneXrayCore$'
+          dpkg-deb --info "$deb_file"
+          lintian "$deb_file"
 
       - name: Verify core CLI
         run: ./linux/app/OneXrayCore -h

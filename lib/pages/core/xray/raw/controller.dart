@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -22,9 +22,17 @@ import 'package:onexray/service/xray/profile/state.dart';
 import 'package:onexray/service/xray/profile/state_writer.dart';
 import 'package:uuid/uuid.dart';
 
-class XrayRawController extends Cubit<int> {
+class XrayRawPageState {
+  final bool validJson;
+  final int lineCount;
+
+  const XrayRawPageState({this.validJson = false, this.lineCount = 1});
+}
+
+class XrayRawController extends PageCubit<XrayRawPageState> {
   final XrayRawParams params;
-  XrayRawController(this.params) : super(0) {
+  XrayRawController(this.params) : super(const XrayRawPageState()) {
+    controller.addListener(_updateEditorState);
     _initParams();
     _queryOutbound();
   }
@@ -35,9 +43,28 @@ class XrayRawController extends Cubit<int> {
   final controller = TextEditingController();
 
   @override
-  Future<void> close() {
+  Future<void> disposePageResources() async {
+    controller.removeListener(_updateEditorState);
     controller.dispose();
-    return super.close();
+  }
+
+  void _updateEditorState() {
+    final text = controller.text;
+    var validJson = false;
+    try {
+      JsonTool.decoder.convert(text);
+      validJson = true;
+    } catch (_) {
+      validJson = false;
+    }
+    if (isPageActive) {
+      emit(
+        XrayRawPageState(
+          validJson: validJson,
+          lineCount: "\n".allMatches(text).length + 1,
+        ),
+      );
+    }
   }
 
   void _initParams() {
@@ -48,7 +75,7 @@ class XrayRawController extends Cubit<int> {
     final db = AppDatabase();
     if (_configId != DBConstants.defaultId) {
       final config = await db.coreConfigDao.searchRow(_configId);
-      if (isClosed) {
+      if (!isPageActive) {
         return;
       }
       if (config != null) {

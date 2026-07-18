@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:onexray/core/tools/file.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/mixin/alert.dart';
@@ -47,12 +47,12 @@ class BackupPageState {
   }
 }
 
-class BackupController extends Cubit<BackupPageState> {
+class BackupController extends PageCubit<BackupPageState> {
   BackupController() : super(const BackupPageState()) {
     _readFiles();
   }
 
-  Future<void> _readFiles() async {
+  Future<void> _readFiles({bool selectNewest = false}) async {
     final backupDir = await BackupService().backupDir;
     final zipFiles = await Directory(backupDir).list().toList();
     final fileInfos = <FileInfo>[];
@@ -65,8 +65,17 @@ class BackupController extends Cubit<BackupPageState> {
         fileInfos.add(info);
       }
     }
-
-    emit(state.copyWith(files: fileInfos));
+    fileInfos.sort((a, b) {
+      final aTime = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    final selection = selectNewest && fileInfos.isNotEmpty
+        ? fileInfos.first.name
+        : fileInfos.any((file) => file.name == state.selection)
+        ? state.selection
+        : "";
+    emit(state.copyWith(files: fileInfos, selection: selection));
   }
 
   void updateSelection(String? value) {
@@ -89,7 +98,7 @@ class BackupController extends Cubit<BackupPageState> {
         AppLocalizations.of(context)!.backupPageImport,
       );
     }
-    await _readFiles();
+    await _readFiles(selectNewest: success);
   }
 
   Future<void> moreAction(
@@ -176,9 +185,9 @@ class BackupController extends Cubit<BackupPageState> {
     emit(state.copyWith(backingUp: true));
     try {
       await BackupService().backup();
-      await _readFiles();
+      await _readFiles(selectNewest: true);
     } finally {
-      if (!isClosed) {
+      if (isPageActive) {
         emit(state.copyWith(backingUp: false));
       }
     }
@@ -226,7 +235,7 @@ class BackupController extends Cubit<BackupPageState> {
       try {
         success = await BackupService().restore(zipPath);
       } finally {
-        if (!isClosed) {
+        if (isPageActive) {
           emit(state.copyWith(restoring: false));
         }
       }

@@ -1,24 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/core/tools/extensions.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/mixin/alert.dart';
 import 'package:onexray/pages/main/navigation.dart';
+import 'package:onexray/service/auto_update/state.dart';
 import 'package:onexray/service/subscription/service.dart';
 import 'package:onexray/service/subscription/validator.dart';
 
-class SubscriptionAddController extends Cubit<int> {
-  SubscriptionAddController() : super(0);
+class SubscriptionAddPageState {
+  const SubscriptionAddPageState({required this.autoUpdateState});
+
+  factory SubscriptionAddPageState.initial() =>
+      SubscriptionAddPageState(autoUpdateState: AutoUpdateState());
+
+  final AutoUpdateState autoUpdateState;
+}
+
+class SubscriptionAddController extends PageCubit<SubscriptionAddPageState> {
+  SubscriptionAddController() : super(SubscriptionAddPageState.initial()) {
+    _readAutoUpdateState();
+  }
 
   final nameController = TextEditingController();
   final urlController = TextEditingController();
 
   @override
-  Future<void> close() {
+  Future<void> disposePageResources() async {
     nameController.dispose();
     urlController.dispose();
-    return super.close();
   }
 
   Future<void> save(BuildContext context) async {
@@ -48,7 +59,16 @@ class SubscriptionAddController extends Cubit<int> {
     }
   }
 
-  void gotoAutoUpdate(BuildContext context) {
-    context.pushScoped(AppSecondaryDestination.autoUpdate);
+  Future<void> gotoAutoUpdate(BuildContext context) async {
+    await context.pushScoped(AppSecondaryDestination.autoUpdate);
+    await _readAutoUpdateState();
+  }
+
+  Future<void> _readAutoUpdateState() async {
+    final autoUpdateState = AutoUpdateState();
+    await autoUpdateState.readFromPreferences();
+    if (isPageActive) {
+      emit(SubscriptionAddPageState(autoUpdateState: autoUpdateState));
+    }
   }
 }

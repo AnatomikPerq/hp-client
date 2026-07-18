@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/core/constants/preferences.dart';
 import 'package:onexray/core/tools/logger.dart';
@@ -8,7 +8,6 @@ import 'package:onexray/gen/assets.gen.dart';
 import 'package:onexray/pages/launch/route.dart';
 import 'package:onexray/pages/main/url.dart';
 import 'package:onexray/service/launch/bootstrap.dart';
-import 'package:onexray/service/firebase/service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PrivacyPageState {
@@ -21,7 +20,7 @@ class PrivacyPageState {
   }
 }
 
-class PrivacyController extends Cubit<PrivacyPageState> {
+class PrivacyController extends PageCubit<PrivacyPageState> {
   PrivacyController() : super(const PrivacyPageState()) {
     _readPrivacy();
   }
@@ -50,7 +49,6 @@ class PrivacyController extends Cubit<PrivacyPageState> {
     try {
       await PreferencesKey().savePrivacyAccepted(true);
       accepted = true;
-      await FirebaseService().initializeAfterPrivacyAccepted();
       final destination = await LaunchBootstrapService()
           .resolveAcceptedDestination();
       if (context.mounted) {
@@ -58,14 +56,6 @@ class PrivacyController extends Cubit<PrivacyPageState> {
       }
     } catch (e, stackTrace) {
       ygLogger("privacy accept error: $e\n$stackTrace");
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: e,
-          stack: stackTrace,
-          library: "OneXray launch",
-          context: ErrorDescription("while accepting privacy policy"),
-        ),
-      );
       if (accepted && context.mounted) {
         context.go(RouterPath.home);
       }

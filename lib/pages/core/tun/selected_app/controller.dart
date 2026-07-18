@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/pages/core/tun/installed_app/params.dart';
 import 'package:onexray/pages/core/tun/selected_app/params.dart';
 import 'package:onexray/pages/main/navigation.dart';
-import 'package:onexray/pages/widget/menu_picker.dart';
 
 class SelectedAppPageState {
   final List<AndroidAppInfo> apps;
@@ -18,7 +17,7 @@ class SelectedAppPageState {
   }
 }
 
-class SelectedAppController extends Cubit<SelectedAppPageState> {
+class SelectedAppController extends PageCubit<SelectedAppPageState> {
   final SelectedAppParams params;
 
   SelectedAppController(this.params) : super(const SelectedAppPageState()) {
@@ -59,11 +58,7 @@ class SelectedAppController extends Cubit<SelectedAppPageState> {
     emit(state.copyWith(apps: selectedApps));
   }
 
-  void moreAction(
-    BuildContext context,
-    AndroidAppInfo appInfo,
-    IconMenuId menuId,
-  ) {
+  void removeApp(AndroidAppInfo appInfo) {
     _selections.remove(appInfo.packageName);
     final newApps = List<AndroidAppInfo>.from(state.apps)..remove(appInfo);
     emit(state.copyWith(apps: newApps));

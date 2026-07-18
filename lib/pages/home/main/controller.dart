@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:onexray/pages/mixin/page_cubit.dart';
 import 'package:onexray/core/constants/preferences.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -11,10 +12,10 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/home/main/actions.dart';
 import 'package:onexray/pages/home/main/state.dart';
 import 'package:onexray/pages/home/main/system_extension_coordinator.dart';
-import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/mixin/alert.dart';
 import 'package:onexray/service/app_update/service.dart';
 import 'package:onexray/service/background_task/service.dart';
+import 'package:onexray/service/core_routing_mode/state.dart';
 import 'package:onexray/service/event_bus/service.dart';
 import 'package:onexray/service/event_bus/state.dart';
 import 'package:onexray/service/geo_data/system_dat_service.dart';
@@ -23,7 +24,7 @@ import 'package:onexray/service/toast/service.dart';
 import 'package:onexray/service/vpn/service.dart';
 import 'package:onexray/service/xray/profile/simple_state.dart';
 
-class HomeController extends Cubit<HomePageState> {
+class HomeController extends PageCubit<HomePageState> {
   final BuildContext context;
 
   HomeController(this.context)
@@ -37,6 +38,7 @@ class HomeController extends Cubit<HomePageState> {
 
   late final StreamSubscription<void> _toastSubscription;
   StreamSubscription<int>? _xrayProfileSubscription;
+  StreamSubscription<int>? _runtimeConfigSubscription;
   Future<void>? _systemGeoDatFuture;
   late final _actions = HomeActions(context);
   late final _systemExtension = HomeSystemExtensionCoordinator(
@@ -46,6 +48,7 @@ class HomeController extends Cubit<HomePageState> {
 
   Future<void> _asyncInit() async {
     _initToastStream();
+    _listenRuntimeConfig();
     _systemExtension.start();
     unawaited(_listenXrayProfile());
     _systemGeoDatFuture = _checkSystemGeoDatAssets();
@@ -53,51 +56,42 @@ class HomeController extends Cubit<HomePageState> {
     unawaited(_initServices());
     try {
       final id = await PreferencesKey().readLastConfigId();
-      if (isClosed) {
+      if (!isPageActive) {
         return;
       }
       emit(state.copyWith(configId: id));
       await _updateConfigName(id);
     } catch (e, stackTrace) {
-      ygReportError(e, stackTrace, reason: 'Home initialization failed');
+      ygLogger('Home initialization failed: $e\n$stackTrace');
     }
     unawaited(_checkAppUpdate());
   }
 
   Future<void> _initServices() async {
     try {
-      if (isClosed || !context.mounted) {
+      if (!isPageActive || !context.mounted) {
         return;
       }
       await context.read<AppEventBus>().asyncInitService(context);
     } catch (e, stackTrace) {
-      ygReportError(
-        e,
-        stackTrace,
-        reason: 'Home service initialization failed',
-      );
+      ygLogger('Home service initialization failed: $e\n$stackTrace');
     }
 
-    if (isClosed) {
+    if (!isPageActive) {
       return;
     }
     try {
       BackgroundTaskService().init();
     } catch (e, stackTrace) {
-      ygReportError(
-        e,
-        stackTrace,
-        reason: 'Background task initialization failed',
-      );
+      ygLogger('Background task initialization failed: $e\n$stackTrace');
     }
-    unawaited(_refreshVpnStatus());
   }
 
   Future<void> _refreshVpnStatus() async {
     try {
       await VpnService().refreshVpnStatus();
     } catch (e, stackTrace) {
-      ygReportError(e, stackTrace, reason: 'VPN status refresh failed');
+      ygLogger('VPN status refresh failed: $e\n$stackTrace');
     }
   }
 
@@ -105,7 +99,7 @@ class HomeController extends Cubit<HomePageState> {
     try {
       await SystemGeoDatService().checkAssets();
     } catch (e, stackTrace) {
-      ygReportError(e, stackTrace, reason: 'System GeoData check failed');
+      ygLogger('System GeoData check failed: $e\n$stackTrace');
     }
   }
 
@@ -118,7 +112,7 @@ class HomeController extends Cubit<HomePageState> {
   Future<void> _checkAppUpdate() async {
     try {
       await Future.delayed(const Duration(seconds: 3));
-      if (isClosed || !context.mounted) {
+      if (!isPageActive || !context.mounted) {
         return;
       }
       if (!await PreferencesKey().readPrivacyAccepted()) {
@@ -130,21 +124,30 @@ class HomeController extends Cubit<HomePageState> {
       }
       await service.recordAutomaticCheck();
       final result = await service.checkForUpdate();
-      if (isClosed ||
-          !context.mounted ||
-          result.status != AppUpdateCheckStatus.available ||
-          result.updateInfo == null) {
+      if (!isPageActive || !context.mounted) {
         return;
       }
-      final updateInfo = result.updateInfo!;
-      if (!await service.shouldShowAutomaticReminder(updateInfo)) {
-        return;
-      }
-      if (!isClosed && context.mounted) {
-        await context.pushAppUpdateDialog(updateInfo);
+      switch (result.status) {
+        case AppUpdateCheckStatus.available:
+          final updateInfo = result.updateInfo;
+          if (updateInfo == null) {
+            return;
+          }
+          final shouldShow = await service.shouldShowAutomaticReminder(
+            updateInfo,
+          );
+          if (isPageActive) {
+            AppEventBus.instance.updateAppUpdateInfo(
+              shouldShow ? updateInfo : null,
+            );
+          }
+        case AppUpdateCheckStatus.upToDate:
+          AppEventBus.instance.updateAppUpdateInfo(null);
+        case AppUpdateCheckStatus.failed:
+          return;
       }
     } catch (e, stackTrace) {
-      ygReportError(e, stackTrace, reason: 'Automatic update check failed');
+      ygLogger('Automatic update check failed: $e\n$stackTrace');
     }
   }
 
@@ -164,7 +167,7 @@ class HomeController extends Cubit<HomePageState> {
     final eventBus = AppEventBus.instance;
     var xrayProfileId = eventBus.state.xrayProfileId;
     xrayProfileId = await PreferencesKey().readXrayProfileId();
-    if (isClosed) {
+    if (!isPageActive) {
       return;
     }
     await _readXrayProfile(xrayProfileId);
@@ -176,7 +179,7 @@ class HomeController extends Cubit<HomePageState> {
   }
 
   Future<void> _readXrayProfile(int id) async {
-    if (isClosed) {
+    if (!isPageActive) {
       return;
     }
     switch (id) {
@@ -198,7 +201,7 @@ class HomeController extends Cubit<HomePageState> {
         break;
       default:
         final xrayProfileData = await AppDatabase().coreConfigDao.searchRow(id);
-        if (isClosed) {
+        if (!isPageActive) {
           return;
         }
         if (xrayProfileData != null) {
@@ -223,7 +226,7 @@ class HomeController extends Cubit<HomePageState> {
     return HomeConnectionViewStateBuilder.build(context, homeState, eventState);
   }
 
-  void gotoNodeInfo() => _actions.gotoNodeInfo();
+  void gotoNodeInfo() => _actions.gotoNodeInfo(state.configId);
 
   void gotoXrayProfile() => _actions.gotoXrayProfile();
 
@@ -233,8 +236,36 @@ class HomeController extends Cubit<HomePageState> {
 
   Future<void> _updateConfigName(int value) async {
     final configName = await _readConfigName(value);
-    if (!isClosed && state.configId == value) {
+    if (isPageActive && state.configId == value) {
       emit(state.copyWith(configName: configName));
+    }
+  }
+
+  void _listenRuntimeConfig() {
+    final eventBus = AppEventBus.instance;
+    unawaited(
+      _updateRuntimeConfigName(
+        HomeConnectionViewStateBuilder.runtimeConfigId(eventBus.state),
+      ),
+    );
+    _runtimeConfigSubscription = eventBus.stream
+        .map(HomeConnectionViewStateBuilder.runtimeConfigId)
+        .distinct()
+        .listen(_updateRuntimeConfigName);
+  }
+
+  Future<void> _updateRuntimeConfigName(int id) async {
+    if (!isPageActive) {
+      return;
+    }
+    emit(state.copyWith(runtimeConfigId: id, runtimeConfigName: ''));
+    if (id == DBConstants.defaultId) {
+      return;
+    }
+
+    final configName = await _readConfigName(id);
+    if (isPageActive && state.runtimeConfigId == id) {
+      emit(state.copyWith(runtimeConfigName: configName));
     }
   }
 
@@ -259,7 +290,9 @@ class HomeController extends Cubit<HomePageState> {
     if (state.vpnCommandLoading || AppEventBus.instance.state.vpnLoading) {
       return;
     }
-    if (state.configId == DBConstants.defaultId) {
+    final routingMode = AppEventBus.instance.state.coreRoutingMode;
+    if (routingMode != CoreRoutingMode.direct &&
+        state.configId == DBConstants.defaultId) {
       ContextAlert.showToast(
         context,
         AppLocalizations.of(context)!.vpnSelectOneConfig,
@@ -273,8 +306,33 @@ class HomeController extends Cubit<HomePageState> {
       final result = await VpnService().startVpn(state.configId);
       await _handleVpnCommandResult(result);
     } finally {
-      if (!isClosed) {
+      if (isPageActive) {
         emit(state.copyWith(vpnCommandLoading: false));
+      }
+    }
+  }
+
+  Future<void> switchRoutingMode(CoreRoutingMode mode) async {
+    final eventState = AppEventBus.instance.state;
+    if (state.vpnCommandLoading || eventState.vpnLoading) {
+      return;
+    }
+    emit(state.copyWith(vpnCommandLoading: true, pendingRoutingMode: mode));
+    try {
+      await _ensureSystemGeoDatAssets();
+      final result = await VpnService().switchRoutingMode(
+        mode,
+        selectedConfigId: state.configId,
+      );
+      await _handleVpnCommandResult(result);
+    } finally {
+      if (isPageActive) {
+        emit(
+          state.copyWith(
+            vpnCommandLoading: false,
+            clearPendingRoutingMode: true,
+          ),
+        );
       }
     }
   }
@@ -309,10 +367,10 @@ class HomeController extends Cubit<HomePageState> {
   }
 
   @override
-  Future<void> close() async {
+  Future<void> disposePageResources() async {
     await _toastSubscription.cancel();
     await _xrayProfileSubscription?.cancel();
+    await _runtimeConfigSubscription?.cancel();
     await _systemExtension.close();
-    return super.close();
   }
 }

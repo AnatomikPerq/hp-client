@@ -2,10 +2,6 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
-    // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -21,6 +17,7 @@ val keystoreProperties: Properties? = if (keystoreFile.exists()) {
 } else {
     null
 }
+val splitPerAbi = providers.gradleProperty("split-per-abi").orNull?.toBoolean() == true
 
 android {
     namespace = "net.yuandev.onexray"
@@ -39,6 +36,23 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        if (!splitPerAbi) {
+            ndk {
+                abiFilters.clear()
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
+    }
+
+    if (splitPerAbi) {
+        splits {
+            abi {
+                reset()
+                isEnable = true
+                isUniversalApk = false
+                include("arm64-v8a", "x86_64")
+            }
+        }
     }
 
     signingConfigs {
@@ -82,10 +96,6 @@ dependencies {
 
     implementation("androidx.fragment:fragment-ktx:1.8.9")
     implementation("androidx.activity:activity-ktx:1.13.0")
-
-    implementation("com.google.android.play:integrity:1.6.0")
-
-    implementation("androidx.datastore:datastore:1.2.1")
 
     val kotlinxCoroutinesVersion = "1.11.0"
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesVersion")
