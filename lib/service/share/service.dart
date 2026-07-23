@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:image/image.dart' as img;
@@ -12,6 +13,7 @@ import 'package:onexray/service/db/config_writer.dart';
 import 'package:onexray/service/event_bus/service.dart';
 import 'package:onexray/service/ping/service.dart';
 import 'package:onexray/service/share/xray_share_reader.dart';
+import 'package:onexray/service/subscription/model.dart';
 import 'package:onexray/service/subscription/service.dart';
 import 'package:onexray/service/toast/service.dart';
 import 'package:zxing2/qrcode.dart';
@@ -28,6 +30,33 @@ final class ShareService {
   void init() {}
 
   void dispose() {}
+
+  @visibleForTesting
+  static List<SubscriptionImportEntry> parseSubscriptionImportEntries(
+    String text,
+  ) {
+    final entries = <SubscriptionImportEntry>[];
+    for (final rawLine in text.split('\n')) {
+      final line = rawLine.trim();
+      if (!line.startsWith('https://')) {
+        continue;
+      }
+
+      final uri = Uri.tryParse(line);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+        continue;
+      }
+
+      final fragmentIndex = line.indexOf('#');
+      entries.add(
+        SubscriptionImportEntry(
+          url: fragmentIndex < 0 ? line : line.substring(0, fragmentIndex),
+          name: Uri.decodeComponent(uri.fragment),
+        ),
+      );
+    }
+    return entries;
+  }
 
   Future<void> pickImage() async {
     final picker = ImagePicker();
@@ -153,14 +182,11 @@ final class ShareService {
       try {
         final url = text.trim();
         if (url.startsWith("https://")) {
-          final uri = Uri.tryParse(url);
-          if (uri != null) {
-            success = await SubscriptionService().addSubscription(
-              url,
-              uri.fragment,
-              false,
-            );
-          }
+          final entries = parseSubscriptionImportEntries(url);
+          final imported = await SubscriptionService().importSubscriptions(
+            entries,
+          );
+          success = imported > 0;
         } else {
           final rows = await XrayShareReader().parseShareText(url);
           if (rows.isNotEmpty) {

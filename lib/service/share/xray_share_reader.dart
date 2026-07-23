@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
@@ -7,8 +8,8 @@ import 'package:onexray/core/tools/file.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/xray/outbound/state.dart';
 import 'package:onexray/service/xray/outbound/state_db.dart';
+import 'package:onexray/service/xray/outbound/state_normalizer.dart';
 import 'package:onexray/service/xray/outbound/state_reader.dart';
-import 'package:onexray/service/xray/outbound/state_validator.dart';
 
 class XrayShareReader {
   Future<List<CoreConfigCompanion>> parseShareFile(String filePath) async {
@@ -20,15 +21,15 @@ class XrayShareReader {
 
   Future<List<CoreConfigCompanion>> parseOutboundShareText(String text) async {
     final xrayJson = await AppHostApi().convertShareLinksToXrayJson(text);
-    final rows = await _readXrayJsonOutbounds(xrayJson);
-    return rows;
+    return readXrayJsonOutbounds(xrayJson);
   }
 
   Future<List<CoreConfigCompanion>> parseShareText(String text) async {
     return parseOutboundShareText(text);
   }
 
-  Future<List<CoreConfigCompanion>> _readXrayJsonOutbounds(
+  @visibleForTesting
+  Future<List<CoreConfigCompanion>> readXrayJsonOutbounds(
     XrayJson xrayJson,
   ) async {
     final res = <CoreConfigCompanion>[];
@@ -37,17 +38,21 @@ class XrayShareReader {
       return res;
     }
 
-    for (final outbound in outbounds) {
-      final state = OutboundState();
-      final success = state.readFromOutbound(outbound);
-      if (success) {
-        state.removeWhitespace();
-        final check = await state.validate();
-        if (check.item1) {
-          res.add(state.outboundCompanion);
-        } else {
-          ygLogger("Invalid outbound state: ${check.item2}");
+    for (var index = 0; index < outbounds.length; index++) {
+      if (index > 0 && index % 64 == 0) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      final outbound = outbounds[index];
+      try {
+        final state = OutboundState();
+        final success = state.readFromOutbound(outbound);
+        if (!success) {
+          continue;
         }
+        state.removeWhitespace();
+        res.add(state.outboundCompanion);
+      } catch (error, stackTrace) {
+        ygLogger("Failed to read imported outbound: $error\n$stackTrace");
       }
     }
     return res;
