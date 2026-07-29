@@ -21,7 +21,15 @@ class SubscriptionListPage extends StatelessWidget {
             title: Text(
               AppLocalizations.of(context)!.subscriptionListPageTitle,
             ),
-            actions: [_addButton(context)],
+            actions: [
+              BlocBuilder<AppEventBus, AppEventBusState>(
+                bloc: AppEventBus.instance,
+                buildWhen: (previous, current) =>
+                    previous.downloading != current.downloading,
+                builder: (context, state) =>
+                    _addButton(context, state.downloading),
+              ),
+            ],
           ),
           body: const SafeArea(child: _SubscriptionListView()),
         ),
@@ -29,21 +37,31 @@ class SubscriptionListPage extends StatelessWidget {
     );
   }
 
-  Widget _addButton(BuildContext context) {
+  Widget _addButton(BuildContext context, bool downloading) {
     final localizations = AppLocalizations.of(context)!;
     final compact = MediaQuery.sizeOf(context).width < 600;
+    final icon = downloading
+        ? const SizedBox.square(
+            dimension: 15,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : const Icon(LucideIcons.plus);
     return compact
         ? ShadIconButton(
-            icon: const Icon(LucideIcons.plus),
-            onPressed: () => context
-                .read<SubscriptionListController>()
-                .addSubscription(context),
+            icon: icon,
+            onPressed: downloading
+                ? null
+                : () => context
+                      .read<SubscriptionListController>()
+                      .addSubscription(context),
           )
         : ShadButton(
-            leading: const Icon(LucideIcons.plus),
-            onPressed: () => context
-                .read<SubscriptionListController>()
-                .addSubscription(context),
+            leading: icon,
+            onPressed: downloading
+                ? null
+                : () => context
+                      .read<SubscriptionListController>()
+                      .addSubscription(context),
             child: Text(localizations.buttonAdd),
           );
   }
@@ -71,7 +89,9 @@ class _SubscriptionListView extends StatelessWidget {
       stream: controller.rowsStream,
       builder: (context, snapshot) {
         return BlocBuilder<AppEventBus, AppEventBusState>(
-          buildWhen: (previous, current) => previous.pinging != current.pinging,
+          buildWhen: (previous, current) =>
+              previous.pinging != current.pinging ||
+              previous.downloading != current.downloading,
           builder: (context, eventState) => SubscriptionListView(
             items: snapshot.data ?? const [],
             emptyMessage: AppLocalizations.of(
@@ -80,7 +100,9 @@ class _SubscriptionListView extends StatelessWidget {
             addLabel: AppLocalizations.of(context)!.buttonAdd,
             pingLabel: AppLocalizations.of(context)!.outboundPageRealPing,
             pinging: eventState.pinging,
-            onAdd: () => controller.addSubscription(context),
+            onAdd: eventState.downloading
+                ? null
+                : () => controller.addSubscription(context),
             onOpen: (subscription) =>
                 controller.openNodes(context, subscription.id),
             onPing: (subscription) => controller.ping(subscription.id),
