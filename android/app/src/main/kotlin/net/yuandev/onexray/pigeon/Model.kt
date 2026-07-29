@@ -29,6 +29,7 @@ data class TunJson(
     val metricsEnabled: Boolean?,
     val tunName: String?,
     val autoOutboundsInterface: String?,
+    val excludeLocalNetworks: Boolean?,
     val onDemandEnabled: Boolean?,
     val disconnectOnSleep: Boolean?,
     val onDemandRules: List<OnDemandRule>?,
@@ -66,8 +67,8 @@ enum class LibXrayMethod {
     @SerialName("countGeoData")
     COUNT_GEO_DATA,
 
-    @SerialName("ping")
-    PING,
+    @SerialName("pingBatch")
+    PING_BATCH,
 
     @SerialName("testXray")
     TEST_XRAY,

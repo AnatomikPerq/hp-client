@@ -33,6 +33,8 @@ import 'package:onexray/pages/core/xray/profile/dns_hosts/page.dart';
 import 'package:onexray/pages/core/xray/profile/dns_hosts/params.dart';
 import 'package:onexray/pages/core/xray/profile/dns_server/page.dart';
 import 'package:onexray/pages/core/xray/profile/dns_server/params.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_additional/page.dart';
+import 'package:onexray/pages/core/xray/profile/inbound_additional/params.dart';
 import 'package:onexray/pages/core/xray/profile/inbound_ping/page.dart';
 import 'package:onexray/pages/core/xray/profile/inbound_ping/params.dart';
 import 'package:onexray/pages/core/xray/profile/inbound_sniffing/page.dart';
@@ -77,10 +79,10 @@ import 'package:onexray/pages/settings/app_update/params.dart';
 import 'package:onexray/pages/settings/app_icon/page.dart';
 import 'package:onexray/pages/settings/auto_update/page.dart';
 import 'package:onexray/pages/settings/backup/page.dart';
+import 'package:onexray/pages/settings/desktop/page.dart';
 import 'package:onexray/pages/settings/language/page.dart';
 import 'package:onexray/pages/settings/main/page.dart';
 import 'package:onexray/pages/settings/theme/page.dart';
-import 'package:onexray/pages/settings/toolbox/page.dart';
 import 'package:onexray/pages/subscriptions/add/page.dart';
 import 'package:onexray/pages/subscriptions/edit/page.dart';
 import 'package:onexray/pages/subscriptions/edit/params.dart';
@@ -356,6 +358,14 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
     ),
   ),
   _route(
+    AppSecondaryDestination.inboundAdditional,
+    (_, state) => _withExtra<AdditionalInboundParams>(
+      state,
+      AppSecondaryDestination.inboundAdditional,
+      (params) => AdditionalInboundPage(params: params),
+    ),
+  ),
+  _route(
     AppSecondaryDestination.outboundFreedom,
     (_, state) => _withExtra<OutboundFreedomParams>(
       state,
@@ -450,9 +460,12 @@ final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
     ),
   ),
   _route(AppSecondaryDestination.autoUpdate, (_, _) => const AutoUpdatePage()),
+  _route(
+    AppSecondaryDestination.desktopSettings,
+    (_, _) => const DesktopSettingsPage(),
+  ),
   _route(AppSecondaryDestination.backup, (_, _) => const BackupPage()),
   _route(AppSecondaryDestination.appIcon, (_, _) => const AppIconPage()),
-  _route(AppSecondaryDestination.toolbox, (_, _) => const ToolboxPage()),
   _route(AppSecondaryDestination.theme, (_, _) => const ThemePage()),
   _route(AppSecondaryDestination.language, (_, _) => const LanguagePage()),
   _route(AppSecondaryDestination.support, (_, _) => const SettingsPage()),

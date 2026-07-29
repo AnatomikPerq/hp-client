@@ -45,7 +45,16 @@ abstract class BridgeHostApi {
   @async
   bool useSystemExtension();
 
-  //iOS======================
+  @async
+  NativeLaunchAtLoginResult queryLaunchAtLogin();
+
+  @async
+  NativeLaunchAtLoginResult setLaunchAtLogin(bool enabled);
+
+  @async
+  bool openLaunchAtLoginSettings();
+
+  //Apple app icon======================
   @async
   bool setAppIcon(String appIcon);
 
@@ -70,6 +79,21 @@ enum PlatformPermissionState {
 }
 
 enum NativeVpnCommandState { success, waitingForPlatformPermission, failed }
+
+enum NativeLaunchAtLoginState {
+  enabled,
+  disabled,
+  requiresApproval,
+  unavailable,
+  error,
+}
+
+class NativeLaunchAtLoginResult {
+  NativeLaunchAtLoginResult({required this.state, this.message});
+
+  final NativeLaunchAtLoginState state;
+  final String? message;
+}
 
 class PlatformPermissionResult {
   PlatformPermissionResult({

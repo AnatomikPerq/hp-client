@@ -2,12 +2,8 @@ import Cocoa
 import FlutterMacOS
 
 @main
+@MainActor
 class AppDelegate: FlutterAppDelegate {
-    override func applicationWillFinishLaunching(_ notification: Notification) {
-        initApp()
-        super.applicationWillFinishLaunching(notification)
-    }
-
     override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
@@ -28,9 +24,9 @@ class AppDelegate: FlutterAppDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
         if window.isMiniaturized {
-            window.deminiaturize(self)
+            window.deminiaturize(nil)
         }
-        window.makeKeyAndOrderFront(self)
+        window.makeKeyAndOrderFront(nil)
     }
 
     override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

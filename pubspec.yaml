@@ -1,7 +1,7 @@
 name: onexray
 description: "Cross Platform Xray-core Client"
 publish_to: "none"
-version: 26.7.3+1
+version: 26.8.1+1
 
 environment:
   sdk: ">=3.12.0 <4.0.0"
@@ -30,8 +30,6 @@ dependencies:
   pub_semver: ^2.2.0
   # i18n
   intl: ^0.20.2
-  # async
-  async: ^2.13.1
   # native
   ffi: ^2.2.0
 
@@ -40,21 +38,21 @@ dependencies:
   tuple: ^2.0.2
 
   #---------- flutter community
-  package_info_plus: ^10.2.0
+  package_info_plus: ^10.2.1
   device_info_plus: ^13.2.0
-  share_plus: ^13.2.0
+  share_plus: ^13.3.0
 
   #---------- third party plugin
   drift: ^2.34.2
   drift_flutter: ^0.3.1
-  sqlite3: ^3.4.0
+  sqlite3: ^3.5.0
 
-  dio: ^5.10.0
-  uuid: ^4.5.3
+  dio: ^5.11.0
+  uuid: ^4.6.0
   permission_handler: ^12.0.3
   # qrcode
   file_picker: ^12.0.0-beta.7
-  mobile_scanner: ^7.2.1
+  mobile_scanner: ^7.4.0
   image: ^4.9.1
   zxing2: ^0.2.4
   # export
@@ -67,7 +65,7 @@ dependencies:
   flutter_markdown_plus: ^1.0.12
   duration: ^4.0.3
 
-  flutter_local_notifications: ^22.0.1
+  flutter_local_notifications: ^22.2.0
 
   in_app_review: ^2.0.12
 
@@ -87,27 +85,14 @@ dev_dependencies:
   build_runner: ^2.15.1
   json_serializable: ^6.14.0
   drift_dev: ^2.34.0
-  pigeon: ^27.1.2
+  pigeon: ^27.3.0
   flutter_lints: ^6.0.0
   flutter_gen_runner: ^5.15.0
   ffigen: ^20.1.1
-  msix: ^3.18.0
 
 # re_editor only uses APIs that remain compatible with isolate_manager 6.x.
 dependency_overrides:
   isolate_manager: ^6.3.2
-
-msix_config:
-  display_name: OneXray
-  publisher_display_name: Yuan Dev LLC
-  identity_name: YuanDevLLC.OneXray
-  publisher: CN=3666BCB5-5482-46DD-9C19-D8A7290A39FD
-  logo_path: assets/logo.png
-  capabilities: allowElevation
-  languages: en-us
-  os_min_version: 10.0.17763.0
-  build_windows: false
-  store: true
 
 flutter_gen:
   output: lib/gen/
@@ -122,6 +107,7 @@ flutter:
     - assets/icon/
     - assets/md/
     - assets/app_icon/
+    - assets/macos_icon/
 
 ffigen:
   llvm-path:

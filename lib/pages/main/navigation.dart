@@ -55,6 +55,7 @@ enum AppSecondaryDestination {
   inboundTun("inbound-tun"),
   inboundSniffing("inbound-sniffing"),
   inboundPing("inbound-ping"),
+  inboundAdditional("inbound-additional"),
   outboundFreedom("outbound-freedom"),
   outboundFragment("outbound-fragment"),
   outboundBlackHole("outbound-black-hole"),
@@ -70,9 +71,9 @@ enum AppSecondaryDestination {
   logFile("log-file"),
   configFileViewer("config-file-viewer"),
   autoUpdate("auto-update"),
+  desktopSettings("desktop-settings"),
   backup("backup"),
   appIcon("app-icon"),
-  toolbox("toolbox"),
   theme("theme"),
   language("language"),
   support("support");
