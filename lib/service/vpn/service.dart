@@ -56,6 +56,13 @@ final class VpnService {
   Future<void>? _initFuture;
 
   bool get vpnRunning => _vpnRunning;
+  bool get vpnRunningOrStarting {
+    final actionState = AppEventBus.instance.state.vpnActionState;
+    return _isCoreActive ||
+        actionState == VpnActionState.preparing ||
+        actionState == VpnActionState.connecting;
+  }
+
   CoreRunMode get _selectedRunMode =>
       CoreRunModePolicy.resolve(AppEventBus.instance.state.coreRunMode);
 
@@ -280,6 +287,32 @@ final class VpnService {
 
   Future<NativeVpnCommandResult> stopDefaultVpn() =>
       _runCommand(_stopCurrentVpn);
+
+  Future<NativeVpnCommandResult> restartCurrentVpn() =>
+      _runCommand(_restartCurrentVpn);
+
+  Future<NativeVpnCommandResult> _restartCurrentVpn(int generation) async {
+    if (!_isCoreActive) {
+      return _commandSuccess();
+    }
+
+    final runningId = AppEventBus.instance.state.runningId;
+    final restartConfigId = _runningRoutingMode == CoreRoutingMode.direct
+        ? _lastConfigId
+        : runningId != DBConstants.defaultId
+        ? runningId
+        : _lastConfigId;
+    if (_runningRoutingMode != CoreRoutingMode.direct &&
+        restartConfigId == DBConstants.defaultId) {
+      return _commandFailed(appLocalizationsNoContext().vpnSelectOneConfig);
+    }
+
+    final stopResult = await _stopCurrentVpn(generation);
+    if (stopResult.state == NativeVpnCommandState.failed) {
+      return stopResult;
+    }
+    return _startVpn(restartConfigId, generation);
+  }
 
   Future<NativeVpnCommandResult> startVpn(int configId) =>
       _runCommand((generation) => _startVpn(configId, generation));

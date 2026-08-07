@@ -46,6 +46,42 @@ OneXray is a client-only app. It does not provide VPN or proxy servers, subscrip
 - **Local tools** — node ping, Xray logs, GeoData and rule-set management, backup, and restore.
 - **Platform integration** — Android Per-App VPN, Apple On Demand, desktop tray controls, and outbound-interface selection.
 
+## Age-Encrypted Subscriptions
+
+When adding or editing an HTTPS subscription, open **Encryption** and either
+enter an existing age key pair or generate an X25519 or Mihomo-compatible
+Hybrid key (`ML-KEM-768 + X25519`). OneXray sends only the saved public
+recipient as `X-Age-Public-Key`; the secret key remains local and the pair is
+reused for automatic refreshes.
+
+HTTPS is still required. OneXray backups are not encrypted and include the age
+key pair so restored subscriptions remain usable; store backup ZIP files
+carefully.
+
+## OneXray URL Scheme
+
+OneXray can share and import content through its proprietary `onexray://` URLs:
+
+```text
+onexray://onexray.com/config/add?type=outbound|profile|full|raw&data=<percent-encoded-base64-json>#Name
+onexray://onexray.com/sub/add?url=<percent-encoded-https-url>[&age=x25519|hybrid]#Name
+onexray://onexray.com/dat/add?type=domain|ip&url=<percent-encoded-https-url>#Name
+```
+
+When a shared config references custom GeoData stored in OneXray, matching
+GeoData links are placed before the config link.
+
+Only the types shown above are supported. Legacy `type=setting`, backups, and
+other commands are not accepted. An age subscription link generates a new
+local key pair, sends only its public key for the first download, and stores
+the pair when the subscription is imported successfully.
+
+Android, iOS, and installed macOS apps register the scheme directly. On
+Windows and Linux, use the EXE/winget or DEB package; ZIP packages do not
+register the scheme automatically. The Mac App Store app and OneXraySE share
+the same scheme, so installing both can make macOS choose either app as the
+handler.
+
 ## Download
 
 | Platform | Requirements | Download |
@@ -70,6 +106,24 @@ brew install --cask onexrayse
 brew uninstall --cask onexrayse
 ```
 
+#### Universal ZIP
+
+1. Download and extract `OneXray-macos-universal.zip`.
+2. Move `OneXraySE.app` to `/Applications`. Do not run it directly from Downloads or another folder; macOS requires an app containing a System Extension to be installed in a system Applications directory.
+3. Open OneXraySE from Applications and accept the macOS launch confirmation.
+
+For the first VPN connection:
+
+1. Import a subscription or node, select a node, and click Start.
+2. Open **System Settings > General > Login Items & Extensions**.
+3. Under **Extensions**, open **Network Extensions**, enable **OneXraySE**, and click **Done**.
+4. If **Privacy & Security** also shows an approval request, click **Allow** and restart the Mac if requested.
+5. Return to OneXraySE and click Start again.
+
+To update the ZIP build, quit OneXraySE, replace the existing app in `/Applications` with the newly extracted `OneXraySE.app`, and reopen it. Approve the System Extension update if macOS asks.
+
+See [Installing System Extensions and Drivers](https://developer.apple.com/documentation/systemextensions/installing-system-extensions-and-drivers) and [Change Login Items & Extensions settings](https://support.apple.com/guide/mac-help/change-login-items-extension-settings-mtusr003/mac).
+
 ### Windows
 
 Winget automatically selects the x86_64 or ARM64 installer for the current device.
@@ -86,6 +140,8 @@ Android builds support `arm64-v8a` and `x86_64`. 32-bit ARM devices are not supp
 ### iOS
 
 If the App Store is unavailable for your Apple ID, download `OneXray-ios.ipa` and install it with [AltStore](https://altstore.io/) or another compatible sideloading tool.
+
+Self-installing the IPA requires re-signing both OneXray and its Packet Tunnel extension with a provisioning profile that authorizes the Network Extension capability. Apple does not support this capability for free Personal Team accounts, so a paid Apple Developer Program membership is required. Without it, the app may open and ping nodes, but the VPN cannot start. See [Apple Developer Forums](https://developer.apple.com/forums/thread/128767) and [Supported capabilities (iOS)](https://developer.apple.com/help/account/reference/supported-capabilities-ios/).
 
 ### Linux
 

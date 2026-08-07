@@ -41,6 +41,26 @@ class LibXrayInvokeResponse {
   Map<String, dynamic> toJson() => _$LibXrayInvokeResponseToJson(this);
 }
 
+final class LibXrayInvokeException implements Exception {
+  const LibXrayInvokeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+abstract final class LibXrayErrorMessage {
+  static const invalidAgeSecretKey = 'invalid or unsupported age secret key';
+  static const missingAgeSecretKey = 'missing age secret key';
+  static const ageDecryptFailed = 'unable to decrypt age subscription';
+  static const malformedAgeArmor = 'malformed age armor';
+  static const agePlaintextTooLarge =
+      'decrypted subscription exceeds the 16 MiB size limit';
+  static const agePlaintextUnsupported =
+      'decrypted subscription is unsupported';
+}
+
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class GetFreePortsResponse {
   List<int>? ports;
@@ -147,10 +167,10 @@ class PingBatchRequest {
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class PingBatchItemRequest {
-  String? configPath;
+  String? xrayJson;
   String? outboundTag;
 
-  PingBatchItemRequest(this.configPath, {this.outboundTag});
+  PingBatchItemRequest(this.xrayJson, {this.outboundTag});
 
   factory PingBatchItemRequest.fromJson(Map<String, dynamic> json) =>
       _$PingBatchItemRequestFromJson(json);
@@ -160,14 +180,26 @@ class PingBatchItemRequest {
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class RunXrayRequest {
-  String? configPath;
+  String? xrayJson;
 
-  RunXrayRequest(this.configPath);
+  RunXrayRequest(this.xrayJson);
 
   factory RunXrayRequest.fromJson(Map<String, dynamic> json) =>
       _$RunXrayRequestFromJson(json);
 
   Map<String, dynamic> toJson() => _$RunXrayRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class TestXrayRequest {
+  String? xrayJson;
+
+  TestXrayRequest(this.xrayJson);
+
+  factory TestXrayRequest.fromJson(Map<String, dynamic> json) =>
+      _$TestXrayRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$TestXrayRequestToJson(this);
 }
 
 enum LibXrayMethod {
@@ -177,6 +209,8 @@ enum LibXrayMethod {
   convertShareLinksToXrayJson,
   @JsonValue("convertXrayJsonToShareLinks")
   convertXrayJsonToShareLinks,
+  @JsonValue("generateAgeKeyPair")
+  generateAgeKeyPair,
   @JsonValue("countGeoData")
   countGeoData,
   @JsonValue("pingBatch")
@@ -185,8 +219,6 @@ enum LibXrayMethod {
   testXray,
   @JsonValue("runXray")
   runXray,
-  @JsonValue("runXrayFromJson")
-  runXrayFromJson,
   @JsonValue("stopXray")
   stopXray,
   @JsonValue("xrayVersion")
@@ -201,7 +233,7 @@ class LibXrayInvokeRequest {
   LibXrayMethod? method;
   Map<String, dynamic>? payload;
 
-  LibXrayInvokeRequest({this.method, this.payload}) : apiVersion = 1;
+  LibXrayInvokeRequest({this.method, this.payload}) : apiVersion = 2;
 
   factory LibXrayInvokeRequest.fromJson(Map<String, dynamic> json) =>
       _$LibXrayInvokeRequestFromJson(json);
@@ -224,8 +256,9 @@ class GetFreePortsRequest {
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class ConvertShareLinksToXrayJsonRequest {
   String? text;
+  AgeDecryptConfig? age;
 
-  ConvertShareLinksToXrayJsonRequest(this.text);
+  ConvertShareLinksToXrayJsonRequest(this.text, {this.age});
 
   factory ConvertShareLinksToXrayJsonRequest.fromJson(
     Map<String, dynamic> json,
@@ -233,6 +266,50 @@ class ConvertShareLinksToXrayJsonRequest {
 
   Map<String, dynamic> toJson() =>
       _$ConvertShareLinksToXrayJsonRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class AgeDecryptConfig {
+  String? secretKey;
+
+  AgeDecryptConfig(this.secretKey);
+
+  factory AgeDecryptConfig.fromJson(Map<String, dynamic> json) =>
+      _$AgeDecryptConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$AgeDecryptConfigToJson(this);
+}
+
+enum AgeKeyType {
+  @JsonValue("x25519")
+  x25519,
+  @JsonValue("hybrid")
+  hybrid,
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class GenerateAgeKeyPairRequest {
+  AgeKeyType? keyType;
+
+  GenerateAgeKeyPairRequest(this.keyType);
+
+  factory GenerateAgeKeyPairRequest.fromJson(Map<String, dynamic> json) =>
+      _$GenerateAgeKeyPairRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$GenerateAgeKeyPairRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class GenerateAgeKeyPairResponse {
+  String? secretKey;
+  String? publicKey;
+
+  GenerateAgeKeyPairResponse(this.secretKey, this.publicKey);
+
+  factory GenerateAgeKeyPairResponse.fromJson(Map<String, dynamic> json) =>
+      _$GenerateAgeKeyPairResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$GenerateAgeKeyPairResponseToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
@@ -247,18 +324,6 @@ class ConvertXrayJsonToShareLinksRequest {
 
   Map<String, dynamic> toJson() =>
       _$ConvertXrayJsonToShareLinksRequestToJson(this);
-}
-
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class RunXrayFromJSONRequest {
-  String? configJSON;
-
-  RunXrayFromJSONRequest(this.configJSON);
-
-  factory RunXrayFromJSONRequest.fromJson(Map<String, dynamic> json) =>
-      _$RunXrayFromJSONRequestFromJson(json);
-
-  Map<String, dynamic> toJson() => _$RunXrayFromJSONRequestToJson(this);
 }
 
 class LibXrayRunConfig {

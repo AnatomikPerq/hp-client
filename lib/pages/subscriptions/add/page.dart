@@ -36,13 +36,14 @@ class SubscriptionAddPage extends StatelessWidget {
   ) {
     final localizations = AppLocalizations.of(context)!;
     final autoUpdate = state.autoUpdateState;
+    final saveLoading = downloading || state.generatingAgeKey;
     final autoUpdateValue = autoUpdate.subscriptionEnabled
         ? "${localizations.autoUpdatePageEnabled} · ${autoUpdate.subscriptionInterval}"
         : localizations.autoUpdatePageDisabled;
     return SettingsPageScaffold(
       title: localizations.subscriptionAddPageTitle,
-      onSave: downloading ? null : () => controller.save(context),
-      saveLoading: downloading,
+      onSave: saveLoading ? null : () => controller.save(context),
+      saveLoading: saveLoading,
       saveLabel: localizations.buttonSave,
       body: SubscriptionFormView(
         supportText: localizations.subscriptionAddPageSection,
@@ -55,6 +56,35 @@ class SubscriptionAddPage extends StatelessWidget {
         autoUpdateTitle: localizations.autoUpdatePageTitle,
         autoUpdateValue: autoUpdateValue,
         onOpenAutoUpdate: () => controller.gotoAutoUpdate(context),
+        encryptionTitle: localizations.subscriptionEncryptionSection,
+        ageProviderSupportTitle:
+            localizations.subscriptionAgeProviderSupportTitle,
+        ageProviderSupportDescription:
+            localizations.subscriptionAgeProviderSupportDescription,
+        ageSecretKeyLabel: localizations.subscriptionAgeSecretKey,
+        ageSecretKeyHint: localizations.subscriptionAgeSecretKeyHint,
+        ageSecretKeyController: controller.ageSecretKeyController,
+        agePublicKeyLabel: localizations.subscriptionAgePublicKey,
+        agePublicKeyHint: localizations.subscriptionAgePublicKeyHint,
+        agePublicKeyController: controller.agePublicKeyController,
+        ageKeyPairErrorText: state.ageKeyPairInvalid
+            ? localizations.subscriptionInvalidAgeSecretKey
+            : null,
+        onAgeKeyChanged: controller.ageKeyChanged,
+        obscureAgeSecretKey: state.obscureAgeSecretKey,
+        revealAgeSecretKeyLabel: localizations.subscriptionRevealAgeKey,
+        hideAgeSecretKeyLabel: localizations.subscriptionHideAgeKey,
+        generateAgeKeyLabel: localizations.subscriptionGenerateAgeKey,
+        generateAgeX25519KeyLabel:
+            localizations.subscriptionGenerateAgeX25519Key,
+        generateAgeHybridKeyLabel:
+            localizations.subscriptionGenerateAgeHybridKey,
+        clearAgeKeyLabel: localizations.subscriptionClearAgeKey,
+        onToggleAgeSecretKeyVisibility: controller.toggleAgeSecretKeyVisibility,
+        onGenerateAgeKey: (keyType) =>
+            controller.generateAgeKey(context, keyType),
+        onClearAgeKey: controller.clearAgeKeyPair,
+        generatingAgeKey: state.generatingAgeKey,
       ),
     );
   }

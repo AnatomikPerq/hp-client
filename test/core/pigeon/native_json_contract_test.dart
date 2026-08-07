@@ -16,6 +16,10 @@ void main() {
       'OneXrayTun',
       'auto',
       true,
+      false,
+      false,
+      false,
+      false,
       true,
       [
         OnDemandRule('connect', 'wifi', ['test']),
@@ -29,7 +33,7 @@ void main() {
       '12000',
       XrayInboundAccount('user', 'pass'),
       '12001',
-      '{"apiVersion":1,"method":"runXray"}',
+      '{"apiVersion":2,"method":"runXray"}',
     );
 
     expect(tun.toJson().keys.toSet(), {
@@ -41,8 +45,12 @@ void main() {
       'metricsEnabled',
       'tunName',
       'autoOutboundsInterface',
+      'includeAllNetworks',
+      'excludeLocalNetworks',
+      'excludeCellularServices',
+      'excludeAPNs',
+      'excludeDeviceCommunication',
       'onDemandEnabled',
-      'disconnectOnSleep',
       'onDemandRules',
       'perAppVPNMode',
       'allowAppList',
@@ -68,6 +76,56 @@ void main() {
       'xray.location.asset',
       'xray.location.cert',
       'xray.tun.fd',
+    });
+  });
+
+  test('runXray request uses the v2 in-memory JSON contract', () {
+    final request = LibXrayInvokeRequest(
+      method: LibXrayMethod.runXray,
+      payload: RunXrayRequest('{"outbounds":[]}').toJson(),
+    );
+
+    expect(request.toJson(), {
+      'apiVersion': 2,
+      'method': 'runXray',
+      'payload': {'xrayJson': '{"outbounds":[]}'},
+    });
+  });
+
+  test('age subscription requests use the typed v2 contract', () {
+    final convert = LibXrayInvokeRequest(
+      method: LibXrayMethod.convertShareLinksToXrayJson,
+      payload: ConvertShareLinksToXrayJsonRequest(
+        'encrypted text',
+        age: AgeDecryptConfig('AGE-SECRET-KEY-1TEST'),
+      ).toJson(),
+    );
+    final generate = LibXrayInvokeRequest(
+      method: LibXrayMethod.generateAgeKeyPair,
+      payload: GenerateAgeKeyPairRequest(AgeKeyType.x25519).toJson(),
+    );
+    final generateHybrid = LibXrayInvokeRequest(
+      method: LibXrayMethod.generateAgeKeyPair,
+      payload: GenerateAgeKeyPairRequest(AgeKeyType.hybrid).toJson(),
+    );
+
+    expect(convert.toJson(), {
+      'apiVersion': 2,
+      'method': 'convertShareLinksToXrayJson',
+      'payload': {
+        'text': 'encrypted text',
+        'age': {'secretKey': 'AGE-SECRET-KEY-1TEST'},
+      },
+    });
+    expect(generate.toJson(), {
+      'apiVersion': 2,
+      'method': 'generateAgeKeyPair',
+      'payload': {'keyType': 'x25519'},
+    });
+    expect(generateHybrid.toJson(), {
+      'apiVersion': 2,
+      'method': 'generateAgeKeyPair',
+      'payload': {'keyType': 'hybrid'},
     });
   });
 

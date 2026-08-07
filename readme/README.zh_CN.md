@@ -46,6 +46,37 @@ OneXray 仅提供客户端，不提供 VPN/代理服务器、订阅或网络服�
 - **本地工具**：节点 Ping、Xray 日志、GeoData 与规则集管理、备份和恢复。
 - **平台集成**：Android Per-App VPN、Apple On Demand、桌面托盘控制和出站网卡选择。
 
+## age 加密订阅
+
+添加或编辑 HTTPS 订阅时，可在“加密”区域填写已有 age 密钥对，或选择生成
+X25519、Mihomo 兼容的 Hybrid（`ML-KEM-768 + X25519`）密钥。OneXray 只通过
+`X-Age-Public-Key` 发送已保存的公钥；私钥仅保存在本地，密钥对会在自动更新
+订阅时复用。
+
+订阅仍必须使用 HTTPS。OneXray 备份文件未加密，并会包含 age 密钥对，以保证恢复后
+订阅仍可用；请妥善保管备份 ZIP 文件。
+
+## OneXray URL Scheme
+
+OneXray 可通过专有的 `onexray://` URL 分享和导入内容：
+
+```text
+onexray://onexray.com/config/add?type=outbound|profile|full|raw&data=<经过百分号编码的-base64-json>#名称
+onexray://onexray.com/sub/add?url=<经过百分号编码的-https-url>[&age=x25519|hybrid]#名称
+onexray://onexray.com/dat/add?type=domain|ip&url=<经过百分号编码的-https-url>#名称
+```
+
+分享的配置引用了 OneXray 中已有的自定义 GeoData 时，对应 GeoData 链接会排列在
+配置链接之前。
+
+仅支持上面列出的类型，不接受旧版 `type=setting`、备份或其他命令。导入 age
+订阅链接时，App 会生成一对新的本地密钥，首次下载只发送公钥，并在订阅成功
+导入后保存密钥对。
+
+Android、iOS 和已安装的 macOS App 会直接注册该协议。Windows 和 Linux
+请使用 EXE/winget 或 DEB 包；ZIP 包不会自动注册协议。Mac App Store 版本与
+OneXraySE 使用相同协议，同时安装时 macOS 可能选择其中任意一个处理链接。
+
 ## 下载
 
 | 平台 | 要求 | 下载 |
@@ -70,6 +101,24 @@ brew install --cask onexrayse
 brew uninstall --cask onexrayse
 ```
 
+#### Universal ZIP
+
+1. 下载并解压 `OneXray-macos-universal.zip`。
+2. 将 `OneXraySE.app` 移动到 `/Applications`（“应用程序”）目录。不要直接从“下载”目录或其他目录运行；macOS 要求包含 System Extension 的 App 安装在系统的“应用程序”目录中。
+3. 从“应用程序”目录打开 OneXraySE，并确认 macOS 的首次打开提示。
+
+首次连接 VPN：
+
+1. 导入订阅或节点，选中节点，然后点击启动。
+2. 打开“系统设置 > 通用 > 登录项与扩展”。
+3. 在“扩展”区域打开“网络扩展”，启用 OneXraySE，然后点击“完成”。
+4. 如果“隐私与安全性”页面也显示批准请求，请点击“允许”；系统要求重启时请重启 Mac。
+5. 返回 OneXraySE，再次点击启动。
+
+更新 ZIP 版本时，请先退出 OneXraySE，再用新解压的 `OneXraySE.app` 替换 `/Applications` 中的旧版本并重新打开。如果 macOS 要求批准 System Extension 更新，请按提示操作。
+
+参阅 [Installing System Extensions and Drivers](https://developer.apple.com/documentation/systemextensions/installing-system-extensions-and-drivers) 和 [更改“登录项与扩展”设置](https://support.apple.com/guide/mac-help/change-login-items-extension-settings-mtusr003/mac)。
+
 ### Windows
 
 Winget 会根据当前设备架构自动选择 x86_64 或 ARM64 安装包。
@@ -86,6 +135,8 @@ Android 版本支持 `arm64-v8a` 与 `x86_64`，不支持 32 位 ARM 设备。
 ### iOS
 
 若您的 Apple ID 无法使用 App Store，可下载 `OneXray-ios.ipa`，并通过 [AltStore](https://altstore.io/) 或其他兼容的侧载工具安装。
+
+自行安装 IPA 时，必须使用授权 Network Extension capability 的 provisioning profile，重新签名 OneXray 主 App 与 Packet Tunnel extension。Apple 不向免费的 Personal Team 账号提供该 capability，因此必须加入付费 Apple Developer Program。否则 App 可能可以打开并进行节点测速，但无法启动 VPN。参阅 [Apple Developer Forums](https://developer.apple.com/forums/thread/128767) 和 [iOS 支持的能力](https://developer.apple.com/help/account/reference/supported-capabilities-ios/)。
 
 ### Linux
 

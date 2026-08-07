@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
+import 'package:onexray/pages/widget/menu_picker.dart';
 import 'package:onexray/pages/widget/responsive_content.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -11,26 +13,68 @@ class SubscriptionFormView extends StatelessWidget {
     required this.nameLabel,
     required this.nameController,
     required this.urlLabel,
-    this.urlController,
-    this.readOnlyUrl,
+    required this.urlController,
     this.urlHint,
     this.urlHelper,
     this.autoUpdateTitle,
     this.autoUpdateValue,
     this.onOpenAutoUpdate,
-  }) : assert(urlController != null || readOnlyUrl != null);
+    required this.encryptionTitle,
+    required this.ageProviderSupportTitle,
+    required this.ageProviderSupportDescription,
+    required this.ageSecretKeyLabel,
+    required this.ageSecretKeyHint,
+    required this.ageSecretKeyController,
+    required this.agePublicKeyLabel,
+    required this.agePublicKeyHint,
+    required this.agePublicKeyController,
+    this.ageKeyPairErrorText,
+    this.onAgeKeyChanged,
+    required this.obscureAgeSecretKey,
+    required this.revealAgeSecretKeyLabel,
+    required this.hideAgeSecretKeyLabel,
+    required this.generateAgeKeyLabel,
+    required this.generateAgeX25519KeyLabel,
+    required this.generateAgeHybridKeyLabel,
+    required this.clearAgeKeyLabel,
+    required this.onToggleAgeSecretKeyVisibility,
+    required this.onGenerateAgeKey,
+    required this.onClearAgeKey,
+    this.generatingAgeKey = false,
+  });
 
   final String supportText;
   final String nameLabel;
   final TextEditingController nameController;
   final String urlLabel;
-  final TextEditingController? urlController;
-  final String? readOnlyUrl;
+  final TextEditingController urlController;
   final String? urlHint;
   final String? urlHelper;
   final String? autoUpdateTitle;
   final String? autoUpdateValue;
   final VoidCallback? onOpenAutoUpdate;
+  final String encryptionTitle;
+  final String ageProviderSupportTitle;
+  final String ageProviderSupportDescription;
+  final String ageSecretKeyLabel;
+  final String ageSecretKeyHint;
+  final TextEditingController ageSecretKeyController;
+  final String agePublicKeyLabel;
+  final String agePublicKeyHint;
+  final TextEditingController agePublicKeyController;
+  final String? ageKeyPairErrorText;
+  final ValueChanged<String>? onAgeKeyChanged;
+  final bool obscureAgeSecretKey;
+  final String revealAgeSecretKeyLabel;
+  final String hideAgeSecretKeyLabel;
+  final String generateAgeKeyLabel;
+  final String generateAgeX25519KeyLabel;
+  final String generateAgeHybridKeyLabel;
+  final String clearAgeKeyLabel;
+  final VoidCallback onToggleAgeSecretKeyVisibility;
+  final ValueChanged<AgeKeyType> onGenerateAgeKey;
+  final VoidCallback onClearAgeKey;
+  final bool generatingAgeKey;
 
   @override
   Widget build(BuildContext context) {
@@ -42,12 +86,154 @@ class SubscriptionFormView extends StatelessWidget {
           child: Column(
             children: [
               _formCard(context),
+              const SizedBox(height: 18),
+              _encryptionCard(context),
               if (onOpenAutoUpdate != null) ...[
                 const SizedBox(height: 18),
                 _autoUpdateCard(context),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _encryptionCard(BuildContext context) {
+    return ShadCard(
+      width: double.infinity,
+      padding: EdgeInsets.zero,
+      radius: const BorderRadius.all(Radius.circular(8)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 14, 10),
+            child: Text(encryptionTitle, style: AppTypography.sectionTitle),
+          ),
+          Divider(height: 1, color: ColorManager.border(context)),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ageProviderSupportAlert(context),
+                const SizedBox(height: 14),
+                _fieldLabel(context, ageSecretKeyLabel),
+                const SizedBox(height: 8),
+                ShadInput(
+                  controller: ageSecretKeyController,
+                  obscureText: obscureAgeSecretKey,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: onAgeKeyChanged,
+                  placeholder: Text(ageSecretKeyHint),
+                  trailing: IconButton(
+                    tooltip: obscureAgeSecretKey
+                        ? revealAgeSecretKeyLabel
+                        : hideAgeSecretKeyLabel,
+                    onPressed: onToggleAgeSecretKeyVisibility,
+                    icon: Icon(
+                      obscureAgeSecretKey
+                          ? LucideIcons.eye
+                          : LucideIcons.eyeOff,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _fieldLabel(context, agePublicKeyLabel),
+                const SizedBox(height: 8),
+                ShadInput(
+                  controller: agePublicKeyController,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: onAgeKeyChanged,
+                  placeholder: Text(agePublicKeyHint),
+                ),
+                if (ageKeyPairErrorText != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    ageKeyPairErrorText!,
+                    style: AppTypography.badge.copyWith(
+                      color: ColorManager.palette(context).destructive,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AppMenuButton<AgeKeyType>(
+                      entries: [
+                        AppMenuEntry<AgeKeyType>.item(
+                          value: AgeKeyType.x25519,
+                          title: generateAgeX25519KeyLabel,
+                        ),
+                        AppMenuEntry<AgeKeyType>.item(
+                          value: AgeKeyType.hybrid,
+                          title: generateAgeHybridKeyLabel,
+                        ),
+                      ],
+                      onSelected: onGenerateAgeKey,
+                      triggerBuilder: (toggleMenu) => ShadButton.outline(
+                        leading: generatingAgeKey
+                            ? const SizedBox.square(
+                                dimension: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(LucideIcons.keyRound),
+                        onPressed: generatingAgeKey ? null : toggleMenu,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(generateAgeKeyLabel),
+                            if (!generatingAgeKey) ...[
+                              const SizedBox(width: 6),
+                              const Icon(LucideIcons.chevronDown, size: 15),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    ShadButton.ghost(
+                      leading: const Icon(LucideIcons.trash2),
+                      onPressed: generatingAgeKey ? null : onClearAgeKey,
+                      child: Text(clearAgeKeyLabel),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ageProviderSupportAlert(BuildContext context) {
+    final palette = ColorManager.palette(context);
+    return ShadAlert(
+      icon: const Icon(LucideIcons.triangleAlert),
+      title: Text(ageProviderSupportTitle),
+      description: Text(ageProviderSupportDescription),
+      iconColor: palette.restartingText,
+      titleStyle: AppTypography.listSectionTitle.copyWith(
+        color: palette.restartingText,
+        fontWeight: FontWeight.w600,
+      ),
+      descriptionStyle: AppTypography.supporting.copyWith(
+        color: palette.foreground,
+      ),
+      decoration: ShadDecoration(
+        color: palette.restarting.withValues(alpha: 0.08),
+        border: ShadBorder.all(
+          color: palette.restarting.withValues(alpha: 0.42),
+          radius: const BorderRadius.all(Radius.circular(8)),
+          padding: const EdgeInsets.all(12),
         ),
       ),
     );
@@ -81,15 +267,13 @@ class SubscriptionFormView extends StatelessWidget {
                 controller: nameController,
                 hintText: nameLabel,
               );
-              final url = urlController == null
-                  ? _readOnlyField(context)
-                  : _editableField(
-                      context,
-                      label: urlLabel,
-                      controller: urlController!,
-                      hintText: urlHint,
-                      helperText: urlHelper,
-                    );
+              final url = _editableField(
+                context,
+                label: urlLabel,
+                controller: urlController,
+                hintText: urlHint,
+                helperText: urlHelper,
+              );
               if (compact) {
                 return Column(
                   children: [
@@ -146,27 +330,6 @@ class SubscriptionFormView extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _readOnlyField(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _fieldLabel(context, urlLabel),
-          const SizedBox(height: 8),
-          Text(
-            readOnlyUrl ?? "",
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.rowTitle.copyWith(
-              color: ColorManager.primaryText(context),
-            ),
-          ),
         ],
       ),
     );
