@@ -19,6 +19,15 @@ class HomePageState {
   final bool vpnCommandLoading;
   final CoreRoutingMode? pendingRoutingMode;
 
+  /// Проверка живого подключения: идёт запрос.
+  final bool livePingRunning;
+
+  /// Задержка последней проверки в мс, `null` — проверки не было.
+  final int? livePingMs;
+
+  /// Последняя проверка не достучалась наружу.
+  final bool livePingFailed;
+
   const HomePageState({
     required this.configId,
     required this.configName,
@@ -28,6 +37,9 @@ class HomePageState {
     required this.nodeSearchVisible,
     required this.vpnCommandLoading,
     required this.pendingRoutingMode,
+    this.livePingRunning = false,
+    this.livePingMs,
+    this.livePingFailed = false,
   });
 
   factory HomePageState.initial({int xrayProfileId = DBConstants.defaultId}) =>
@@ -52,6 +64,10 @@ class HomePageState {
     bool? vpnCommandLoading,
     CoreRoutingMode? pendingRoutingMode,
     bool clearPendingRoutingMode = false,
+    bool? livePingRunning,
+    int? livePingMs,
+    bool? livePingFailed,
+    bool clearLivePing = false,
   }) {
     return HomePageState(
       configId: configId ?? this.configId,
@@ -64,6 +80,11 @@ class HomePageState {
       pendingRoutingMode: clearPendingRoutingMode
           ? null
           : pendingRoutingMode ?? this.pendingRoutingMode,
+      livePingRunning: livePingRunning ?? this.livePingRunning,
+      livePingMs: clearLivePing ? null : livePingMs ?? this.livePingMs,
+      livePingFailed: clearLivePing
+          ? false
+          : livePingFailed ?? this.livePingFailed,
     );
   }
 }

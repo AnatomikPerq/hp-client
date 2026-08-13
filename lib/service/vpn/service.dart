@@ -17,6 +17,7 @@ import 'package:onexray/service/core_run_mode/state.dart';
 import 'package:onexray/service/event_bus/service.dart';
 import 'package:onexray/service/event_bus/state.dart';
 import 'package:onexray/service/menu/tray/service.dart';
+import 'package:onexray/service/minewire/service.dart';
 import 'package:onexray/service/notification/service.dart';
 import 'package:onexray/service/toast/service.dart';
 import 'package:onexray/service/tun_settings/state.dart';
@@ -79,6 +80,9 @@ final class VpnService {
   Future<void> _asyncInit() async {
     final eventBus = AppEventBus.instance;
     final preferences = PreferencesKey();
+    // Sidecar от аварийно закрытого клиента добиваем до всего остального:
+    // иначе тоннель живёт сам по себе.
+    await MinewireService().cleanupStale();
     final cleanupResult = await AppHostApi().cleanupStaleDesktopCore();
     _staleDesktopCoreCleanupRequired = cleanupResult == false;
     var savedRunningId = await preferences.readRunningConfigId();
@@ -621,6 +625,9 @@ final class VpnService {
   }
 
   Future<NativeVpnCommandResult> _stopCurrentCore() async {
+    // Sidecar minewire гасим всегда: если узел был не минуайровский,
+    // процесса просто нет и вызов ничего не делает.
+    await MinewireService().stop();
     if (_runningMode == CoreRunMode.proxy) {
       return _stopProxyCore();
     }

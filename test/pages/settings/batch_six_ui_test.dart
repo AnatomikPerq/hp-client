@@ -50,6 +50,7 @@ void main() {
       useDockIconLabel: useDockIconLabel,
       showReview: true,
       showDesktopSettings: showDesktopSettings,
+      onCore: noop,
       onAutoUpdate: noop,
       onCheckUpdate: noop,
       onClearData: noop,
@@ -124,7 +125,7 @@ void main() {
 
     expect(find.text('Connect on App Launch'), findsOneWidget);
     expect(find.text('System User-Agent'), findsOneWidget);
-    expect(find.text('OneXray User-Agent'), findsOneWidget);
+    expect(find.text('HYPER CLIENT User-Agent'), findsOneWidget);
     expect(find.byType(ShadSwitch), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsOneWidget);
     expect(tester.takeException(), isNull);

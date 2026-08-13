@@ -7,10 +7,14 @@ abstract final class AppDialogRoutePath {
   static const appUpdate = "/app-update";
 }
 
+/// Разделы нижней панели / бокового рельса.
+///
+/// Ветки `StatefulShellRoute` и индексы переходов строятся из `values`, поэтому
+/// добавление или удаление раздела здесь автоматически расходится по
+/// роутеру и оболочке — руками индексы нигде не прописаны.
 enum AppPrimaryRoute {
   home("/home"),
   subscriptions("/subscriptions"),
-  core("/core"),
   settings("/settings");
 
   final String rootPath;
@@ -29,6 +33,7 @@ enum AppPrimaryRoute {
 
 enum AppSecondaryDestination {
   overview("overview"),
+  core("core"),
   nodeInfo("node-info"),
   qrcode("qrcode"),
   share("share"),

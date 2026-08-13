@@ -10,6 +10,7 @@ import 'package:onexray/pages/home/main/state.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/widget/menu_picker.dart';
+import 'package:onexray/pages/widget/starfield.dart';
 import 'package:onexray/service/core_routing_mode/state.dart';
 import 'package:onexray/service/event_bus/service.dart';
 import 'package:onexray/service/event_bus/state.dart';
@@ -64,21 +65,44 @@ class HomePage extends StatelessWidget {
                 ),
                 body: SafeArea(
                   top: false,
-                  child: Column(
+                  // Звёздное поле — фон всей страницы, а не подложка под
+                  // кнопкой: непрозрачная карточка поверх списка читалась
+                  // как голубое перекрытие.
+                  child: Stack(
                     children: [
-                      _HomeConnectionFrame(
-                        connection: connection,
-                        xrayProfileName: homeState.xrayProfileName,
-                        routingMode: eventState.coreRoutingMode,
-                        pendingRoutingMode: homeState.pendingRoutingMode,
-                        onToggleConnection: controller.startVpn,
-                        onShowNodeInfo: controller.gotoNodeInfo,
-                        onShowXrayProfile: controller.gotoXrayProfile,
-                        onRoutingModeChanged: controller.switchRoutingMode,
+                      Positioned.fill(
+                        child: Starfield(
+                          active:
+                              connection.tone == HomeConnectionTone.connected,
+                          // На светлом фоне светлые звёзды не видны:
+                          // там поле рисуется приглушённым синим.
+                          idleColor:
+                              Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFFB4D6F0)
+                              : const Color(0xFF7C9BBE),
+                          activeColor: ColorManager.palette(context).running,
+                        ),
                       ),
-                      Expanded(
-                        child: HomeNodePanel(
-                          showSearch: homeState.nodeSearchVisible,
+                      // Герой уходит внутрь скролла первым сливером: иначе он
+                      // остаётся прибит к верху и не уезжает, когда список
+                      // узлов листают вниз.
+                      HomeNodePanel(
+                        showSearch: homeState.nodeSearchVisible,
+                        header: _HomeConnectionFrame(
+                          connection: connection,
+                          xrayProfileName: homeState.xrayProfileName,
+                          routingMode: eventState.coreRoutingMode,
+                          pendingRoutingMode: homeState.pendingRoutingMode,
+                          livePing: HomeLivePingState(
+                            running: homeState.livePingRunning,
+                            milliseconds: homeState.livePingMs,
+                            failed: homeState.livePingFailed,
+                          ),
+                          onToggleConnection: controller.startVpn,
+                          onShowNodeInfo: controller.gotoNodeInfo,
+                          onShowXrayProfile: controller.gotoXrayProfile,
+                          onRoutingModeChanged: controller.switchRoutingMode,
+                          onMeasureLivePing: controller.measureLivePing,
                         ),
                       ),
                     ],
@@ -93,26 +117,43 @@ class HomePage extends StatelessWidget {
   }
 }
 
+/// Результат проверки живого подключения для отрисовки.
+class HomeLivePingState {
+  const HomeLivePingState({
+    required this.running,
+    required this.milliseconds,
+    required this.failed,
+  });
+
+  final bool running;
+  final int? milliseconds;
+  final bool failed;
+}
+
 class _HomeConnectionFrame extends StatelessWidget {
   const _HomeConnectionFrame({
     required this.connection,
     required this.xrayProfileName,
     required this.routingMode,
     required this.pendingRoutingMode,
+    required this.livePing,
     required this.onToggleConnection,
     required this.onShowNodeInfo,
     required this.onShowXrayProfile,
     required this.onRoutingModeChanged,
+    required this.onMeasureLivePing,
   });
 
   final HomeConnectionViewPageState connection;
   final String xrayProfileName;
   final CoreRoutingMode routingMode;
   final CoreRoutingMode? pendingRoutingMode;
+  final HomeLivePingState livePing;
   final VoidCallback onToggleConnection;
   final VoidCallback onShowNodeInfo;
   final VoidCallback onShowXrayProfile;
   final ValueChanged<CoreRoutingMode> onRoutingModeChanged;
+  final VoidCallback onMeasureLivePing;
 
   @override
   Widget build(BuildContext context) {
@@ -127,10 +168,12 @@ class _HomeConnectionFrame extends StatelessWidget {
             xrayProfileName: xrayProfileName,
             routingMode: routingMode,
             pendingRoutingMode: pendingRoutingMode,
+            livePing: livePing,
             onToggleConnection: onToggleConnection,
             onShowNodeInfo: onShowNodeInfo,
             onShowXrayProfile: onShowXrayProfile,
             onRoutingModeChanged: onRoutingModeChanged,
+            onMeasureLivePing: onMeasureLivePing,
           ),
         ),
       ),
@@ -200,9 +243,10 @@ class HomeAddMenuButton extends StatelessWidget {
 }
 
 class HomeNodePanel extends StatelessWidget {
-  const HomeNodePanel({super.key, required this.showSearch});
+  const HomeNodePanel({super.key, required this.showSearch, this.header});
 
   final bool showSearch;
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +257,7 @@ class HomeNodePanel extends StatelessWidget {
       queryType: HomeNodeQueryType.homeNodes,
       showSearch: showSearch,
       selectedId: selectedId,
+      header: header,
       onSelect: (config) =>
           context.read<HomeController>().updateConfigId(config.id),
     );
@@ -226,41 +271,379 @@ class HomeConnectionSummary extends StatelessWidget {
     required this.xrayProfileName,
     required this.routingMode,
     required this.pendingRoutingMode,
+    required this.livePing,
     required this.onToggleConnection,
     required this.onShowNodeInfo,
     required this.onShowXrayProfile,
     required this.onRoutingModeChanged,
+    required this.onMeasureLivePing,
   });
 
   final HomeConnectionViewPageState connection;
   final String xrayProfileName;
   final CoreRoutingMode routingMode;
   final CoreRoutingMode? pendingRoutingMode;
+  final HomeLivePingState livePing;
   final VoidCallback onToggleConnection;
   final VoidCallback onShowNodeInfo;
   final VoidCallback onShowXrayProfile;
   final ValueChanged<CoreRoutingMode> onRoutingModeChanged;
+  final VoidCallback onMeasureLivePing;
 
   @override
   Widget build(BuildContext context) {
-    return ShadCard(
-      padding: EdgeInsets.zero,
-      radius: BorderRadius.circular(8),
-      width: double.infinity,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 820) {
-            return _wideLayout(context);
-          }
-          if (constraints.maxWidth >= 560) {
-            return _mediumLayout(context);
-          }
-          return _compactLayout(context);
-        },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Одна раскладка на все ширины: раньше узкое окно переключалось на
+        // старый компактный вид, и при перетаскивании границы интерфейс
+        // прыгал между двумя разными экранами.
+        final width = constraints.maxWidth;
+        final diameter = width < 380
+            ? 124.0
+            : width < 520
+            ? 146.0
+            : 172.0;
+        return _heroLayout(context, diameter);
+      },
+    );
+  }
+
+  /// Главный экран строится вокруг одного действия: большая кнопка со
+  /// свечением показывает состояние, всё остальное уходит на второй план.
+  Widget _heroLayout(BuildContext context, double diameter) {
+    final palette = ColorManager.palette(context);
+    final connected = connection.tone == HomeConnectionTone.connected;
+    final accent = connected ? palette.running : palette.primary;
+    // Фона у героя нет намеренно: он лежит на общем звёздном поле страницы
+    // и уезжает вверх вместе со списком. Любая заливка здесь читается как
+    // посторонняя плашка поверх интерфейса.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 22),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _heroSpeed(context, LucideIcons.arrowUp, connection.uploadText),
+              const SizedBox(width: 56),
+              _heroSpeed(
+                context,
+                LucideIcons.arrowDown,
+                connection.downloadText,
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
+          // Кнопка проверки живёт сбоку и не двигает круг: у неё та же
+          // ширина, что и у зеркального отступа слева.
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: connected ? _livePingSlot : 0),
+              _heroButton(context, accent, connected, diameter),
+              SizedBox(
+                width: connected ? _livePingSlot : 0,
+                child: connected
+                    ? Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: _livePingButton(context, accent),
+                      )
+                    : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
+          _heroNodeLine(context, accent),
+          const SizedBox(height: 18),
+          // Режимы делят ширину поровну, а не растут под текст: иначе на
+          // узком экране русские подписи выносили строку за край.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: RoutingModeControl(
+              value: routingMode,
+              pendingValue: pendingRoutingMode,
+              disabled: connection.loading,
+              expanded: true,
+              onChanged: onRoutingModeChanged,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _heroButton(
+    BuildContext context,
+    Color accent,
+    bool connected,
+    double diameter,
+  ) {
+    // Светлая тема — не зеркало тёмной. Там свечение почти не читается, и
+    // белый круг на почти белом фоне выглядел выцветшим: держим его
+    // обычной тенью и более плотной обводкой, а свечение оставляем
+    // акценту при подключении.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final borderAlpha = connected
+        ? (dark ? 0.9 : 1.0)
+        : (dark ? 0.32 : 0.55);
+    final shadows = <BoxShadow>[
+      if (!dark)
+        BoxShadow(
+          color: const Color(0xFF0B1220).withValues(alpha: 0.10),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
+        ),
+      BoxShadow(
+        color: accent.withValues(
+          alpha: connected ? (dark ? 0.42 : 0.34) : (dark ? 0.14 : 0.10),
+        ),
+        blurRadius: connected ? 56 : 28,
+        spreadRadius: connected ? 8 : 2,
+      ),
+    ];
+    // Орбита ЗА пределами кнопки, а не внутри неё. Раньше кольцо лежало в
+    // Stack'е размером с кнопку и зажималось до её диаметра — спутник
+    // оказывался ровно на обводке и читался как случайная точка.
+    return SizedBox.square(
+      dimension: diameter + orbitMargin * 2,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          OrbitRing(
+            diameter: diameter + orbitMargin * 2,
+            color: accent,
+            active: connected,
+          ),
+          _powerCircle(context, accent, connected, diameter, borderAlpha, shadows),
+        ],
+      ),
+    );
+  }
+
+  /// Отступ от кнопки до орбиты.
+  static const orbitMargin = 26.0;
+
+  /// Место под кнопку проверки по обе стороны от круга.
+  static const _livePingSlot = 72.0;
+
+  /// Проверка живого подключения: «Тест скорости» в списке меряет узел в
+  /// отдельном временном ядре и о текущем соединении не говорит ничего.
+  Widget _livePingButton(BuildContext context, Color accent) {
+    final palette = ColorManager.palette(context);
+    final localizations = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final label = livePing.running
+        ? null
+        : livePing.milliseconds != null
+        ? "${livePing.milliseconds} ms"
+        : livePing.failed
+        ? localizations.pingError
+        : null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: localizations.pingPageTitle,
+          child: Material(
+            color: palette.card,
+            shape: CircleBorder(
+              side: BorderSide(color: accent.withValues(alpha: 0.45)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: livePing.running ? null : onMeasureLivePing,
+              child: SizedBox.square(
+                dimension: 46,
+                child: Center(
+                  child: livePing.running
+                      ? SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: accent,
+                          ),
+                        )
+                      : Icon(LucideIcons.activity, size: 20, color: accent),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (label != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: livePing.failed
+                  ? theme.colorScheme.error
+                  : palette.mutedForeground,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _powerCircle(
+    BuildContext context,
+    Color accent,
+    bool connected,
+    double diameter,
+    double borderAlpha,
+    List<BoxShadow> shadows,
+  ) {
+    final palette = ColorManager.palette(context);
+    return Semantics(
+      button: true,
+      label: connection.actionLabel,
+      child: Tooltip(
+        message: connection.actionLabel,
+        child: MouseRegion(
+          cursor: connection.loading
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: connection.loading ? null : onToggleConnection,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              width: diameter,
+              height: diameter,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: palette.card,
+                border: Border.all(
+                  color: accent.withValues(alpha: borderAlpha),
+                  width: 2,
+                ),
+                boxShadow: shadows,
+              ),
+              child: Center(
+                child: connection.loading
+                    ? SizedBox.square(
+                        dimension: 42,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: accent,
+                        ),
+                      )
+                    : Icon(
+                        LucideIcons.power,
+                        size: diameter * 0.33,
+                        color: accent,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _heroSpeed(BuildContext context, IconData icon, String value) {
+    final palette = ColorManager.palette(context);
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: palette.mutedForeground),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: palette.foreground,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _heroNodeLine(BuildContext context, Color accent) {
+    final palette = ColorManager.palette(context);
+    final theme = Theme.of(context);
+    final detail = connection.summaryDetailText;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          connection.statusText,
+          style: theme.textTheme.bodySmall?.copyWith(color: accent),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: onShowNodeInfo,
+          borderRadius: BorderRadius.circular(8),
+          // Не меньше 40pt: на телефоне в эту строку надо попадать пальцем.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      connection.nodeName,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: palette.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 18,
+                    color: palette.mutedForeground,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (detail != null && detail.isNotEmpty)
+          Text(
+            detail,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: palette.mutedForeground,
+            ),
+          ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: onShowXrayProfile,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.slidersHorizontal,
+                    size: 14,
+                    color: palette.mutedForeground,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    xrayProfileName,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: palette.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ignore: unused_element
   Widget _wideLayout(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 112),
@@ -290,6 +673,7 @@ class HomeConnectionSummary extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _mediumLayout(BuildContext context) {
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 14, 10),
@@ -336,6 +720,7 @@ class HomeConnectionSummary extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _compactLayout(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -765,48 +1150,47 @@ class RoutingModeControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayValue = pendingValue ?? value;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsetsDirectional.fromSTEB(9, 5, 5, 5),
-      decoration: BoxDecoration(
-        color: ColorManager.tagBackground(context).withValues(alpha: 0.55),
-        border: Border.all(color: ColorManager.border(context)),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
-        children: [
-          Text(
+    // Подпись стоит НАД переключателем, а не рядом с ним. Пока она делила
+    // строку с режимами, на любом неширком окне выигрывала она, а русские
+    // «Правила / Глобально / Напрямую» обрезались до «Пра…» и «Глоб…».
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: expanded
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(4, 0, 4, 7),
+          child: Text(
             AppLocalizations.of(context)!.coreRoutingModeTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTypography.badge.copyWith(
               color: ColorManager.secondaryText(context),
             ),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: ColorManager.surface(context),
-                border: Border.all(color: ColorManager.border(context)),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
-                children: CoreRoutingMode.values
-                    .map(
-                      (mode) => expanded
-                          ? Expanded(
-                              child: _modeButton(context, mode, displayValue),
-                            )
-                          : _modeButton(context, mode, displayValue),
-                    )
-                    .toList(),
-              ),
-            ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: ColorManager.surface(context),
+            border: Border.all(color: ColorManager.border(context)),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+            children: CoreRoutingMode.values
+                .map(
+                  (mode) => expanded
+                      ? Expanded(
+                          child: _modeButton(context, mode, displayValue),
+                        )
+                      : _modeButton(context, mode, displayValue),
+                )
+                .toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -830,7 +1214,7 @@ class RoutingModeControl extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           height: 40,
-          padding: const EdgeInsetsDirectional.symmetric(horizontal: 6),
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: selected
                 ? Theme.of(context).colorScheme.primary
@@ -838,6 +1222,10 @@ class RoutingModeControl extends StatelessWidget {
             borderRadius: BorderRadius.circular(5),
           ),
           child: Row(
+            // Кнопка больше не фиксированной ширины, поэтому в строке
+            // режимов она получает неограниченную ширину: с max этот Row
+            // не смог бы себя измерить.
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (pendingValue == mode) ...[
@@ -866,6 +1254,14 @@ class RoutingModeControl extends StatelessWidget {
         ),
       ),
     );
-    return expanded ? button : SizedBox(width: 62, child: button);
+    // Фиксированные 62px обрезали русские подписи до «Прав…» и «Глоба…».
+    // Кнопка теперь растёт под текст, а minWidth держит их одинаковыми,
+    // когда подписи короткие.
+    return expanded
+        ? button
+        : ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 64),
+            child: button,
+          );
   }
 }

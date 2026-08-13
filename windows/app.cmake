@@ -6,10 +6,17 @@ install(FILES "${APP_DIR}/libXray.dll"
         COMPONENT Runtime)
 
 install(PROGRAMS
-        "${APP_DIR}/OneXrayCore.exe"
+        "${APP_DIR}/HyperClientCore.exe"
         DESTINATION "${APP_BIN_DIR}"
         COMPONENT Runtime)
 
 install(FILES "${APP_DIR}/wintun.dll"
+        DESTINATION "${APP_BIN_DIR}"
+        COMPONENT Runtime)
+
+# Sidecar minewire. Права администратора ему не нужны — в отличие от ядра
+# он лишь открывает локальный SOCKS5.
+install(PROGRAMS
+        "${APP_DIR}/minewire.exe"
         DESTINATION "${APP_BIN_DIR}"
         COMPONENT Runtime)

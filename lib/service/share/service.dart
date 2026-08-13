@@ -242,7 +242,7 @@ final class ShareService {
       eventBus.updateDownloading(true);
       try {
         final url = text.trim();
-        if (url.startsWith('onexray://')) {
+        if (url.startsWith('hyperclient://')) {
           final links = OneXrayAppLinkParser.parseText(url);
           for (final link in links) {
             if (await _appLinkImporter.importLink(link, showLoading: false)) {

@@ -36,7 +36,7 @@ void main() {
     expect((await adapter.setEnabled(true)).state, LaunchAtLoginState.enabled);
 
     final desktopFile = File(
-      path.join(configHome, 'autostart', 'net.yuandev.onexray.desktop'),
+      path.join(configHome, 'autostart', 'ru.huhusova67.hyperclient.desktop'),
     );
     final text = await desktopFile.readAsString();
     expect(text, contains('Type=Application'));
@@ -65,7 +65,7 @@ void main() {
           temporaryDirectory.path,
           '.config',
           'autostart',
-          'net.yuandev.onexray.desktop',
+          'ru.huhusova67.hyperclient.desktop',
         ),
       ).exists(),
       isTrue,
@@ -75,7 +75,7 @@ void main() {
   test('treats a stale owned entry as disabled', () async {
     final configHome = path.join(temporaryDirectory.path, 'config');
     final desktopFile = File(
-      path.join(configHome, 'autostart', 'net.yuandev.onexray.desktop'),
+      path.join(configHome, 'autostart', 'ru.huhusova67.hyperclient.desktop'),
     );
     await desktopFile.parent.create(recursive: true);
     await desktopFile.writeAsString(

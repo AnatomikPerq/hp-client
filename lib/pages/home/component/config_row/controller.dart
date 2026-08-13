@@ -60,6 +60,10 @@ class ConfigRowController {
           extra: params,
         );
         break;
+      case CoreConfigType.minewire:
+        // Редактора у узла minewire нет: он целиком описывается ссылкой
+        // из подписки, руками там менять нечего.
+        break;
       case CoreConfigType.profile:
         if (config.id == XrayProfileSimple.simpleId) {
           context.pushScoped(AppSecondaryDestination.xrayProfileSimple);

@@ -1,8 +1,8 @@
-display_name: OneXray
-package_name: onexray
+display_name: HYPER CLIENT
+package_name: hyperclient
 maintainer:
-  name: Yuan Dev LLC
-  email: yuan@yuandev.net
+  name: HYPER CLIENT
+  email: noreply@huhusova67.ru
 priority: optional
 section: net
 # Fallback for direct Fastforge use. The App build script replaces this with
@@ -15,9 +15,9 @@ dependencies:
 essential: false
 icon: assets/logo.png
 postinstall_scripts:
-  - setcap cap_net_admin,cap_net_raw+eip /opt/OneXray/bin/OneXrayCore
+  - setcap cap_net_admin,cap_net_raw+eip /opt/HyperClient/bin/HyperClientCore
 keywords:
-  - OneXray
+  - HYPER CLIENT
   - Xray
   - VPN
   - Proxy
@@ -25,6 +25,6 @@ generic_name: VPN and Proxy Client
 categories:
   - Network
 startup_notify: true
-startup_wm_class: OneXray
+startup_wm_class: HyperClient
 supported_mime_type:
-  - x-scheme-handler/onexray
+  - x-scheme-handler/hyperclient

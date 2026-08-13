@@ -46,6 +46,7 @@ class ConfigGridList extends StatelessWidget {
     this.selectedId,
     this.onCleanSubscription,
     this.subscriptionExpandable = true,
+    this.header,
   });
 
   static const double maxContentWidth = 1040;
@@ -64,12 +65,27 @@ class ConfigGridList extends StatelessWidget {
   final Future<void> Function(int subId)? onCleanSubscription;
   final bool subscriptionExpandable;
 
+  /// Блок над списком, который прокручивается ВМЕСТЕ с ним.
+  ///
+  /// Главный экран отдаёт сюда кнопку подключения: если держать её снаружи
+  /// в Column, она остаётся прибитой к верху и не уезжает, когда список
+  /// листают вниз.
+  final Widget? header;
+
   @override
   Widget build(BuildContext context) {
-    if (rows.isEmpty) {
-      return ListEmptyView(message: emptyMessage, icon: emptyIcon);
-    }
-    return CustomScrollView(slivers: _slivers(context));
+    return CustomScrollView(
+      slivers: [
+        if (header case final header?) SliverToBoxAdapter(child: header),
+        if (rows.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: ListEmptyView(message: emptyMessage, icon: emptyIcon),
+          )
+        else
+          ..._slivers(context),
+      ],
+    );
   }
 
   List<Widget> _slivers(BuildContext context) {

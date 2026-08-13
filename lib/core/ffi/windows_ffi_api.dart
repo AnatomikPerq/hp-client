@@ -27,7 +27,7 @@ class WindowsFfiApi extends BaseFfiApi {
 
   //===================================
 
-  static const _coreExe = "OneXrayCore.exe";
+  static const _coreExe = "HyperClientCore.exe";
   static const _waitObject0 = 0;
   static const _waitTimeout = 258;
   static const _waitFailed = 0xFFFFFFFF;

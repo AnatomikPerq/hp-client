@@ -19,7 +19,7 @@ class LinuxFfiApi extends BaseFfiApi {
   LinuxFfiApi._internal();
 
   //===================================
-  static const _coreBin = "OneXrayCore";
+  static const _coreBin = "HyperClientCore";
   static const _stopProxyCoreFailed = "stop proxy core failed";
   final _processManager = LocalProcessManager();
   final _processStore = DesktopCoreProcessStore();

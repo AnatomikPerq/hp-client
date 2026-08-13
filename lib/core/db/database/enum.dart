@@ -5,7 +5,11 @@ enum CoreConfigType {
   // Legacy persisted value. Product/code terminology is Xray Profile.
   profile("setting"),
   raw("raw"),
-  full("full");
+  full("full"),
+  // Узел minewire. Хранится отдельным типом, потому что в момент импорта
+  // ещё неизвестен локальный порт sidecar-процесса — outbound для Xray
+  // собирается уже при подключении.
+  minewire("minewire");
 
   const CoreConfigType(this.name);
 

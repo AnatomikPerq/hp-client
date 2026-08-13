@@ -27,7 +27,7 @@ class GoRouteApp extends StatelessWidget {
     );
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: "OneXray",
+      title: "HYPER CLIENT",
       themeMode: state.themeCode.themeMode,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

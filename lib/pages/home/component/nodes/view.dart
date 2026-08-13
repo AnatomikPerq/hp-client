@@ -14,12 +14,16 @@ class HomeNodeView extends StatefulWidget {
     required this.showSearch,
     required this.onSelect,
     this.selectedId,
+    this.header,
   });
 
   final HomeNodeQueryType queryType;
   final bool showSearch;
   final int? selectedId;
   final ValueChanged<CoreConfigData> onSelect;
+
+  /// Прокручивается вместе со списком, а не висит над ним.
+  final Widget? header;
 
   @override
   State<HomeNodeView> createState() => _HomeNodeViewState();
@@ -102,6 +106,7 @@ class _HomeNodeViewState extends State<HomeNodeView> {
       onPingSubscription: (subId) => controller.ping(subId),
       onRefresh: () => controller.refreshData(),
       onCleanSubscription: (subId) => controller.cleanUnreachable(subId),
+      header: widget.header,
     );
   }
 

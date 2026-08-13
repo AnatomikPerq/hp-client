@@ -7,6 +7,7 @@ import 'package:onexray/pages/core/geo_data/select/page.dart';
 import 'package:onexray/pages/core/geo_data/select/params.dart';
 import 'package:onexray/pages/core/geo_data/show/page.dart';
 import 'package:onexray/pages/core/geo_data/show/params.dart';
+import 'package:onexray/pages/core/main/page.dart';
 import 'package:onexray/pages/core/log/log_file_viewer/page.dart';
 import 'package:onexray/pages/core/log/log_file_viewer/params.dart';
 import 'package:onexray/pages/core/log/config_file_viewer/page.dart';
@@ -101,7 +102,6 @@ abstract final class RouterPath {
   static const firstRun = "/firstRun";
   static const home = "/home";
   static const subscriptions = "/subscriptions";
-  static const core = "/core";
   static const settings = "/settings";
 
   static final router = GoRouter(
@@ -183,6 +183,8 @@ _SharedSecondaryRoute _route(
 
 final _sharedSecondaryRoutes = <_SharedSecondaryRoute>[
   _route(AppSecondaryDestination.overview, (_, _) => const HomePage()),
+  // Ядро перестало быть разделом нижней панели и открывается из настроек.
+  _route(AppSecondaryDestination.core, (_, _) => const CorePage()),
   _route(
     AppSecondaryDestination.nodeInfo,
     (_, state) => _withExtra<NodeInfoPageParams>(

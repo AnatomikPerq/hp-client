@@ -57,6 +57,11 @@ class SettingsController extends PageCubit<SettingsPageState> {
     }
   }
 
+  /// Ядро больше не отдельный раздел панели — вход к нему теперь отсюда.
+  void gotoCore(BuildContext context) {
+    context.goScoped(AppSecondaryDestination.core);
+  }
+
   void gotoTunSettings(BuildContext context) {
     context.goScoped(AppSecondaryDestination.tun);
   }

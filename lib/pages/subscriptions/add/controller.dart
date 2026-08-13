@@ -64,7 +64,12 @@ class SubscriptionAddController extends PageCubit<SubscriptionAddPageState> {
     if (state.generatingAgeKey) {
       return;
     }
-    final name = nameController.text.trim();
+    final typedName = nameController.text.trim();
+    // Пустое имя допустимо: сервис подставит Profile-Title из ответа сервера,
+    // а если заголовка нет — останется заглушка.
+    final name = typedName.isEmpty
+        ? SubscriptionService.anonymousName
+        : typedName;
     final url = SubscriptionUrl.normalize(urlController.text);
     final check = await SubscriptionValidator.validate(name, url);
     if (check.item1) {

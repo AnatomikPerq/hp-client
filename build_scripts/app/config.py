@@ -1,5 +1,5 @@
 PROJECT_CONFIG = {
-    "OneXray": {
+    "HyperClient": {
         "build_number.base": 400,
         "core.dir": "libXray",
         "core.lib.src.files.ios": ["LibXray.xcframework"],
@@ -13,8 +13,8 @@ PROJECT_CONFIG = {
         "core.lib.dst.dir.linux": "app",
         "core.lib.dst.dir.windows": "app",
         "core.dat.dst.dir": "../assets/dat",
-        "core.bin.dst.file.linux": "app/OneXrayCore",
-        "core.bin.dst.file.windows": "app/OneXrayCore.exe",
+        "core.bin.dst.file.linux": "app/HyperClientCore",
+        "core.bin.dst.file.windows": "app/HyperClientCore.exe",
         "app.release.dir.android": "../build/app/outputs",
         "app.release.dir.linux": "../dist",
         "app.release.dir.windows": "../dist",

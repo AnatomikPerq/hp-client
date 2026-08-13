@@ -163,6 +163,7 @@ class NetClient {
   Future<String?> getText(
     String url, {
     DownloadRequestHeaders? requestHeaders,
+    void Function(Headers headers)? onResponseHeaders,
   }) async {
     try {
       await asyncInit();
@@ -185,6 +186,7 @@ class NetClient {
         );
         final status = res.statusCode ?? 0;
         if (status < 300) {
+          onResponseHeaders?.call(res.headers);
           return res.data;
         }
         final location = res.headers.value(HttpHeaders.locationHeader);

@@ -206,20 +206,34 @@ void main() {
           xrayProfileName: 'Simple Profile',
           routingMode: CoreRoutingMode.rule,
           pendingRoutingMode: null,
+          livePing: const HomeLivePingState(
+            running: false,
+            milliseconds: null,
+            failed: false,
+          ),
           onToggleConnection: _noop,
           onShowNodeInfo: _noop,
           onShowXrayProfile: _noop,
           onRoutingModeChanged: _noopRoutingMode,
+          onMeasureLivePing: _noop,
         ),
       ),
     );
 
-    final button = tester.widget<ShadIconButton>(find.byType(ShadIconButton));
+    // Кнопка подключения — круг во весь герой, а не иконка 40×40:
+    // на 390pt ширины диаметр равен 146.
+    final powerIcon = find.byIcon(LucideIcons.power);
+    expect(powerIcon, findsOneWidget);
+    final circle = find.ancestor(
+      of: powerIcon,
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(tester.getSize(circle.first), const Size(146, 146));
+    final decoration =
+        tester.widget<AnimatedContainer>(circle.first).decoration
+            as BoxDecoration;
+    expect(decoration.shape, BoxShape.circle);
     final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
-    expect(button.width, 40);
-    expect(button.height, 40);
-    expect(button.iconSize, 18);
-    expect(button.decoration?.shape, BoxShape.circle);
     expect(tooltip.message, 'Connect to Selected Node');
     final profileRow = find.ancestor(
       of: find.text('Simple Profile'),
@@ -256,18 +270,31 @@ void main() {
           xrayProfileName: 'Simple Profile',
           routingMode: CoreRoutingMode.rule,
           pendingRoutingMode: null,
+          livePing: const HomeLivePingState(
+            running: false,
+            milliseconds: null,
+            failed: false,
+          ),
           onToggleConnection: _noop,
           onShowNodeInfo: _noop,
           onShowXrayProfile: _noop,
           onRoutingModeChanged: _noopRoutingMode,
+          onMeasureLivePing: _noop,
         ),
       ),
     );
 
-    final button = tester.widget<ShadIconButton>(find.byType(ShadIconButton));
-    expect(button.backgroundColor, AppPalette.light.runningBadge);
-    expect(button.foregroundColor, AppPalette.light.runningBadgeForeground);
-    expect(button.hoverForegroundColor, AppPalette.light.destructive);
+    // Подключено — герой переходит на жёлтый брендовый акцент.
+    final powerIcon = tester.widget<Icon>(find.byIcon(LucideIcons.power));
+    expect(powerIcon.color, AppPalette.light.running);
+    final circle = find.ancestor(
+      of: find.byIcon(LucideIcons.power),
+      matching: find.byType(AnimatedContainer),
+    );
+    final decoration =
+        tester.widget<AnimatedContainer>(circle.first).decoration
+            as BoxDecoration;
+    expect(decoration.border?.top.color.a, greaterThan(0.9));
   });
 
   testWidgets('Direct mode does not display the selected node as running', (

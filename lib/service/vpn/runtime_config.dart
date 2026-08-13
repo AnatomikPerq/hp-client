@@ -13,7 +13,10 @@ import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/core_routing_mode/state.dart';
 import 'package:onexray/service/core_run_mode/state.dart';
 import 'package:onexray/service/localizations/service.dart';
+import 'package:onexray/service/minewire/db.dart';
+import 'package:onexray/service/minewire/service.dart';
 import 'package:onexray/service/tun_settings/state.dart';
+import 'package:onexray/service/xray/outbound/enum.dart';
 import 'package:onexray/service/xray/constants.dart';
 import 'package:onexray/service/xray/full_config/state.dart';
 import 'package:onexray/service/xray/full_config/state_reader.dart';
@@ -28,6 +31,7 @@ import 'package:onexray/service/xray/profile/simple_state.dart';
 import 'package:onexray/service/xray/profile/state.dart';
 import 'package:onexray/service/xray/profile/state_reader.dart';
 import 'package:onexray/service/xray/profile/state_writer.dart';
+import 'package:onexray/service/xray/minewire_bypass.dart';
 import 'package:onexray/service/xray/raw/fix.dart';
 import 'package:onexray/service/xray/routing_mode.dart';
 
@@ -161,6 +165,15 @@ final class XrayRuntimeConfigService {
         ports,
         runDir,
       ),
+      CoreConfigType.minewire => _writeMinewire(
+        config,
+        profile,
+        mode,
+        routingMode,
+        tunSettings,
+        ports,
+        runDir,
+      ),
       _ => throw XrayRuntimeConfigException(
         appLocalizationsNoContext().vpnSelectOneConfig,
       ),
@@ -190,6 +203,55 @@ final class XrayRuntimeConfigService {
     profile.outbounds.outbounds.add(outbound);
     final xrayJson = await profile.fixSetting(mode, tunSettings, ports);
     return _writeTypedConfig(xrayJson, routingMode, runDir);
+  }
+
+  /// Узел minewire: сначала поднимаем sidecar, затем подключаем его к Xray
+  /// обычным socks-outbound на локальный порт.
+  ///
+  /// Порт не хранится в базе намеренно — он выбирается свободным при каждом
+  /// запуске, поэтому outbound собирается здесь, а не при импорте.
+  Future<String> _writeMinewire(
+    CoreConfigData config,
+    XrayProfileState profile,
+    CoreRunMode mode,
+    CoreRoutingMode routingMode,
+    TunSettingsState tunSettings,
+    XrayPorts ports,
+    String runDir,
+  ) async {
+    final link = MinewireConfigReader.read(config);
+    if (link == null) {
+      throw XrayRuntimeConfigException(
+        appLocalizationsNoContext().vpnOutboundInvalid,
+      );
+    }
+    final MinewireEndpoint endpoint;
+    try {
+      endpoint = await MinewireService().start(link);
+    } on MinewireException catch (error) {
+      ygLogger('start minewire failed: ${error.message}');
+      throw XrayRuntimeConfigException(
+        appLocalizationsNoContext().vpnStartFailed,
+      );
+    }
+
+    final outbound = OutboundState();
+    outbound.name = config.name;
+    outbound.protocol = XrayOutboundProtocol.socks;
+    outbound.address = "127.0.0.1";
+    outbound.port = "${endpoint.localPort}";
+    await _applyFinalOutbound(profile, outbound, config);
+    profile.outbounds.outbounds.add(outbound);
+    final xrayJson = await profile.fixSetting(mode, tunSettings, ports);
+    if (!XrayRoutingModeFix.applyToXrayJson(xrayJson, routingMode)) {
+      throw XrayRuntimeConfigException(
+        appLocalizationsNoContext().vpnRoutingModeProxyMissing,
+      );
+    }
+    // Строго после режима маршрутизации: «Глобально» вырезает routing
+    // целиком, и правило обхода нужно вернуть поверх результата.
+    XrayMinewireBypass.apply(xrayJson, endpoint.serverIps, link.port);
+    return xrayJson.writeConfig(runDir);
   }
 
   Future<void> _applyFinalOutbound(

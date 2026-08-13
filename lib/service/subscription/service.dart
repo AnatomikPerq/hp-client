@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:onexray/core/db/database/constants.dart';
@@ -19,9 +22,13 @@ import 'package:onexray/service/subscription/validator.dart';
 typedef _SubscriptionLoadResult = ({
   SubscriptionUpdateResult status,
   List<CoreConfigCompanion> rows,
+  String? profileTitle,
 });
 
 class SubscriptionService {
+  /// Имя-заглушка, которое ставится, когда пользователь не ввёл своё.
+  static const anonymousName = "anonymous";
+
   static final SubscriptionService _singleton = SubscriptionService._internal();
 
   factory SubscriptionService() => _singleton;
@@ -33,7 +40,7 @@ class SubscriptionService {
     String name,
     bool showLoading,
   ) async {
-    final subscriptionName = name.isEmpty ? "anonymous" : name;
+    final subscriptionName = name.isEmpty ? anonymousName : name;
     final checked = await SubscriptionValidator.validate(subscriptionName, url);
     if (!checked.item1) {
       return false;
@@ -49,7 +56,7 @@ class SubscriptionService {
     var imported = 0;
     final importedSubIds = <int>[];
     for (final entry in entries) {
-      final name = entry.name.isEmpty ? "anonymous" : entry.name;
+      final name = entry.name.isEmpty ? anonymousName : entry.name;
       try {
         final checked = await SubscriptionValidator.validate(name, entry.url);
         if (!checked.item1) {
@@ -108,12 +115,16 @@ class SubscriptionService {
       return SubscriptionInsertResult(status: loaded.status);
     }
     final rows = loaded.rows;
+    final resolvedName = _resolveSubscriptionName(
+      input.name,
+      loaded.profileTitle,
+    );
 
     final db = AppDatabase();
     try {
       return await db.transaction(() async {
         final row = SubscriptionCompanion.insert(
-          name: input.name,
+          name: resolvedName,
           url: input.url,
           ageSecretKey: Value(input.normalizedAgeSecretKey),
           agePublicKey: Value(input.normalizedAgePublicKey),
@@ -202,7 +213,7 @@ class SubscriptionService {
             throw StateError('replace subscription configs failed');
           }
           final updated = subscription.copyWith(
-            name: input.name,
+            name: _resolveSubscriptionName(input.name, loaded.profileTitle),
             url: input.url,
             ageSecretKey: Value(ageSecretKey),
             agePublicKey: Value(agePublicKey),
@@ -294,11 +305,16 @@ class SubscriptionService {
       url,
       ageSecretKey: ageSecretKey,
     );
+    // Узлы minewire приходят из того же тела подписки, но своим типом —
+    // фильтр «только outbound» их отбрасывал.
+    const importable = {
+      CoreConfigType.outbound,
+      CoreConfigType.minewire,
+    };
+    final importableNames = importable.map((type) => type.name).toSet();
     return rows
         .where(
-          (row) =>
-              row.type.present &&
-              row.type.value == CoreConfigType.outbound.name,
+          (row) => row.type.present && importableNames.contains(row.type.value),
         )
         .toList();
   }
@@ -308,20 +324,26 @@ class SubscriptionService {
       return (
         status: SubscriptionUpdateResult.invalidAgeSecretKey,
         rows: <CoreConfigCompanion>[],
+        profileTitle: null,
       );
     }
     final ageContext = input.normalizedAgeContext;
 
+    String? profileTitle;
     final text = await NetClient().getText(
       input.url,
       requestHeaders: DownloadRequestHeaders(
         agePublicKey: ageContext?.publicKey,
       ),
+      onResponseHeaders: (headers) {
+        profileTitle = decodeProfileTitle(headers.value('profile-title'));
+      },
     );
     if (text == null) {
       return (
         status: SubscriptionUpdateResult.downloadFailed,
         rows: <CoreConfigCompanion>[],
+        profileTitle: null,
       );
     }
 
@@ -335,19 +357,62 @@ class SubscriptionService {
             ? SubscriptionUpdateResult.invalidContent
             : SubscriptionUpdateResult.success,
         rows: rows,
+        profileTitle: profileTitle,
       );
     } on LibXrayInvokeException catch (error) {
       return (
         status: _ageErrorStatus(error.message),
         rows: <CoreConfigCompanion>[],
+        profileTitle: profileTitle,
       );
     } catch (error, stackTrace) {
       ygLogger('parse subscription failed (${error.runtimeType})\n$stackTrace');
       return (
         status: SubscriptionUpdateResult.invalidContent,
         rows: <CoreConfigCompanion>[],
+        profileTitle: profileTitle,
       );
     }
+  }
+
+  /// Заголовок Profile-Title приходит либо обычным текстом, либо в виде
+  /// "base64:<...>" — так его отдаёт 3x-ui, чтобы пронести юникод и эмодзи
+  /// через HTTP-заголовок.
+  @visibleForTesting
+  static String? decodeProfileTitle(String? raw) {
+    var value = raw?.trim() ?? '';
+    if (value.isEmpty) {
+      return null;
+    }
+    const prefix = 'base64:';
+    if (value.toLowerCase().startsWith(prefix)) {
+      var payload = value.substring(prefix.length).trim();
+      payload = payload.replaceAll('-', '+').replaceAll('_', '/');
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      try {
+        value = utf8.decode(base64Decode(payload));
+      } catch (_) {
+        return null;
+      }
+    }
+    value = value.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  /// Имя из заголовка подписки важнее заглушки, но никогда не затирает
+  /// то, что пользователь ввёл руками.
+  static String _resolveSubscriptionName(String typed, String? profileTitle) {
+    final title = profileTitle?.trim() ?? '';
+    if (title.isEmpty) {
+      return typed;
+    }
+    final entered = typed.trim();
+    if (entered.isEmpty || entered == anonymousName) {
+      return title;
+    }
+    return typed;
   }
 
   SubscriptionUpdateResult _ageErrorStatus(String error) {

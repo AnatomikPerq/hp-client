@@ -74,8 +74,10 @@ void main() {
       expect(shad.background, palette.background);
       expect(shad.card, palette.card);
       expect(shad.popover, palette.popover);
-      expect(shad.border, const Color(0x1CFFFFFF));
-      expect(shad.input, const Color(0x26FFFFFF));
+      // Сверяем с палитрой, а не с литералами: цвета живут в AppPalette и
+      // менялись под космическую тему.
+      expect(shad.border, palette.border);
+      expect(shad.input, palette.input);
     });
 
     test('Material and Shad themes share the Geist typography system', () {

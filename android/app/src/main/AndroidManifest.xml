@@ -53,7 +53,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="onexray.com"
-                    android:scheme="onexray" />
+                    android:scheme="hyperclient" />
             </intent-filter>
         </activity>
         <service

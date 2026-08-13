@@ -120,7 +120,8 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
       resolveSubId: (data, type) => switch (type) {
         CoreConfigType.raw => DBConstants.defaultId,
         CoreConfigType.full => DBConstants.defaultId,
-        CoreConfigType.outbound => data.subId,
+        // Узел minewire приходит из подписки наравне с обычными.
+        CoreConfigType.outbound || CoreConfigType.minewire => data.subId,
         _ => null,
       },
       normalizeData: (data, type) {
@@ -193,13 +194,23 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
     return _convertOutboundQueryRows(rows);
   }
 
+  /// Типы, которые показываются как узлы: всё, что можно выбрать и запустить.
+  static final _homeNodeTypeNames = <String>[
+    CoreConfigType.outbound.name,
+    CoreConfigType.minewire.name,
+    CoreConfigType.raw.name,
+    CoreConfigType.full.name,
+  ];
+
+  /// Узлы, которые может отдать подписка.
+  static final _subscriptionNodeTypeNames = <String>[
+    CoreConfigType.outbound.name,
+    CoreConfigType.minewire.name,
+  ];
+
   Stream<List<ConfigQueryRow>> allHomeNodeRowsStream() async* {
     final query = _allConfigRowsQuery
-      ..where(
-        coreConfig.type.equals(CoreConfigType.outbound.name) |
-            coreConfig.type.equals(CoreConfigType.raw.name) |
-            coreConfig.type.equals(CoreConfigType.full.name),
-      );
+      ..where(coreConfig.type.isIn(_homeNodeTypeNames));
     final queryStream = query.watch();
     await for (final rows in queryStream) {
       final results = await _convertHomeNodeQueryRows(rows);
@@ -209,11 +220,7 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
 
   Future<List<ConfigQueryRow>> get allHomeNodeRows async {
     final query = _allConfigRowsQuery
-      ..where(
-        coreConfig.type.equals(CoreConfigType.outbound.name) |
-            coreConfig.type.equals(CoreConfigType.raw.name) |
-            coreConfig.type.equals(CoreConfigType.full.name),
-      );
+      ..where(coreConfig.type.isIn(_homeNodeTypeNames));
     final rows = await query.get();
     final results = await _convertHomeNodeQueryRows(rows);
     return results;
@@ -241,14 +248,14 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
     int subId,
   ) async =>
       (select(coreConfig)
-            ..where((tbl) => tbl.type.equals(CoreConfigType.outbound.name))
+            ..where((tbl) => tbl.type.isIn(_subscriptionNodeTypeNames))
             ..where((tbl) => tbl.subId.equals(subId))
             ..orderBy([(tbl) => OrderingTerm.asc(tbl.delay)]))
           .get();
 
   Stream<List<CoreConfigData>> allOutboundRowsWithDataBySubIdStream(int subId) {
     return (select(coreConfig)
-          ..where((tbl) => tbl.type.equals(CoreConfigType.outbound.name))
+          ..where((tbl) => tbl.type.isIn(_subscriptionNodeTypeNames))
           ..where((tbl) => tbl.subId.equals(subId))
           ..orderBy([(tbl) => OrderingTerm.asc(tbl.delay)]))
         .watch();
@@ -259,7 +266,7 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
       return (select(coreConfig)
             ..where(
               (tbl) =>
-                  (tbl.type.equals(CoreConfigType.outbound.name) &
+                  (tbl.type.isIn(_subscriptionNodeTypeNames) &
                       tbl.subId.equals(DBConstants.defaultId)) |
                   tbl.type.equals(CoreConfigType.raw.name) |
                   tbl.type.equals(CoreConfigType.full.name),

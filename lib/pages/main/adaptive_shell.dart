@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/home/main/page.dart';
-import 'package:onexray/pages/core/main/page.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/settings/main/page.dart';
 import 'package:onexray/pages/subscriptions/list/page.dart';
@@ -75,37 +74,45 @@ class AdaptiveMainShell extends StatelessWidget {
         children: [
           SafeArea(
             bottom: false,
-            child: SizedBox(
-              width: extended ? 220 : 72,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: NavigationRail(
-                      extended: extended,
-                      minWidth: 72,
-                      minExtendedWidth: 220,
-                      selectedIndex: navigationShell.currentIndex,
-                      onDestinationSelected: (index) => context.goPrimary(
-                        navigationShell,
-                        AppPrimaryRoute.values[index],
+            // NavigationRail разворачивается плавно за kThemeAnimationDuration,
+            // поэтому и обёртка должна менять ширину с той же скоростью:
+            // при мгновенном скачке подписи на мгновение вылезали за край.
+            // ClipRect подстраховывает на время перехода.
+            child: ClipRect(
+              child: AnimatedContainer(
+                duration: kThemeAnimationDuration,
+                curve: Curves.easeInOut,
+                width: extended ? 220 : 72,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: NavigationRail(
+                        extended: extended,
+                        minWidth: 72,
+                        minExtendedWidth: 220,
+                        selectedIndex: navigationShell.currentIndex,
+                        onDestinationSelected: (index) => context.goPrimary(
+                          navigationShell,
+                          AppPrimaryRoute.values[index],
+                        ),
+                        destinations: AppPrimaryRoute.values
+                            .map(
+                              (primary) => NavigationRailDestination(
+                                icon: Icon(_icon(primary)),
+                                selectedIcon: Icon(_icon(primary)),
+                                label: Text(_label(context, primary)),
+                              ),
+                            )
+                            .toList(),
                       ),
-                      destinations: AppPrimaryRoute.values
-                          .map(
-                            (primary) => NavigationRailDestination(
-                              icon: Icon(_icon(primary)),
-                              selectedIcon: Icon(_icon(primary)),
-                              label: Text(_label(context, primary)),
-                            ),
-                          )
-                          .toList(),
                     ),
-                  ),
-                  if (appUpdateInfo != null)
-                    _DesktopUpdateReminder(
-                      extended: extended,
-                      onTap: () => _showDesktopUpdate(context, appUpdateInfo),
-                    ),
-                ],
+                    if (appUpdateInfo != null)
+                      _DesktopUpdateReminder(
+                        extended: extended,
+                        onTap: () => _showDesktopUpdate(context, appUpdateInfo),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -144,7 +151,6 @@ class AdaptiveMainShell extends StatelessWidget {
     return switch (primary) {
       AppPrimaryRoute.home => LucideIcons.house,
       AppPrimaryRoute.subscriptions => LucideIcons.layers3,
-      AppPrimaryRoute.core => LucideIcons.slidersHorizontal,
       AppPrimaryRoute.settings => LucideIcons.settings,
     };
   }
@@ -154,7 +160,6 @@ class AdaptiveMainShell extends StatelessWidget {
     return switch (primary) {
       AppPrimaryRoute.home => localizations.homePageTitle,
       AppPrimaryRoute.subscriptions => localizations.subscriptionListPageTitle,
-      AppPrimaryRoute.core => localizations.mainNavigationCore,
       AppPrimaryRoute.settings => localizations.settingsPageTitle,
     };
   }
@@ -245,7 +250,6 @@ class PrimaryRootContent extends StatelessWidget {
     return switch (primary) {
       AppPrimaryRoute.home => const HomePage(),
       AppPrimaryRoute.subscriptions => const SubscriptionListPage(),
-      AppPrimaryRoute.core => const CorePage(),
       AppPrimaryRoute.settings => const SettingsPage(),
     };
   }

@@ -9,6 +9,6 @@ install(FILES "${APP_DIR}/libXray.so"
         COMPONENT Runtime)
 
 install(PROGRAMS
-        "${APP_DIR}/OneXrayCore"
+        "${APP_DIR}/HyperClientCore"
         DESTINATION "${APP_BIN_DIR}"
         COMPONENT Runtime)

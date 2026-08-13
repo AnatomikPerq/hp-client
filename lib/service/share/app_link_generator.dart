@@ -18,6 +18,9 @@ abstract final class OneXrayAppLinkGenerator {
       CoreConfigType.profile => OneXrayConfigLinkType.profile,
       CoreConfigType.full => OneXrayConfigLinkType.full,
       CoreConfigType.raw => OneXrayConfigLinkType.raw,
+      // Узел minewire описывается своей ссылкой mw:// и в формат
+      // app-link не укладывается — экспорт для него не предлагаем.
+      CoreConfigType.minewire => null,
       null => null,
     };
     final data = config.data?.trim();

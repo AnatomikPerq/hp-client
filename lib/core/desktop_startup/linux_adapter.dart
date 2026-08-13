@@ -5,7 +5,7 @@ import 'package:onexray/core/desktop_startup/model.dart';
 import 'package:path/path.dart' as path;
 
 final class LinuxLaunchAtLoginAdapter extends LaunchAtLoginAdapter {
-  static const _desktopFileName = 'net.yuandev.onexray.desktop';
+  static const _desktopFileName = 'ru.huhusova67.hyperclient.desktop';
 
   final Map<String, String> _environment;
   final String _executable;

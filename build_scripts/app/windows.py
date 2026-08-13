@@ -72,6 +72,12 @@ class WindowsBuilder(Builder):
             self._wintun_architecture(),
             "wintun.dll",
         )
+        # Локальная сборка запускается повторно, и shutil.move отказывается
+        # перезаписывать уже лежащий wintun.dll. В CI каталог всегда чистый,
+        # поэтому там это не проявляется.
+        win_tun_dst_path = os.path.join(app_path, "wintun.dll")
+        if os.path.exists(win_tun_dst_path):
+            os.remove(win_tun_dst_path)
         shutil.move(win_tun_src_path, app_path)
 
     def build_app(self):

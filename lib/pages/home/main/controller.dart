@@ -20,6 +20,7 @@ import 'package:onexray/service/event_bus/service.dart';
 import 'package:onexray/service/event_bus/state.dart';
 import 'package:onexray/service/geo_data/system_dat_service.dart';
 import 'package:onexray/service/localizations/service.dart';
+import 'package:onexray/service/ping/live_probe.dart';
 import 'package:onexray/service/toast/service.dart';
 import 'package:onexray/service/vpn/service.dart';
 import 'package:onexray/service/xray/profile/simple_state.dart';
@@ -280,6 +281,73 @@ class HomeController extends PageCubit<HomePageState> {
   void updateConfigId(int value) {
     emit(state.copyWith(configId: value, configName: ""));
     unawaited(_updateConfigName(value));
+    unawaited(_switchRunningNode(value));
+  }
+
+  /// Пока туннель поднят, выбор другого узла переключает на него сразу.
+  ///
+  /// Раньше выбор только запоминался, и нужно было ещё раз нажать кнопку —
+  /// причём первое нажатие отключало, а не переключало.
+  Future<void> _switchRunningNode(int value) async {
+    if (value == DBConstants.defaultId) {
+      return;
+    }
+    final eventState = AppEventBus.instance.state;
+    if (eventState.coreRoutingMode == CoreRoutingMode.direct) {
+      return;
+    }
+    if (!VpnService().vpnRunningOrStarting) {
+      return;
+    }
+    // Уже на этом узле: перезапуск был бы отключением.
+    if (eventState.runningId == value) {
+      return;
+    }
+    if (state.vpnCommandLoading || eventState.vpnLoading) {
+      return;
+    }
+    emit(state.copyWith(vpnCommandLoading: true));
+    try {
+      await _ensureSystemGeoDatAssets();
+      final result = await VpnService().startVpn(value);
+      await _handleVpnCommandResult(result);
+    } catch (e, stackTrace) {
+      ygLogger('switch running node failed: $e\n$stackTrace');
+    } finally {
+      if (isPageActive) {
+        emit(state.copyWith(vpnCommandLoading: false));
+      }
+    }
+  }
+
+  /// Проверить, что подключение реально работает.
+  ///
+  /// Запрос уходит из приложения тем же маршрутом, что и остальной трафик
+  /// системы, поэтому меряется живое соединение, а не отдельный узел во
+  /// временном ядре, как в обычном тесте скорости.
+  Future<void> measureLivePing() async {
+    if (state.livePingRunning) {
+      return;
+    }
+    emit(state.copyWith(livePingRunning: true, clearLivePing: true));
+    try {
+      final result = await LivePingProbe().measure();
+      if (!isPageActive) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          livePingRunning: false,
+          livePingMs: result.reachable ? result.milliseconds : null,
+          livePingFailed: !result.reachable,
+        ),
+      );
+    } catch (e, stackTrace) {
+      ygLogger('live ping failed: $e\n$stackTrace');
+      if (isPageActive) {
+        emit(state.copyWith(livePingRunning: false, livePingFailed: true));
+      }
+    }
   }
 
   void toggleNodeSearch() {

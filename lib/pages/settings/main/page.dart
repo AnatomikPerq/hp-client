@@ -39,6 +39,7 @@ class SettingsContent extends StatelessWidget {
             useDockIconLabel: AppPlatform.isMacOS,
             showReview: AppPlatform.isMobile || AppPlatform.isMacOS,
             showDesktopSettings: AppPlatform.isDesktop,
+            onCore: () => controller.gotoCore(context),
             onAutoUpdate: () => controller.gotoAutoUpdate(context),
             onCheckUpdate: () => controller.checkUpdate(context),
             onClearData: () => controller.clearData(context),
@@ -68,6 +69,7 @@ class SettingsOverviewView extends StatelessWidget {
   final bool useDockIconLabel;
   final bool showReview;
   final bool showDesktopSettings;
+  final VoidCallback onCore;
   final VoidCallback onAutoUpdate;
   final VoidCallback onCheckUpdate;
   final VoidCallback onClearData;
@@ -92,6 +94,7 @@ class SettingsOverviewView extends StatelessWidget {
     required this.useDockIconLabel,
     required this.showReview,
     required this.showDesktopSettings,
+    required this.onCore,
     required this.onAutoUpdate,
     required this.onCheckUpdate,
     required this.onClearData,
@@ -124,7 +127,11 @@ class SettingsOverviewView extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Column(
-                        children: [_dataSection(context), _appSection(context)],
+                        children: [
+                          _coreSection(context),
+                          _dataSection(context),
+                          _appSection(context),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -140,6 +147,7 @@ class SettingsOverviewView extends StatelessWidget {
               }
               return Column(
                 children: [
+                  _coreSection(context),
                   _dataSection(context),
                   _appSection(context),
                   _versionSection(context),
@@ -151,6 +159,23 @@ class SettingsOverviewView extends StatelessWidget {
           _footer(context),
         ],
       ),
+    );
+  }
+
+  /// Ядро занимало отдельный раздел нижней панели ради одного экрана.
+  /// Теперь это строка настроек — панель освободилась под три раздела.
+  Widget _coreSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return SettingSection(
+      title: l10n.settingsPageSectionNetwork,
+      children: [
+        NavigationSettingRow(
+          title: l10n.mainNavigationCore,
+          subtitle: l10n.corePageTunSettingsDescription,
+          leading: const Icon(LucideIcons.slidersHorizontal),
+          onTap: onCore,
+        ),
+      ],
     );
   }
 

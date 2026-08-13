@@ -1,7 +1,7 @@
-app_id: 835d7bbd-85bb-4c73-97f8-ce0740f151a7
-publisher_name: YuanDevLLC
-publisher_url: https://github.com/OneXray/OneXray
-display_name: OneXray
+app_id: 346eafc3-85a2-4bbe-9f2b-5ee624666817
+publisher_name: HYPER CLIENT
+publisher_url: https://github.com/AnatomikPerq/hp-client
+display_name: HYPER CLIENT
 script_template: inno_setup.iss
 create_desktop_icon: true
 setup_icon_file: windows\runner\resources\app_icon.ico

@@ -14,6 +14,7 @@ extension ConfigReader on CoreConfigData {
             .toUpperCase(),
       CoreConfigType.raw => 'JSON',
       CoreConfigType.full => 'FULL',
+      CoreConfigType.minewire => 'MINEWIRE',
       CoreConfigType.profile || null => '',
     };
   }
@@ -32,6 +33,14 @@ extension ConfigReader on CoreConfigData {
       CoreConfigType.full => AppLocalizations.of(
         context,
       )!.homeManualInputFullConfig,
+      // У minewire в тегах лежат режим и тип прокси — показываем их так же,
+      // как у обычного узла показываются транспорт и security.
+      CoreConfigType.minewire =>
+        tags
+            .split(',')
+            .skip(1)
+            .where((tag) => tag.isNotEmpty && tag.toLowerCase() != 'none')
+            .join(' · '),
       CoreConfigType.profile || null => '',
     };
   }

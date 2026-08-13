@@ -6,7 +6,7 @@ import 'package:onexray/service/share/app_link_model.dart';
 import 'package:onexray/service/subscription/model.dart';
 
 abstract final class OneXrayAppLinkParser {
-  static const scheme = 'onexray';
+  static const scheme = 'hyperclient';
   static const host = 'onexray.com';
 
   static const configPath = '/config/add';

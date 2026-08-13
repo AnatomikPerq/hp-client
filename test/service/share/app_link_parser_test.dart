@@ -17,7 +17,7 @@ void main() {
       test('parses ${entry.key}', () {
         const json = '{"name":"Example"}';
         final uri = Uri(
-          scheme: 'onexray',
+          scheme: 'hyperclient',
           host: 'onexray.com',
           path: '/config/add',
           queryParameters: {
@@ -48,7 +48,7 @@ void main() {
         base64Encode(utf8.encode('{"name":"Example"}')),
       );
       final duplicate = Uri.parse(
-        'onexray://onexray.com/config/add?type=raw&type=full&data=$data',
+        'hyperclient://hyperclient.com/config/add?type=raw&type=full&data=$data',
       );
       final unknown = _configUri(extra: const {'backup': 'true'});
 
@@ -155,7 +155,7 @@ void main() {
 }
 
 Uri _configUri({
-  String scheme = 'onexray',
+  String scheme = 'hyperclient',
   String host = 'onexray.com',
   String path = '/config/add',
   String type = 'raw',
@@ -175,7 +175,7 @@ Uri _configUri({
 
 Uri _subscriptionUri({required String url, String? age, String name = ''}) {
   return Uri(
-    scheme: 'onexray',
+    scheme: 'hyperclient',
     host: 'onexray.com',
     path: '/sub/add',
     queryParameters: {'url': url, 'age': ?age},
@@ -189,7 +189,7 @@ Uri _geoDataUri({
   String name = '',
 }) {
   return Uri(
-    scheme: 'onexray',
+    scheme: 'hyperclient',
     host: 'onexray.com',
     path: '/dat/add',
     queryParameters: {'type': type, 'url': url},

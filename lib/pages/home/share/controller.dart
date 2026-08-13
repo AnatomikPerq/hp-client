@@ -147,6 +147,9 @@ class ShareController extends PageCubit<SharePageState> {
             );
             await _parseXrayJson(config);
             break;
+          case CoreConfigType.minewire:
+            // Экспортировать нечего: узел живёт только внутри подписки.
+            break;
           case CoreConfigType.raw:
             final text = XrayRawDb.readFromDbData(config);
             await _finishJsonExport(text, config.name);
