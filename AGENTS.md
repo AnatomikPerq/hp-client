@@ -1,8 +1,12 @@
 # Project Overview
 
-OneXray App is a cross-platform Flutter Xray-core client. Supported platforms include iOS, macOS, macOS SE, Android, Windows, and Linux.
+HYPER CLIENT is a cross-platform Flutter VPN client. Supported platforms include iOS, macOS, macOS SE, Android, Windows, and Linux. It is a fork of OneXray and is now developed independently; the upstream name should not appear in product-facing text.
 
 The app manages nodes, subscriptions, Xray Profiles, Full Configs, Raw Json configs, and GeoData. Before startup, it composes and writes the final runtime Xray JSON. Production builds use TUN mode; Proxy mode is an in-memory Debug-only tool.
+
+Beyond Xray-core protocols, the client hosts **non-standard transports** that ordinary clients cannot see. Their binaries live in `protocols/` under version control and ship with every build. Their links are parsed **in Dart, before libXray** — the core does not know those schemes and silently drops them, and libXray must not be patched, or upstream updates turn into manual merges. See `protocols/README.md`.
+
+The internal Dart package name is still `onexray`. That is deliberate: renaming it would rewrite imports across the whole tree and conflict with every upstream merge.
 
 # Repository Layout
 
@@ -47,7 +51,7 @@ Shared Apple Swift models, logging, and utilities live in `swift/All`. The App b
 
 The Android native bridge and VPN service live under `android/app/src/main/kotlin/net/yuandev/onexray`.
 
-Windows and Linux desktop builds use Dart FFI, platform runners, and the packaged `OneXrayCore` binary to start core. Windows TUN mode requires elevated core startup. The Debug-only Proxy path does not require administrator privileges.
+Windows and Linux desktop builds use Dart FFI, platform runners, and the packaged `HyperClientCore` binary to start core. Windows TUN mode requires elevated core startup. The Debug-only Proxy path does not require administrator privileges.
 
 # Generated Files
 

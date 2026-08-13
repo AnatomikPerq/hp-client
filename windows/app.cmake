@@ -14,9 +14,15 @@ install(FILES "${APP_DIR}/wintun.dll"
         DESTINATION "${APP_BIN_DIR}"
         COMPONENT Runtime)
 
-# Sidecar minewire. Права администратора ему не нужны — в отличие от ядра
-# он лишь открывает локальный SOCKS5.
+# Нестандартные протоколы. Их бинарники лежат В РЕПОЗИТОРИИ (protocols/),
+# а не в игнорируемом windows/app/: клиент задуман как дом для протоколов,
+# которых не понимают обычные клиенты, и сборка из чистого клона обязана
+# получать их автоматически.
+set(PROTOCOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../protocols")
+
+# minewire: права администратора не нужны — в отличие от ядра он лишь
+# открывает локальный SOCKS5.
 install(PROGRAMS
-        "${APP_DIR}/minewire.exe"
+        "${PROTOCOLS_DIR}/minewire/windows/x64/minewire.exe"
         DESTINATION "${APP_BIN_DIR}"
         COMPONENT Runtime)
