@@ -5,6 +5,7 @@ import 'package:onexray/core/constants/preferences.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/model/xray_json.dart';
+import 'package:onexray/core/model/xray_standard.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/tools/file.dart';
@@ -32,6 +33,7 @@ import 'package:onexray/service/xray/profile/state.dart';
 import 'package:onexray/service/xray/profile/state_reader.dart';
 import 'package:onexray/service/xray/profile/state_writer.dart';
 import 'package:onexray/service/xray/minewire_bypass.dart';
+import 'package:onexray/service/xray/outbound/state_writer.dart';
 import 'package:onexray/service/xray/raw/fix.dart';
 import 'package:onexray/service/xray/routing_mode.dart';
 
@@ -39,6 +41,19 @@ class XrayRuntimeConfigException implements Exception {
   final String message;
 
   const XrayRuntimeConfigException(this.message);
+}
+
+/// Набор изменений для живого ядра при смене узла.
+class XrayHotSwap {
+  const XrayHotSwap({
+    required this.outbounds,
+    required this.addedRules,
+    required this.removedRuleTags,
+  });
+
+  final List<XrayOutbound> outbounds;
+  final List<XrayRoutingRule> addedRules;
+  final List<String> removedRuleTags;
 }
 
 class XrayRuntimeConfig {
@@ -121,6 +136,76 @@ final class XrayRuntimeConfigService {
       ports: ports,
       coreInvokeText: JsonTool.encoder.convert(invoke.toJson()),
     );
+  }
+
+  /// Что нужно отдать живому ядру, чтобы оно переехало на другой узел.
+  ///
+  /// `null` — узел так подменить нельзя, нужен полный перезапуск.
+  Future<XrayHotSwap?> buildHotSwap(CoreConfigData config) async {
+    final type = CoreConfigType.fromString(config.type);
+    // Raw и Full описывают ВЕСЬ конфиг целиком, подменой одного outbound
+    // их не переключить.
+    if (type != CoreConfigType.outbound && type != CoreConfigType.minewire) {
+      return null;
+    }
+    try {
+      final tunSettings = TunSettingsState();
+      await tunSettings.readFromPreferences();
+      final profile = await XrayProfileStateReader.loadFromDb(tunSettings);
+
+      final outbound = OutboundState();
+      final rules = <XrayRoutingRule>[];
+      final removedRuleTags = <String>[XrayMinewireBypass.ruleTag];
+
+      if (type == CoreConfigType.minewire) {
+        final link = MinewireConfigReader.read(config);
+        if (link == null) {
+          return null;
+        }
+        final endpoint = await MinewireService().start(link);
+        outbound.name = config.name;
+        outbound.protocol = XrayOutboundProtocol.socks;
+        outbound.address = "127.0.0.1";
+        outbound.port = "${endpoint.localPort}";
+        rules.addAll(
+          XrayMinewireBypass.buildRules(endpoint.serverIps, link.port),
+        );
+      } else {
+        if (!outbound.readFromDbData(config)) {
+          return null;
+        }
+        outbound.name = config.name;
+        // Уходим с minewire — sidecar больше не нужен.
+        await MinewireService().stop();
+      }
+
+      await _applyFinalOutbound(profile, outbound, config);
+      final outbounds = <XrayOutbound>[outbound.xrayJson];
+      final finalOutbound = profile.outbounds.finalOutbound;
+      if (finalOutbound != null) {
+        outbounds.add(finalOutbound.xrayJson);
+      }
+      if (rules.isNotEmpty) {
+        // Правило ведёт в direct, а в режиме «Глобально» такого outbound
+        // у живого ядра может не быть — добавляем вместе с правилом.
+        outbounds.add(
+          XrayOutboundStandard.standard
+            ..protocol = "freedom"
+            ..tag = RoutingOutboundTag.direct.name,
+        );
+      }
+      return XrayHotSwap(
+        outbounds: outbounds,
+        addedRules: rules,
+        removedRuleTags: removedRuleTags,
+      );
+    } on MinewireException catch (error) {
+      ygLogger('hot swap to minewire failed: ${error.message}');
+      return null;
+    } catch (error, stackTrace) {
+      ygLogger('build hot swap failed: $error\n$stackTrace');
+      return null;
+    }
   }
 
   Future<String> _writeSelectedConfig(

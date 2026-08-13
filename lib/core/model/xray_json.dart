@@ -16,6 +16,13 @@ class XrayJson {
   XrayMetrics? metrics;
   List<XrayFakeDns>? fakeDns;
 
+  /// Управляющий интерфейс ядра.
+  ///
+  /// Позволяет менять outbound и правила маршрутизации у ЖИВОГО процесса,
+  /// не перезапуская его. На Windows это единственный способ не спрашивать
+  /// права администратора при каждой смене узла.
+  XrayApi? api;
+
   XrayJson(
     this.name,
     this.env,
@@ -28,12 +35,27 @@ class XrayJson {
     this.stats,
     this.metrics,
     this.fakeDns,
+    this.api,
   );
 
   factory XrayJson.fromJson(Map<String, dynamic> json) =>
       _$XrayJsonFromJson(json);
 
   Map<String, dynamic> toJson() => _$XrayJsonToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class XrayApi {
+  String? tag;
+  String? listen;
+  List<String>? services;
+
+  XrayApi(this.tag, this.listen, this.services);
+
+  factory XrayApi.fromJson(Map<String, dynamic> json) =>
+      _$XrayApiFromJson(json);
+
+  Map<String, dynamic> toJson() => _$XrayApiToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)

@@ -57,6 +57,7 @@ void main() {
     final ports = XrayPorts(
       '23456',
       '23457',
+      '23458',
       XrayInboundAccount('ping-user', 'ping-pass'),
     );
 

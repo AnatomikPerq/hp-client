@@ -21,18 +21,32 @@ abstract final class XrayMinewireBypass {
   ///
   /// Режим «Глобально» вырезает `routing` целиком, поэтому правило нужно
   /// возвращать поверх результата, а не добавлять в профиль заранее.
-  static void apply(XrayJson xrayJson, List<String> serverIps, int serverPort) {
+  /// Правила обхода отдельно от конфига: те же самые нужны и живому ядру
+  /// через API, когда узел меняют без перезапуска.
+  static List<XrayRoutingRule> buildRules(
+    List<String> serverIps,
+    int serverPort,
+  ) {
     if (serverIps.isEmpty) {
+      return const <XrayRoutingRule>[];
+    }
+    return <XrayRoutingRule>[
+      XrayRoutingRuleStandard.standard
+        ..ip = serverIps.map(_asCidr).toList()
+        ..port = "$serverPort"
+        ..outboundTag = RoutingOutboundTag.direct.name
+        ..ruleTag = ruleTag,
+    ];
+  }
+
+  static void apply(XrayJson xrayJson, List<String> serverIps, int serverPort) {
+    final built = buildRules(serverIps, serverPort);
+    if (built.isEmpty) {
       return;
     }
     _ensureDirectOutbound(xrayJson);
 
-    final rule = XrayRoutingRuleStandard.standard
-      ..ip = serverIps.map(_asCidr).toList()
-      ..port = "$serverPort"
-      ..outboundTag = RoutingOutboundTag.direct.name
-      ..ruleTag = ruleTag;
-
+    final rule = built.first;
     final routing = xrayJson.routing ?? XrayRoutingStandard.standard;
     final rules = routing.rules ?? <XrayRoutingRule>[];
     rules.removeWhere((existing) => existing.ruleTag == ruleTag);

@@ -13,7 +13,12 @@ extension XrayJsonStandard on XrayJson {
     null,
     null,
     null,
+    null,
   );
+}
+
+extension XrayApiStandard on XrayApi {
+  static XrayApi get standard => XrayApi(null, null, null);
 }
 
 extension XrayLogStandard on XrayLog {

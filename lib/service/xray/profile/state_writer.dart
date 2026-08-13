@@ -6,6 +6,7 @@ import 'package:onexray/service/core_run_mode/state.dart';
 import 'package:onexray/service/tun_settings/state.dart';
 import 'package:onexray/service/xray/runtime_inbounds.dart';
 import 'package:onexray/service/xray/profile/enum.dart';
+import 'package:onexray/service/xray/core_api.dart';
 import 'package:onexray/service/xray/profile/inbounds_state.dart';
 import 'package:onexray/service/xray/profile/log_state.dart';
 import 'package:onexray/service/xray/profile/state.dart';
@@ -66,6 +67,7 @@ extension XrayProfileStateWriter on XrayProfileState {
     final xrayJson = this.xrayJson;
     XrayRuntimeInbounds.applyToXrayJson(xrayJson, inbounds, mode);
     fixMetricsConfig(xrayJson, ports, metricsEnabled);
+    XrayCoreApi.applyToXrayJson(xrayJson, ports);
     return xrayJson;
   }
 

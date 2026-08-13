@@ -328,22 +328,27 @@ class InboundsState {
 class XrayPorts {
   String pingPort;
   String metricsPort;
+
+  /// Порт управляющего интерфейса ядра: через него меняют outbound у живого
+  /// процесса, не перезапуская его и не спрашивая права заново.
+  String apiPort;
   final XrayInboundAccount pingAuth;
 
-  XrayPorts(this.pingPort, this.metricsPort, this.pingAuth);
+  XrayPorts(this.pingPort, this.metricsPort, this.apiPort, this.pingAuth);
 
   static Future<XrayPorts?> getPorts({
     Set<int> excludedPorts = const <int>{},
   }) async {
     for (var i = 0; i < 5; i++) {
-      final ports = await AppHostApi().getFreePorts(2);
+      final ports = await AppHostApi().getFreePorts(3);
       final availablePorts = ports
           .where((port) => !excludedPorts.contains(port))
           .toList();
-      if (availablePorts.length == 2) {
+      if (availablePorts.length == 3) {
         return XrayPorts(
           "${availablePorts[0]}",
           "${availablePorts[1]}",
+          "${availablePorts[2]}",
           XrayInboundAccountFactory.random(),
         );
       }

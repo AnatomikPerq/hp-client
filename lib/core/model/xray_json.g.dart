@@ -38,6 +38,9 @@ XrayJson _$XrayJsonFromJson(Map<String, dynamic> json) => XrayJson(
   (json['fakeDns'] as List<dynamic>?)
       ?.map((e) => XrayFakeDns.fromJson(e as Map<String, dynamic>))
       .toList(),
+  json['api'] == null
+      ? null
+      : XrayApi.fromJson(json['api'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$XrayJsonToJson(XrayJson instance) => <String, dynamic>{
@@ -52,6 +55,19 @@ Map<String, dynamic> _$XrayJsonToJson(XrayJson instance) => <String, dynamic>{
   'stats': ?instance.stats?.toJson(),
   'metrics': ?instance.metrics?.toJson(),
   'fakeDns': ?instance.fakeDns?.map((e) => e.toJson()).toList(),
+  'api': ?instance.api?.toJson(),
+};
+
+XrayApi _$XrayApiFromJson(Map<String, dynamic> json) => XrayApi(
+  json['tag'] as String?,
+  json['listen'] as String?,
+  (json['services'] as List<dynamic>?)?.map((e) => e as String).toList(),
+);
+
+Map<String, dynamic> _$XrayApiToJson(XrayApi instance) => <String, dynamic>{
+  'tag': ?instance.tag,
+  'listen': ?instance.listen,
+  'services': ?instance.services,
 };
 
 XrayEnv _$XrayEnvFromJson(Map<String, dynamic> json) => XrayEnv(

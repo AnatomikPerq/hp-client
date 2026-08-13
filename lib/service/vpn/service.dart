@@ -25,6 +25,7 @@ import 'package:onexray/service/vpn/command_serial_executor.dart';
 import 'package:onexray/service/vpn/connectivity.dart';
 import 'package:onexray/service/vpn/running_config_id_writer.dart';
 import 'package:onexray/service/vpn/runtime_config.dart';
+import 'package:onexray/service/xray/core_api.dart';
 import 'package:onexray/service/xray/profile/inbounds_state.dart';
 
 final class VpnService {
@@ -44,6 +45,9 @@ final class VpnService {
   var _runningRoutingMode = CoreRoutingMode.rule;
   var _pendingRoutingMode = CoreRoutingMode.rule;
   var _staleDesktopCoreCleanupRequired = false;
+
+  /// Порт управляющего интерфейса ЗАПУЩЕННОГО ядра. `null` — ядра нет.
+  String? _runningApiPort;
   final _commands = CommandSerialExecutor();
   late final _runningConfigIdWriter = RunningConfigIdWriter(
     persist: PreferencesKey().saveRunningConfigId,
@@ -393,6 +397,21 @@ final class VpnService {
         }
       }
 
+      // Смена узла на живом ядре: подменяем outbound через его API вместо
+      // убийства процесса. На Windows перезапуск означает новое окно UAC,
+      // и при включённом авто-переключении оно всплывало на каждый клик.
+      if (hadRunningCore &&
+          outbound != null &&
+          await _tryHotSwapNode(outbound, coreRunMode, routingMode)) {
+        await _updateLastConfigId(configId);
+        _pendingConfigId = DBConstants.defaultId;
+        eventBus.updatePendingConfigId(DBConstants.defaultId);
+        await _updateRunningId(configId, generation);
+        eventBus.updateVpnActionState(VpnActionState.connected);
+        await TrayService().refreshTrayManager();
+        return _commandSuccess();
+      }
+
       if (hadRunningCore) {
         final stopResult = await _stopCurrentVpn(generation);
         if (stopResult.state == NativeVpnCommandState.failed) {
@@ -474,6 +493,52 @@ final class VpnService {
         await _handleStartFailure(message, generation);
       }
       return _commandFailed(message);
+    }
+  }
+
+  /// Переехать на другой узел, не перезапуская ядро.
+  ///
+  /// Любой отказ здесь означает откат на обычный путь со стопом и стартом:
+  /// половинчатое состояние туннеля хуже лишнего окна UAC.
+  Future<bool> _tryHotSwapNode(
+    CoreConfigData config,
+    CoreRunMode coreRunMode,
+    CoreRoutingMode routingMode,
+  ) async {
+    final apiPort = _runningApiPort;
+    if (apiPort == null || !XrayCoreApi.supported) {
+      return false;
+    }
+    // Подменяем только узел. Смена режима запуска или маршрутизации меняет
+    // инбаунды и весь набор outbound — это по-прежнему перезапуск.
+    if (routingMode == CoreRoutingMode.direct ||
+        routingMode != _runningRoutingMode ||
+        coreRunMode != _runningMode) {
+      return false;
+    }
+    if (_lastVpnStatus != VpnStatus.connected) {
+      return false;
+    }
+
+    try {
+      final swap = await _runtimeConfig.buildHotSwap(config);
+      if (swap == null) {
+        return false;
+      }
+      final applied = await XrayCoreApi.replaceProxyOutbound(
+        apiPort: apiPort,
+        outbounds: swap.outbounds,
+        removedRuleTags: swap.removedRuleTags,
+        addedRules: swap.addedRules,
+      );
+      if (!applied) {
+        return false;
+      }
+      ygLogger('switched node without restarting the core');
+      return true;
+    } catch (error, stackTrace) {
+      ygLogger('hot swap failed: $error\n$stackTrace');
+      return false;
     }
   }
 
@@ -628,6 +693,7 @@ final class VpnService {
     // Sidecar minewire гасим всегда: если узел был не минуайровский,
     // процесса просто нет и вызов ничего не делает.
     await MinewireService().stop();
+    _runningApiPort = null;
     if (_runningMode == CoreRunMode.proxy) {
       return _stopProxyCore();
     }
@@ -886,6 +952,7 @@ final class VpnService {
     final runtime = await _runtimeConfig.prepare(config, mode: mode);
     _pendingRunMode = runtime.mode;
     _pendingRoutingMode = runtime.routingMode;
+    _runningApiPort = runtime.ports.apiPort;
     switch (runtime.mode) {
       case CoreRunMode.tun:
         return _makeVpnRequestAndStart(
