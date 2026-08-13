@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/AnatomikPerq/hp-client/releases/latest"><img src="https://img.shields.io/github/v/release/AnatomikPerq/hp-client?display_name=tag&sort=semver" alt="Последний релиз"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Лицензия"></a>
-  <img src="https://img.shields.io/badge/платформы-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20iOS%20%7C%20macOS-4CC9F0" alt="Платформы">
+  <img src="https://img.shields.io/badge/сборки-Windows%20x64-4CC9F0" alt="Готовые сборки">
 </p>
 
 ---
@@ -33,6 +33,14 @@ Xray-совместимые протоколы как основу и **доба
 |---|---|---|
 | VLESS, VMess, Trojan, Shadowsocks, Hysteria2, WireGuard | всё, что умеет Xray-core, включая XHTTP и REALITY | есть |
 | **minewire** (`mw://`) | маскирует трафик под игровой протокол Minecraft | есть, Windows |
+
+## Платформы
+
+Кодовая база собирается под Windows, Linux, Android, iOS и macOS — это
+досталось от основы. Но **готовые сборки мы пока выпускаем только под
+Windows x64**, и нестандартные протоколы тоже собраны только под неё.
+Остальные платформы соберутся, когда под них будут артефакты ядра и
+протоколов; в таблице выше это отражено честно, без обещаний.
 
 Нестандартные протоколы лежат в [`protocols/`](./protocols/) — **в
 репозитории**, а не подкладываются руками. Сборка из чистого клона получает
