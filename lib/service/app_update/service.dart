@@ -52,10 +52,13 @@ class AppUpdateService {
 
   AppUpdateService._internal();
 
+  // Релизы берём у форка, а не у апстрима. С версией 0.1.0-beta проверка
+  // против OneXray всегда сообщала бы о «новой версии» и предлагала
+  // поставить чужое приложение поверх этого.
   static const _githubLatestReleaseApi =
-      "https://api.github.com/repos/OneXray/OneXray/releases/latest";
+      "https://api.github.com/repos/AnatomikPerq/hp-client/releases/latest";
   static const _githubLatestReleaseUrl =
-      "https://github.com/OneXray/OneXray/releases/latest";
+      "https://github.com/AnatomikPerq/hp-client/releases/latest";
   static const _appStoreUrl =
       "https://apps.apple.com/us/app/onexray/id6745748773";
   static const _googlePlayUrl =

@@ -247,7 +247,7 @@ class SettingsController extends PageCubit<SettingsPageState> {
   }
 
   final _githubIssue = Uri.parse(
-    "https://github.com/OneXray/OneXray/issues/new",
+    "https://github.com/AnatomikPerq/hp-client/issues/new",
   );
 
   Future<void> submitIssue(BuildContext context) async {
@@ -258,7 +258,8 @@ class SettingsController extends PageCubit<SettingsPageState> {
     }
   }
 
-  final _github = Uri.parse("https://github.com/OneXray/OneXray");
+  // GPL-3.0 требует отдавать исходники ИМЕННО этой версии, а не апстрима.
+  final _github = Uri.parse("https://github.com/AnatomikPerq/hp-client");
   Future<void> openSourceCode(BuildContext context) async {
     try {
       await launchUrl(_github);
