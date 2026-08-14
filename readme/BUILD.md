@@ -8,10 +8,14 @@
 ```
 hp-client/
   app/         — этот репозиторий
-  libXray/     — ветка main
+  libXray/     — НАШ форк: github.com/AnatomikPerq/libXray
   Xray-core/   — тег под версию libXray (сейчас v26.7.28)
   output/      — сюда складываются готовые пакеты
 ```
+
+libXray именно наш форк, а не апстрим: в него встроены нестандартные
+протоколы (см. [protocols/README.md](../protocols/README.md)). Апстрим
+подключён вторым remote под именем `upstream`.
 
 ## Инструменты
 
@@ -46,6 +50,14 @@ python -m venv .venv
 ```shell
 cd ../libXray
 python3 build/main.py windows local   # или linux / android / apple
+```
+
+Собрать только `libXray.dll` вручную, без скрипта, можно так — флаги важны,
+без `-s -w` библиотека выходит вдвое тяжелее:
+
+```shell
+CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" \
+  -o windows_dll/libXray.dll -buildmode=c-shared ./cgo_bridge
 ```
 
 Затем разложить результат:

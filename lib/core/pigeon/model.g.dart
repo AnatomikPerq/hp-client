@@ -160,6 +160,50 @@ RunXrayRequest _$RunXrayRequestFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$RunXrayRequestToJson(RunXrayRequest instance) =>
     <String, dynamic>{'xrayJson': ?instance.xrayJson};
 
+StartMinewireRequest _$StartMinewireRequestFromJson(
+  Map<String, dynamic> json,
+) => StartMinewireRequest(
+  json['serverAddress'] as String?,
+  json['password'] as String?,
+  mode: json['mode'] as String?,
+  localPort: (json['localPort'] as num?)?.toInt(),
+);
+
+Map<String, dynamic> _$StartMinewireRequestToJson(
+  StartMinewireRequest instance,
+) => <String, dynamic>{
+  'serverAddress': ?instance.serverAddress,
+  'password': ?instance.password,
+  'mode': ?instance.mode,
+  'localPort': ?instance.localPort,
+};
+
+StartMinewireResponse _$StartMinewireResponseFromJson(
+  Map<String, dynamic> json,
+) => StartMinewireResponse((json['localPort'] as num?)?.toInt());
+
+Map<String, dynamic> _$StartMinewireResponseToJson(
+  StartMinewireResponse instance,
+) => <String, dynamic>{'localPort': ?instance.localPort};
+
+MinewireStateResponse _$MinewireStateResponseFromJson(
+  Map<String, dynamic> json,
+) => MinewireStateResponse(
+  json['running'] as bool?,
+  json['connected'] as bool?,
+  json['localAddr'] as String?,
+  json['lastError'] as String?,
+);
+
+Map<String, dynamic> _$MinewireStateResponseToJson(
+  MinewireStateResponse instance,
+) => <String, dynamic>{
+  'running': ?instance.running,
+  'connected': ?instance.connected,
+  'localAddr': ?instance.localAddr,
+  'lastError': ?instance.lastError,
+};
+
 TestXrayRequest _$TestXrayRequestFromJson(Map<String, dynamic> json) =>
     TestXrayRequest(json['xrayJson'] as String?);
 
@@ -193,6 +237,9 @@ const _$LibXrayMethodEnumMap = {
   LibXrayMethod.stopXray: 'stopXray',
   LibXrayMethod.xrayVersion: 'xrayVersion',
   LibXrayMethod.getXrayState: 'getXrayState',
+  LibXrayMethod.startMinewire: 'startMinewire',
+  LibXrayMethod.stopMinewire: 'stopMinewire',
+  LibXrayMethod.minewireState: 'minewireState',
 };
 
 GetFreePortsRequest _$GetFreePortsRequestFromJson(Map<String, dynamic> json) =>

@@ -190,6 +190,62 @@ class RunXrayRequest {
   Map<String, dynamic> toJson() => _$RunXrayRequestToJson(this);
 }
 
+/// Запуск туннеля minewire внутри libXray.
+///
+/// Адрес сервера передаём уже разрешённым: после поднятия туннеля DNS может
+/// сам зависеть от этого туннеля, который ещё не работает.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartMinewireRequest {
+  String? serverAddress;
+  String? password;
+  String? mode;
+  int? localPort;
+
+  StartMinewireRequest(
+    this.serverAddress,
+    this.password, {
+    this.mode,
+    this.localPort,
+  });
+
+  factory StartMinewireRequest.fromJson(Map<String, dynamic> json) =>
+      _$StartMinewireRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartMinewireRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartMinewireResponse {
+  int? localPort;
+
+  StartMinewireResponse(this.localPort);
+
+  factory StartMinewireResponse.fromJson(Map<String, dynamic> json) =>
+      _$StartMinewireResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartMinewireResponseToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class MinewireStateResponse {
+  bool? running;
+  bool? connected;
+  String? localAddr;
+  String? lastError;
+
+  MinewireStateResponse(
+    this.running,
+    this.connected,
+    this.localAddr,
+    this.lastError,
+  );
+
+  factory MinewireStateResponse.fromJson(Map<String, dynamic> json) =>
+      _$MinewireStateResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MinewireStateResponseToJson(this);
+}
+
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class TestXrayRequest {
   String? xrayJson;
@@ -225,6 +281,12 @@ enum LibXrayMethod {
   xrayVersion,
   @JsonValue("getXrayState")
   getXrayState,
+  @JsonValue("startMinewire")
+  startMinewire,
+  @JsonValue("stopMinewire")
+  stopMinewire,
+  @JsonValue("minewireState")
+  minewireState,
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)

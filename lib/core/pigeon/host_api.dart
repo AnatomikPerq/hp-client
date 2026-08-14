@@ -129,6 +129,62 @@ class AppHostApi {
     return [];
   }
 
+  /// Поднять туннель minewire внутри libXray и получить локальный порт.
+  ///
+  /// Бросает при неудаче: вызывающий должен показать ошибку, а не молча
+  /// подключаться в никуда.
+  Future<int> startMinewire({
+    required String serverAddress,
+    required String password,
+    required String mode,
+  }) async {
+    final res = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.startMinewire,
+        payload: StartMinewireRequest(
+          serverAddress,
+          password,
+          mode: mode,
+        ).toJson(),
+      ),
+    );
+    final resp = LibXrayInvokeResponseParser.parse(res);
+    final port = resp.success && resp.data != null
+        ? StartMinewireResponse.fromJson(resp.data!).localPort
+        : null;
+    if (port == null || port <= 0) {
+      throw LibXrayInvokeException(
+        resp.error.isNotEmpty ? resp.error : 'minewire start failed',
+      );
+    }
+    return port;
+  }
+
+  Future<void> stopMinewire() async {
+    try {
+      await _invoke(
+        LibXrayInvokeRequest(method: LibXrayMethod.stopMinewire),
+      );
+    } catch (error, stackTrace) {
+      _reportUnexpected('stopMinewire', error, stackTrace);
+    }
+  }
+
+  Future<MinewireStateResponse?> minewireState() async {
+    try {
+      final res = await _invoke(
+        LibXrayInvokeRequest(method: LibXrayMethod.minewireState),
+      );
+      final resp = LibXrayInvokeResponseParser.parse(res);
+      if (resp.success && resp.data != null) {
+        return MinewireStateResponse.fromJson(resp.data!);
+      }
+    } catch (error, stackTrace) {
+      _reportUnexpected('minewireState', error, stackTrace);
+    }
+    return null;
+  }
+
   Future<XrayJson> convertShareLinksToXrayJson(
     String text, {
     String? ageSecretKey,

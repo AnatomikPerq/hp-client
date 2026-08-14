@@ -1,14 +1,10 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:onexray/core/pigeon/constants.dart';
-import 'package:onexray/core/tools/file.dart';
+import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/minewire/link.dart';
-import 'package:path/path.dart' as p;
 
-/// Что нужно знать Xray о поднятом sidecar.
+/// Что нужно знать Xray о поднятом туннеле.
 class MinewireEndpoint {
   const MinewireEndpoint({required this.localPort, required this.serverIps});
 
@@ -28,12 +24,16 @@ class MinewireException implements Exception {
   String toString() => message;
 }
 
-/// Sidecar-процесс minewire.
+/// Туннель minewire.
 ///
-/// В отличие от ядра Xray, minewire не трогает сетевой стек и запускается
-/// без прав администратора — обычного `Process.start` достаточно, UAC не
-/// нужен. Он поднимает локальный SOCKS5, который дальше подключается к
-/// Xray как обычный outbound.
+/// Движок скомпилирован ВНУТРЬ libXray — той же библиотеки, которую
+/// приложение и так загружает. Отдельного процесса больше нет, и это не
+/// косметика: на Android и iOS запустить сторонний исполняемый файл нельзя
+/// в принципе, так что sidecar не имел пути на телефон. Заодно пароль
+/// остаётся в памяти вместо конфигурационного файла на диске.
+///
+/// Движок по-прежнему открывает локальный SOCKS5, и Xray подключается к нему
+/// обычным socks-outbound — исчезла только граница процессов.
 final class MinewireService {
   factory MinewireService() => _singleton;
 
@@ -41,86 +41,88 @@ final class MinewireService {
 
   static final MinewireService _singleton = MinewireService._internal();
 
-  static const _exeName = "minewire.exe";
-  static const _configName = "minewire.yaml";
-  static const _pidName = "minewire.pid";
-  static const _readyTimeout = Duration(seconds: 8);
-
-  Process? _process;
   int? _localPort;
-  StreamSubscription<String>? _stdout;
-  StreamSubscription<String>? _stderr;
 
-  bool get running => _process != null;
+  bool get running => _localPort != null;
 
-  /// Порт локального SOCKS5, пока процесс жив.
+  /// Порт локального SOCKS5, пока туннель поднят.
   int? get localPort => _localPort;
 
-  /// Лежит рядом с ядром: `<каталог приложения>/bin/minewire.exe`.
-  String get exePath {
-    final bundleDir = p.dirname(Platform.resolvedExecutable);
-    return p.join(bundleDir, "bin", _exeName);
-  }
-
-  bool get supported => Platform.isWindows || Platform.isLinux;
-
-  /// Поднимает minewire и возвращает локальный порт и адреса сервера.
+  /// Поднимает туннель и возвращает локальный порт и адреса сервера.
   ///
-  /// Всегда перезапускает процесс: параметры узла могли поменяться, а
+  /// Всегда перезапускает движок: параметры узла могли поменяться, а
   /// проверять их дешевле перезапуском, чем сравнением конфигов.
   Future<MinewireEndpoint> start(MinewireLink link) async {
-    await stop();
-    if (!supported) {
-      throw const MinewireException(
-        "minewire is not supported on this platform",
-      );
-    }
-    final exe = File(exePath);
-    if (!exe.existsSync()) {
-      throw MinewireException("minewire executable is missing: $exePath");
-    }
-
     // Адрес сервера разрешаем ДО поднятия туннеля: потом DNS может уйти
     // в тот самый туннель, который ещё не работает. Эти же адреса нужны
     // для правила обхода.
     final serverIps = await _resolve(link.host);
-    final port = await _reserveLocalPort();
-    final runDir = VpnConstants.runDir;
-    await FileTool.checkDir(runDir);
-    final configPath = p.join(runDir, _configName);
-    await File(configPath).writeAsString(
-      link.yaml(port, serverHost: serverIps.isEmpty ? null : serverIps.first),
-    );
-
-    final Process process;
+    final target = serverIps.isEmpty ? link.host : serverIps.first;
     try {
-      process = await Process.start(exePath, <String>[
-        "-config",
-        configPath,
-      ], workingDirectory: runDir);
+      final port = await AppHostApi().startMinewire(
+        serverAddress: "$target:${link.port}",
+        password: link.password,
+        mode: link.mode,
+      );
+      _localPort = port;
+      // Движок открывает локальный порт сразу, а соединяется с сервером
+      // фоном. Без ожидания Xray успевает пойти в ещё не готовый туннель, и
+      // первые соединения отваливаются на пустом месте.
+      if (!await _waitUntilConnected()) {
+        await stop();
+        throw const MinewireException("minewire did not reach the server");
+      }
+      ygLogger("minewire is listening on 127.0.0.1:$port");
+      return MinewireEndpoint(localPort: port, serverIps: serverIps);
     } catch (error) {
-      throw MinewireException("start minewire failed: $error");
+      _localPort = null;
+      throw MinewireException("$error");
     }
-    _process = process;
-    _localPort = port;
-    await _writePid(process.pid);
-    _pipeLogs(process);
-    unawaited(
-      process.exitCode.then((code) {
-        ygLogger("minewire exited with code $code");
-        if (identical(_process, process)) {
-          _process = null;
-          _localPort = null;
-        }
-      }),
-    );
+  }
 
-    if (!await _waitUntilListening(port)) {
-      await stop();
-      throw const MinewireException("minewire did not open its local port");
+  Future<void> stop() async {
+    if (_localPort == null) {
+      return;
     }
-    ygLogger("minewire is listening on 127.0.0.1:$port");
-    return MinewireEndpoint(localPort: port, serverIps: serverIps);
+    _localPort = null;
+    await AppHostApi().stopMinewire();
+  }
+
+  /// Подчистить туннель, оставшийся от прошлого запуска приложения.
+  ///
+  /// Движок живёт внутри процесса приложения, поэтому вместе с ним и
+  /// умирает — осиротеть он не может. Вызов оставлен, чтобы снять состояние
+  /// внутри libXray, если библиотека почему-то пережила перезапуск.
+  Future<void> cleanupStale() async {
+    final state = await AppHostApi().minewireState();
+    if (state?.running == true) {
+      ygLogger("stopping a minewire tunnel left from a previous run");
+      await AppHostApi().stopMinewire();
+    }
+    _localPort = null;
+  }
+
+  static const _connectTimeout = Duration(seconds: 12);
+
+  /// Ждёт, пока движок доложит об установленном соединении с сервером.
+  Future<bool> _waitUntilConnected() async {
+    final deadline = DateTime.now().add(_connectTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final state = await AppHostApi().minewireState();
+      if (state?.connected == true) {
+        return true;
+      }
+      if (state?.running != true) {
+        // Движок сам себя погасил — дальше ждать нечего.
+        final error = state?.lastError;
+        if (error != null && error.isNotEmpty) {
+          ygLogger("minewire stopped while connecting: $error");
+        }
+        return false;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return false;
   }
 
   /// Адреса сервера minewire. Пустой список — не смогли разрешить имя.
@@ -138,144 +140,5 @@ final class MinewireService {
       ygLogger("resolve minewire host failed: $error");
       return const <String>[];
     }
-  }
-
-  Future<void> stop() async {
-    final process = _process;
-    _process = null;
-    _localPort = null;
-    await _stdout?.cancel();
-    await _stderr?.cancel();
-    _stdout = null;
-    _stderr = null;
-    if (process == null) {
-      await _clearPid();
-      return;
-    }
-    process.kill();
-    try {
-      await process.exitCode.timeout(const Duration(seconds: 3));
-    } catch (_) {
-      process.kill(ProcessSignal.sigkill);
-    }
-    await _clearPid();
-  }
-
-  /// Добивает sidecar, оставшийся от аварийно закрытого клиента.
-  ///
-  /// Иначе тоннель продолжает работать без интерфейса, который о нём знает.
-  /// Убиваем строго по сохранённому pid и только если под ним действительно
-  /// minewire: пользователь запускает его и руками, чужой процесс не наш.
-  Future<void> cleanupStale() async {
-    if (!supported || running) {
-      return;
-    }
-    final pid = await _readPid();
-    if (pid == null) {
-      return;
-    }
-    await _clearPid();
-    if (!await _pidIsMinewire(pid)) {
-      return;
-    }
-    try {
-      await Process.run('taskkill.exe', <String>['/F', '/PID', '$pid']);
-      ygLogger("stale minewire (pid $pid) terminated");
-    } catch (error) {
-      ygLogger("stop stale minewire failed: $error");
-    }
-  }
-
-  Future<bool> _pidIsMinewire(int pid) async {
-    try {
-      final result = await Process.run('tasklist.exe', <String>[
-        '/FI',
-        'PID eq $pid',
-        '/FI',
-        'IMAGENAME eq $_exeName',
-        '/NH',
-      ]);
-      return result.stdout.toString().toLowerCase().contains(
-        _exeName.toLowerCase(),
-      );
-    } catch (error) {
-      ygLogger("check stale minewire failed: $error");
-      return false;
-    }
-  }
-
-  File get _pidFile => File(p.join(VpnConstants.runDir, _pidName));
-
-  Future<void> _writePid(int pid) async {
-    try {
-      await FileTool.checkDir(VpnConstants.runDir);
-      await _pidFile.writeAsString("$pid");
-    } catch (error) {
-      ygLogger("save minewire pid failed: $error");
-    }
-  }
-
-  Future<int?> _readPid() async {
-    try {
-      final file = _pidFile;
-      if (!file.existsSync()) {
-        return null;
-      }
-      return int.tryParse((await file.readAsString()).trim());
-    } catch (error) {
-      ygLogger("read minewire pid failed: $error");
-      return null;
-    }
-  }
-
-  Future<void> _clearPid() async {
-    try {
-      await FileTool.deleteFileIfExists(_pidFile.path);
-    } catch (error) {
-      ygLogger("clear minewire pid failed: $error");
-    }
-  }
-
-  void _pipeLogs(Process process) {
-    _stdout = process.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((line) => ygLogger("minewire: $line"));
-    _stderr = process.stderr
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((line) => ygLogger("minewire!: $line"));
-  }
-
-  /// Занимает свободный порт и сразу освобождает его.
-  ///
-  /// Гонка тут теоретически возможна, но окно в миллисекунды, а
-  /// альтернатива — фиксированный 1080, который занят чаще, чем свободен.
-  Future<int> _reserveLocalPort() async {
-    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    final port = socket.port;
-    await socket.close();
-    return port;
-  }
-
-  Future<bool> _waitUntilListening(int port) async {
-    final deadline = DateTime.now().add(_readyTimeout);
-    while (DateTime.now().isBefore(deadline)) {
-      if (_process == null) {
-        return false;
-      }
-      try {
-        final socket = await Socket.connect(
-          InternetAddress.loopbackIPv4,
-          port,
-          timeout: const Duration(milliseconds: 400),
-        );
-        socket.destroy();
-        return true;
-      } catch (_) {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-      }
-    }
-    return false;
   }
 }
