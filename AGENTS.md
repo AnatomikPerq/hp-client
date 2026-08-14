@@ -4,7 +4,7 @@ HYPER CLIENT is a cross-platform Flutter VPN client. Supported platforms include
 
 The app manages nodes, subscriptions, Xray Profiles, Full Configs, Raw Json configs, and GeoData. Before startup, it composes and writes the final runtime Xray JSON. Production builds use TUN mode; Proxy mode is an in-memory Debug-only tool.
 
-Beyond Xray-core protocols, the client hosts **non-standard transports** that ordinary clients cannot see. Their binaries live in `protocols/` under version control and ship with every build. Their links are parsed **in Dart, before libXray** — the core does not know those schemes and silently drops them, and libXray must not be patched, or upstream updates turn into manual merges. See `protocols/README.md`.
+Beyond Xray-core protocols, the client hosts **non-standard transports** that ordinary clients cannot see. Their engines are compiled **into our libXray fork** (`AnatomikPerq/libXray`) and ship inside the shared library, not as sidecar executables — Android and iOS cannot spawn a bundled executable at all. Their links are still parsed **in Dart, before libXray**, because Xray-core does not know those schemes and silently drops them. See `protocols/README.md`.
 
 The internal Dart package name is still `onexray`. That is deliberate: renaming it would rewrite imports across the whole tree and conflict with every upstream merge.
 
