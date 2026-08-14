@@ -1,4 +1,4 @@
-dependencies:
+﻿dependencies:
   app_links: ^7.2.1
   archive: ^4.0.9
   collection: ^1.19.1
@@ -84,4 +84,4 @@ flutter_gen:
   output: lib/gen/
 name: onexray
 publish_to: none
-version: 0.1.0-beta.2+2
+version: 0.1.0-beta.3+3
