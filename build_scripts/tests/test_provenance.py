@@ -258,24 +258,14 @@ class ProvenanceTest(unittest.TestCase):
             self.assertNotIn("local-source.dart", json.dumps(receipt))
             self.assertNotIn("new-source.dart", json.dumps(receipt))
 
-    def test_all_jobs_use_resolved_sha_and_publishers_require_receipts(self):
-        workflows = Path(__file__).resolve().parents[2] / ".github/workflows"
-        build = (workflows / "build.yml").read_text()
-        self.assertEqual(build.count("needs: release_metadata"), 6)
-        self.assertEqual(build.count("ref: ${{ env.LIBXRAY_REF }}"), 1)
-        self.assertEqual(build.count("ref: ${{ needs.release_metadata.outputs.libxray_sha }}"), 6)
-        self.assertEqual(build.count("name: Upload build provenance"), 6)
-        for name in ("publish.yml", "publish-microsoft-store.yml"):
-            content = (workflows / name).read_text()
-            self.assertIn("build_scripts/verify_release.py", content)
-            self.assertNotIn("assuming manual rebuild artifacts", content)
-        publish = (workflows / "publish.yml").read_text()
-        self.assertIn('> release-files.txt', publish)
-        self.assertIn('done < release-files.txt', publish)
-        self.assertIn('files: ${{ steps.verify.outputs.files }}', publish)
-        self.assertIn('fail_on_unmatched_files: true', publish)
-        self.assertLess(publish.index('build_scripts/verify_release.py'),
-                        publish.index('name: Delete matching existing release assets'))
+    def test_build_records_libxray_revision_and_uploads_receipt(self):
+        build = (Path(__file__).resolve().parents[2] / ".github/workflows/build.yml").read_text()
+        record = 'echo "ONEXRAY_LIBXRAY_SHA=$libxray_sha" >> "$GITHUB_ENV"'
+        self.assertIn(record, build)
+        # begin_build checks the libXray checkout against this revision.
+        self.assertLess(build.index(record), build.index("      - name: Build\n"))
+        self.assertEqual(build.count("name: Upload build provenance"), 1)
+        self.assertIn("path: output/provenance-windows-x64-exe.json", build)
 
     def test_receipt_records_actual_files_and_keeps_other_platform_packages_out(self):
         root = self.artifacts / "OneXray"

@@ -242,60 +242,38 @@ class WindowsPackagingTest(unittest.TestCase):
 
     def test_exe_workflow_installs_fastforge_and_configures_inno_setup(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/build.yml").read_text()
-        windows = workflow.split("\n  windows:", 1)[1].split("\n  linux:", 1)[0]
-        self.assertIn("name: Install Fastforge\n        if: matrix.mode == 'exe'", windows)
+        windows = workflow.split("\n  windows:", 1)[1]
+        # The fork builds one Windows x64 EXE job; no MSIX/architecture matrix.
+        self.assertNotIn("matrix.", windows)
+        self.assertIn("ONEXRAY_WINDOWS_ARCH: x64", windows)
         fastforge = windows.split("      - name: Install Fastforge\n", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn("dart pub global activate fastforge", fastforge)
         self.assertIn("shell: pwsh", fastforge)
         self.assertIn("$env:PUB_CACHE", fastforge)
         self.assertIn("$env:LOCALAPPDATA", fastforge)
         self.assertIn("$env:GITHUB_PATH", fastforge)
-        self.assertIn("name: Verify Fastforge\n        if: matrix.mode == 'exe'", windows)
+        self.assertIn("name: Verify Fastforge", windows)
         self.assertIn("subprocess.run(['fastforge.bat', '--version'], check=True)", windows)
-        self.assertIn("working-directory: OneXray/build_scripts", windows)
+        self.assertIn("working-directory: hp-client/build_scripts", windows)
         self.assertIn("python -m unittest discover -s tests", windows)
+        self.assertIn(
+            '$expectedHash = "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"',
+            windows,
+        )
         self.assertIn('"INNO_SETUP_PATH=$installDir" >> $env:GITHUB_ENV', windows)
         self.assertNotIn('"ISCC=$compiler"', windows)
+        self.assertIn("build_scripts/main.py HyperClient windows --windows-mode exe", windows)
+        self.assertIn("./windows/app/HyperClientCore.exe -h", windows)
+        self.assertIn("output/HyperClient-windows-amd64.exe", windows)
+        self.assertIn("output/HyperClient-windows-amd64.zip", windows)
 
-    def test_winget_workflow_publishes_stable_exe_installers_only(self):
-        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/update-winget.yml").read_text()
-        self.assertIn("release:\n    types:\n      - released", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn('git check-ref-format "refs/tags/$tag"', workflow)
-        self.assertIn("WINGET_IDENTIFIER: YuanDevLLC.OneXray", workflow)
-        self.assertNotIn("winget-releaser@", workflow)
-        self.assertIn("contents: read", workflow)
-        self.assertIn("defaults:\n      run:\n        shell: bash", workflow)
-        self.assertIn("--version '=2.16.0'", workflow)
-        self.assertIn("secrets.PACKAGE_MANAGER_GITHUB_TOKEN", workflow)
-        phases = ["Generate winget manifests", "Fix installer fields",
-                  "Validate winget manifests", "Submit validated manifests"]
-        self.assertEqual(sorted(workflow.index(f"- name: {phase}") for phase in phases),
-                         [workflow.index(f"- name: {phase}") for phase in phases])
-        for phase in phases:
-            body = workflow.split(f"- name: {phase}", 1)[1].split("\n      - ", 1)[0]
-            self.assertIn("if: steps.verify.outputs.should_update == 'true'", body)
-        generate = workflow.split("- name: Generate winget manifests", 1)[1].split("\n      - ", 1)[0]
-        self.assertIn('komac update "$WINGET_IDENTIFIER"', generate)
-        self.assertIn('--dry-run --output "$WINGET_OUTPUT/generated"', generate)
-        self.assertNotIn("--submit", workflow)
-        self.assertNotIn("komac remove", workflow)
-        self.assertNotIn("PACKAGE_MANAGER_GITHUB_TOKEN", generate)
-        validate = workflow.split("- name: Validate winget manifests", 1)[1].split("\n      - ", 1)[0]
-        self.assertIn('winget_manifest.py validate "$MANIFEST_DIR"', validate)
-        self.assertIn('komac submit "$MANIFEST_DIR" --dry-run', validate)
-        self.assertNotIn("PACKAGE_MANAGER_GITHUB_TOKEN", validate)
-        submit = workflow.split("- name: Submit validated manifests", 1)[1]
-        self.assertIn('komac submit "$MANIFEST_DIR" --yes', submit)
-        self.assertNotIn("komac update", submit)
-        self.assertIn("gh search prs", submit)
-        self.assertEqual(workflow.count("MANIFEST_DIR: ${{ steps.generate.outputs.manifest_dir }}"), 3)
-        for name in ("OneXray-windows-amd64.exe", "OneXray-windows-arm64.exe"):
-            self.assertIn(f'.name == "{name}"', generate)
-            self.assertIn(name, workflow)
-        for name in ("OneXray-windows-amd64.zip", "OneXray-windows-arm64.msix",
-                     "OneXrayCore.exe", "OneXray-windows-amd64.exe.sig"):
-            self.assertNotIn(name, generate)
+    def test_upstream_publishing_workflows_are_removed(self):
+        # They published to upstream's Microsoft Store and winget listings and
+        # to pre-releases; this fork releases by hand.
+        workflows = Path(__file__).resolve().parents[2] / ".github/workflows"
+        for name in ("publish.yml", "publish-microsoft-store.yml", "update-winget.yml"):
+            with self.subTest(workflow=name):
+                self.assertFalse((workflows / name).exists())
 
     def test_msix_uses_store_version_without_rebuilding_windows(self):
         with (
@@ -420,21 +398,19 @@ class WindowsPackagingTest(unittest.TestCase):
         with patch.dict(os.environ, {"ONEXRAY_WINDOWS_ARCH": "arm64"}):
             self.assertEqual(WindowsBuilder._target_architecture(), "arm64")
 
-    def test_windows_jobs_resolve_vcore_main_once_and_record_sha(self):
+    def test_windows_job_builds_our_libxray_without_vcore(self):
         workflow = (
             Path(__file__).resolve().parents[2] / ".github/workflows/build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("VCORE_REPOSITORY: OneXray/VCore", workflow)
-        self.assertEqual(
-            workflow.count("repository: ${{ env.VCORE_REPOSITORY }}"), 2
+        steps = "\n".join(
+            line for line in workflow.splitlines() if not line.lstrip().startswith("#")
         )
-        self.assertIn("VCORE_REF: main", workflow)
-        self.assertIn(
-            'echo "$vcore_sha" > release-metadata/vcore-sha.txt',
-            workflow,
-        )
-        self.assertEqual(workflow.count("ref: ${{ env.VCORE_REF }}"), 1)
-        self.assertIn("ref: ${{ needs.release_metadata.outputs.vcore_sha }}", workflow)
+        self.assertIn("repository: AnatomikPerq/libXray", steps)
+        self.assertNotIn("XTLS/libXray", steps)
+        self.assertNotIn("vcore", steps.lower())
+        self.assertNotIn("msix", steps.lower())
+        # A release tag must carry the version it is built as.
+        self.assertIn("does not match pubspec version", steps)
 
     def test_local_signing_requires_certificate_and_publisher(self):
         with self.assertRaises(ValueError):
