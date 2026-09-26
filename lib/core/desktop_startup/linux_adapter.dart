@@ -64,7 +64,7 @@ final class LinuxLaunchAtLoginAdapter extends LaunchAtLoginAdapter {
       }
       if (!await File(_executable).exists()) {
         return const LaunchAtLoginStatus.error(
-          'The OneXray executable does not exist.',
+          'The HYPER CLIENT executable does not exist.',
         );
       }
 
@@ -78,7 +78,7 @@ final class LinuxLaunchAtLoginAdapter extends LaunchAtLoginAdapter {
           await temporary.delete();
         }
       }
-      return query();
+      return await query();
     } catch (error) {
       return LaunchAtLoginStatus.error(error.toString());
     }
@@ -105,7 +105,7 @@ final class LinuxLaunchAtLoginAdapter extends LaunchAtLoginAdapter {
   String get _desktopEntry =>
       '[Desktop Entry]\n'
       'Type=Application\n'
-      'Name=OneXray\n'
+      'Name=HYPER CLIENT\n'
       'Exec=$_execValue\n'
       'TryExec=$_tryExecValue\n'
       'Terminal=false\n';

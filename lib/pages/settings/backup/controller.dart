@@ -1,251 +1,222 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:onexray/pages/mixin/page_cubit.dart';
-import 'package:onexray/core/tools/file.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:intl/intl.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
-import 'package:onexray/pages/mixin/alert.dart';
-import 'package:onexray/pages/widget/menu_picker.dart';
-import 'package:onexray/service/share/backup.dart';
-import 'package:path/path.dart' as p;
-import 'package:share_plus/share_plus.dart';
+import 'package:onexray/pages/shared/alert.dart';
+import 'package:onexray/pages/shared/page_cubit.dart';
+import 'package:onexray/pages/shared/widgets/settings_page.dart';
+import 'package:onexray/service/advanced/xray/data_update/state.dart';
+import 'package:onexray/service/settings/backup/service.dart';
+import 'package:onexray/service/shared/failure.dart';
 
-class FileInfo {
-  final String name;
-  final String path;
-  DateTime? timestamp;
-
-  FileInfo(this.name, this.path);
+enum BackupPageAction {
+  selecting,
+  creating,
+  allowing,
+  savingInterval,
+  writing,
+  restoring,
+  unbinding,
 }
 
 class BackupPageState {
-  final List<FileInfo> files;
-  final String selection;
-  final bool backingUp;
-  final bool restoring;
-
   const BackupPageState({
-    this.files = const [],
-    this.selection = "",
-    this.backingUp = false,
-    this.restoring = false,
+    this.backup = const BackupState(),
+    this.loading = true,
+    this.action,
   });
-
-  BackupPageState copyWith({
-    List<FileInfo>? files,
-    String? selection,
-    bool? backingUp,
-    bool? restoring,
-  }) {
-    return BackupPageState(
-      files: files ?? this.files,
-      selection: selection ?? this.selection,
-      backingUp: backingUp ?? this.backingUp,
-      restoring: restoring ?? this.restoring,
-    );
-  }
+  final BackupState backup;
+  final bool loading;
+  final BackupPageAction? action;
+  bool get busy => loading || action != null || backup.operation != null;
 }
 
 class BackupController extends PageCubit<BackupPageState> {
-  BackupController() : super(const BackupPageState()) {
-    _readFiles();
+  BackupController({BackupService? service})
+    : service = service ?? BackupService(),
+      super(const BackupPageState()) {
+    _subscription = this.service.stream.listen(
+      (value) => emit(
+        BackupPageState(
+          backup: value,
+          loading: state.loading,
+          action: state.action,
+        ),
+      ),
+    );
+    unawaited(load());
+  }
+  final BackupService service;
+  StreamSubscription<BackupState>? _subscription;
+
+  Future<void> load() async {
+    await service.load();
+    emit(
+      BackupPageState(
+        backup: service.state,
+        loading: false,
+        action: state.action,
+      ),
+    );
   }
 
-  Future<void> _readFiles({bool selectNewest = false}) async {
-    final backupDir = await BackupService().backupDir;
-    final zipFiles = await Directory(backupDir).list().toList();
-    final fileInfos = <FileInfo>[];
-    for (final file in zipFiles) {
-      if (file.path.endsWith(".zip")) {
-        final info = FileInfo(p.basename(file.path), file.path);
-        try {
-          info.timestamp = await File(file.path).lastModified();
-        } catch (_) {}
-        fileInfos.add(info);
-      }
-    }
-    fileInfos.sort((a, b) {
-      final aTime = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bTime = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bTime.compareTo(aTime);
-    });
-    final selection = selectNewest && fileInfos.isNotEmpty
-        ? fileInfos.first.name
-        : fileInfos.any((file) => file.name == state.selection)
-        ? state.selection
-        : "";
-    emit(state.copyWith(files: fileInfos, selection: selection));
-  }
+  Future<void> select(BuildContext context, {required bool create}) => _perform(
+    context,
+    create ? BackupPageAction.creating : BackupPageAction.selecting,
+    () async {
+      await service.select(create: create);
+    },
+  );
 
-  void updateSelection(String? value) {
-    if (value == null) {
-      emit(state.copyWith(selection: ""));
-    } else {
-      emit(state.copyWith(selection: value));
-    }
-  }
-
-  Future<void> importBackup(BuildContext context) async {
-    if (state.backingUp || state.restoring) {
-      return;
-    }
-    final success = await BackupService().importBackup();
-    if (context.mounted) {
-      _showActionResult(
-        context,
-        success,
-        AppLocalizations.of(context)!.backupPageImport,
-      );
-    }
-    await _readFiles(selectNewest: success);
-  }
-
-  Future<void> moreAction(
+  Future<void> backup(
     BuildContext context,
-    FileInfo file,
-    IconMenuId menuId,
-  ) async {
-    switch (menuId) {
-      case IconMenuId.share:
-        await _shareFile(context, file);
-        break;
-      case IconMenuId.save:
-        await _saveFile(context, file);
-        break;
-      case IconMenuId.delete:
-        await _deleteFile(file);
-        break;
-      default:
-        break;
+  ) => _perform(context, BackupPageAction.writing, () async {
+    final l = AppLocalizations.of(context)!;
+    final target = service.state.settings.target;
+    if (target == null) return;
+    if (!service.state.settings.confirmed) {
+      final confirmed = await AppConfirmationDialog(
+        title: l.backupConfirmTitle,
+        subject: target.label,
+        content: '${l.backupSensitiveWarning}\n\n${l.backupOverwriteWarning}',
+        cancelLabel: l.prototypeCancel,
+        confirmLabel: l.backupNow,
+      ).show(context);
+      if (!confirmed || !isPageActive || !context.mounted) return;
+      await service.confirmTarget(target.identifier, writeAutomatically: false);
     }
-  }
+    if (!isPageActive || !context.mounted) return;
+    if (await service.backupNow() && isPageActive && context.mounted) {
+      ContextAlert.showToast(context, l.backupWritten);
+    }
+  });
 
-  Future<void> _shareFile(BuildContext context, FileInfo file) async {
-    Rect? sharePositionOrigin;
-    if (context.mounted) {
-      final box = context.findRenderObject() as RenderBox?;
-      if (box != null) {
-        sharePositionOrigin = box.localToGlobal(Offset.zero) & box.size;
-      }
-    }
-    final params = ShareParams(
-      files: [XFile(file.path)],
-      fileNameOverrides: [file.name],
-      sharePositionOrigin: sharePositionOrigin,
-    );
-    final result = await SharePlus.instance.share(params);
-    if (context.mounted) {
-      _showActionResult(
-        context,
-        result.status == ShareResultStatus.success,
-        AppLocalizations.of(context)!.menuShare,
-      );
-    }
-  }
-
-  void _showActionResult(BuildContext context, bool success, String action) {
-    if (success) {
-      ContextAlert.showToast(
-        context,
-        AppLocalizations.of(
-          context,
-        )!.actionResult(action, AppLocalizations.of(context)!.resultSuccess),
-      );
-    } else {
-      ContextAlert.showToast(
-        context,
-        AppLocalizations.of(
-          context,
-        )!.actionResult(action, AppLocalizations.of(context)!.resultFailed),
-      );
-    }
-  }
-
-  Future<void> _saveFile(BuildContext context, FileInfo file) async {
-    final success = await FileTool.saveFile(file.path, file.name, ".zip");
-    if (context.mounted) {
-      _showActionResult(
-        context,
-        success,
-        AppLocalizations.of(context)!.menuSave,
-      );
-    }
-  }
-
-  Future<void> _deleteFile(FileInfo file) async {
-    await File(file.path).delete();
-    await _readFiles();
-  }
-
-  Future<void> backup(BuildContext context) async {
-    if (state.backingUp || state.restoring) {
-      return;
-    }
-    emit(state.copyWith(backingUp: true));
-    try {
-      await BackupService().backup();
-      await _readFiles(selectNewest: true);
-    } finally {
-      if (isPageActive) {
-        emit(state.copyWith(backingUp: false));
-      }
-    }
-  }
-
-  Future<void> restore(BuildContext context) async {
-    if (state.backingUp || state.restoring) {
-      return;
-    }
-    final restoreConfirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        final localizations = AppLocalizations.of(ctx)!;
-        return AlertDialog(
-          content: Text(localizations.backupPageRestoreTips),
-          actions: <Widget>[
-            TextButton(
-              child: Text(localizations.buttonCancel),
-              onPressed: () => Navigator.pop(ctx, false),
+  Future<void> restore(BuildContext context) =>
+      _perform(context, BackupPageAction.restoring, () async {
+        final l = AppLocalizations.of(context)!;
+        final date = DateFormat.yMd(Localizations.localeOf(context).toString())
+            .add_Hm();
+        final preview = await service.preview();
+        if (!isPageActive || !context.mounted) return;
+        final confirmed = await AppConfirmationDialog(
+          title: l.backupRestoreTitle,
+          content: [
+            l.backupCreatedAt(date.format(preview.createdAt.toLocal())),
+            l.backupSummary(
+              preview.nodes,
+              preview.raw,
+              preview.subscriptions,
+              preview.routes,
             ),
-            TextButton(
-              child: Text(localizations.buttonOK),
-              onPressed: () => Navigator.pop(ctx, true),
-            ),
-          ],
-        );
-      },
-    );
-    if (restoreConfirmed == true && context.mounted) {
-      await _restore(context);
-    }
-  }
-
-  Future<void> _restore(BuildContext context) async {
-    if (state.backingUp || state.restoring) {
-      return;
-    }
-    final zipPath = state.files
-        .where((e) => e.name == state.selection)
-        .firstOrNull
-        ?.path;
-    var success = false;
-    if (zipPath != null) {
-      emit(state.copyWith(restoring: true));
-      try {
-        success = await BackupService().restore(zipPath);
-      } finally {
-        if (isPageActive) {
-          emit(state.copyWith(restoring: false));
+            if (preview.pending > 0) l.backupPendingCount(preview.pending),
+            if (preview.conflicts.isNotEmpty)
+              l.backupConflicts(preview.conflicts.join(', ')),
+            if (preview.empty) l.backupEmptyWarning,
+            l.backupRestoreWarning,
+          ].join('\n\n'),
+          cancelLabel: l.prototypeCancel,
+          confirmLabel: l.backupRestore,
+          destructive: true,
+        ).show(context);
+        if (!confirmed || !isPageActive || !context.mounted) return;
+        final pending = await service.restore(preview);
+        if (isPageActive && context.mounted) {
+          ContextAlert.showToast(context, l.backupRestored(pending));
         }
+      });
+
+  Future<void> allowBackups(BuildContext context) =>
+      _perform(context, BackupPageAction.allowing, () async {
+        final l = AppLocalizations.of(context)!;
+        final target = service.state.settings.target;
+        if (target == null) return;
+        final confirmed = await AppConfirmationDialog(
+          title: l.backupConfirmTitle,
+          subject: target.label,
+          content: '${l.backupSensitiveWarning}\n\n${l.backupOverwriteWarning}',
+          cancelLabel: l.prototypeCancel,
+          confirmLabel: l.backupAllow,
+        ).show(context);
+        if (!confirmed || !isPageActive || !context.mounted) return;
+        final written = await service.confirmTarget(target.identifier);
+        if (isPageActive && context.mounted) {
+          ContextAlert.showToast(
+            context,
+            written ? l.backupWritten : l.prototypeSettingsSaved,
+          );
+        }
+      });
+
+  Future<void> setAutomatic(BuildContext context, bool value) async {
+    if (state.backup.changingAutomatic) return;
+    try {
+      await service.setAutomatic(value);
+    } catch (error) {
+      if (isPageActive && context.mounted) {
+        final l = AppLocalizations.of(context)!;
+        ContextAlert.showToast(
+          context,
+          appFailureMessage(l, error, operation: l.backupFailed),
+        );
       }
     }
-    if (context.mounted) {
-      _showActionResult(
-        context,
-        success,
-        AppLocalizations.of(context)!.backupPageRestore,
-      );
+  }
+
+  Future<void> setInterval(
+    BuildContext context,
+    AutoUpdateInterval? value,
+  ) async {
+    if (value == null || value == state.backup.interval) return;
+    await _perform(context, BackupPageAction.savingInterval, () async {
+      await service.setInterval(value);
+      if (isPageActive && context.mounted) {
+        ContextAlert.settingsSaved(context);
+      }
+    });
+  }
+
+  Future<void> unbind(BuildContext context) => _perform(
+    context,
+    BackupPageAction.unbinding,
+    () async {
+      final l = AppLocalizations.of(context)!;
+      final confirmed = await AppConfirmationDialog(
+        title: l.backupUnbind,
+        content: l.backupUnbindWarning,
+        cancelLabel: l.prototypeCancel,
+        confirmLabel: l.backupUnbind,
+      ).show(context);
+      if (confirmed && isPageActive && context.mounted) await service.unbind();
+    },
+  );
+
+  Future<void> _perform(
+    BuildContext context,
+    BackupPageAction action,
+    Future<void> Function() operation,
+  ) async {
+    if (state.busy) return;
+    emit(
+      BackupPageState(backup: service.state, loading: false, action: action),
+    );
+    try {
+      await operation();
+    } catch (error) {
+      if (isPageActive && context.mounted) {
+        final l = AppLocalizations.of(context)!;
+        ContextAlert.showToast(
+          context,
+          appFailureMessage(l, error, operation: l.backupFailed),
+        );
+      }
+    } finally {
+      emit(BackupPageState(backup: service.state, loading: false));
     }
+  }
+
+  @override
+  Future<void> disposePageResources() async {
+    await _subscription?.cancel();
   }
 }

@@ -43,6 +43,7 @@ enum JsonTool {
 enum OnDemandRuleMode: String, Codable {
     case connect
     case disconnect
+    case ignore
 }
 
 enum OnDemandRuleInterfaceType: String, Codable {
@@ -59,19 +60,21 @@ struct OnDemandRule: Codable {
 }
 
 struct TunJson: Codable {
+    var tunIPv4: String?
+    var tunIPv6: String?
     var tunDnsIPv4: String?
     var tunDnsIPv6: String?
     var enableDot: Bool?
     var dnsServerName: String?
     var enableIPv6: Bool?
-    var metricsEnabled: Bool?
-    var tunName: String?
     var autoOutboundsInterface: String?
     var includeAllNetworks: Bool?
     var excludeLocalNetworks: Bool?
     var excludeCellularServices: Bool?
     var excludeAPNs: Bool?
     var excludeDeviceCommunication: Bool?
+    var excludedRoutes: [String]?
+    var hideVpnIcon: Bool?
     var onDemandEnabled: Bool?
     var onDemandRules: [OnDemandRule]?
     var perAppVPNMode: String?
@@ -79,17 +82,13 @@ struct TunJson: Codable {
     var disallowAppList: [String]?
 }
 
-struct XrayInboundAccount: Codable {
-    var user: String?
-    var pass: String?
-}
-
 struct StartVpnRequest: Codable {
     var tun: TunJson?
-    var pingPort: String?
-    var pingAuth: XrayInboundAccount?
+    var socksPort: String?
     var metricsPort: String?
     var coreInvokeText: String?
+    var snapshotToken: String?
+    var metadataJson: String?
 
     private static func fromUrl(_ url: URL) throws -> Self {
         let data = try Data(contentsOf: url)
@@ -158,7 +157,7 @@ struct LibXrayInvokeRequest: Codable, Hashable {
     var payload: RunXrayRequest?
 
     init(
-        apiVersion: Int? = 2,
+        apiVersion: Int? = 3,
         method: LibXrayMethod? = nil,
         payload: RunXrayRequest? = nil
     ) {
@@ -208,7 +207,14 @@ struct LibXrayInvokeResponse: Codable, Hashable {
     )
 }
 
-// MARK: - System extension XPC protocol (app ↔ tunnel)
+enum RuntimeStateError: String, Error {
+    case unsupported = "runtimeStateUnsupported"
+    case unavailable = "runtimeStateUnavailable"
+    case invalid = "runtimeStateInvalid"
+    case timeout = "runtimeStateTimeout"
+}
+
+// MARK: - System extension app-provider messages (app ↔ tunnel)
 
 enum TunnelRequest: Codable {
     case listDat

@@ -11,23 +11,21 @@ StartVpnRequest _$StartVpnRequestFromJson(Map<String, dynamic> json) =>
       json['tun'] == null
           ? null
           : TunJson.fromJson(json['tun'] as Map<String, dynamic>),
-      json['pingPort'] as String?,
-      json['pingAuth'] == null
-          ? null
-          : XrayInboundAccount.fromJson(
-              json['pingAuth'] as Map<String, dynamic>,
-            ),
+      json['socksPort'] as String?,
       json['metricsPort'] as String?,
       json['coreInvokeText'] as String?,
+      snapshotToken: json['snapshotToken'] as String?,
+      metadataJson: json['metadataJson'] as String?,
     );
 
 Map<String, dynamic> _$StartVpnRequestToJson(StartVpnRequest instance) =>
     <String, dynamic>{
       'tun': ?instance.tun?.toJson(),
-      'pingPort': ?instance.pingPort,
-      'pingAuth': ?instance.pingAuth?.toJson(),
+      'socksPort': ?instance.socksPort,
       'metricsPort': ?instance.metricsPort,
       'coreInvokeText': ?instance.coreInvokeText,
+      'snapshotToken': ?instance.snapshotToken,
+      'metadataJson': ?instance.metadataJson,
     };
 
 LibXrayInvokeResponse _$LibXrayInvokeResponseFromJson(
@@ -84,6 +82,8 @@ PingBatchItemResponse _$PingBatchItemResponseFromJson(
   json['success'] as bool?,
   (json['delay'] as num?)?.toInt(),
   json['error'] as String?,
+  locationJson: json['locationJson'] as String?,
+  locationError: json['locationError'] as String?,
 );
 
 Map<String, dynamic> _$PingBatchItemResponseToJson(
@@ -92,6 +92,8 @@ Map<String, dynamic> _$PingBatchItemResponseToJson(
   'success': ?instance.success,
   'delay': ?instance.delay,
   'error': ?instance.error,
+  'locationJson': ?instance.locationJson,
+  'locationError': ?instance.locationError,
 };
 
 XrayVersionResponse _$XrayVersionResponseFromJson(Map<String, dynamic> json) =>
@@ -100,14 +102,6 @@ XrayVersionResponse _$XrayVersionResponseFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$XrayVersionResponseToJson(
   XrayVersionResponse instance,
 ) => <String, dynamic>{'version': ?instance.version};
-
-GetXrayStateResponse _$GetXrayStateResponseFromJson(
-  Map<String, dynamic> json,
-) => GetXrayStateResponse(json['running'] as bool?);
-
-Map<String, dynamic> _$GetXrayStateResponseToJson(
-  GetXrayStateResponse instance,
-) => <String, dynamic>{'running': ?instance.running};
 
 CountGeoDataRequest _$CountGeoDataRequestFromJson(Map<String, dynamic> json) =>
     CountGeoDataRequest(
@@ -131,6 +125,7 @@ PingBatchRequest _$PingBatchRequestFromJson(Map<String, dynamic> json) =>
           .toList(),
       (json['timeout'] as num?)?.toInt(),
       json['url'] as String?,
+      locationUrl: json['locationUrl'] as String?,
     );
 
 Map<String, dynamic> _$PingBatchRequestToJson(PingBatchRequest instance) =>
@@ -138,6 +133,7 @@ Map<String, dynamic> _$PingBatchRequestToJson(PingBatchRequest instance) =>
       'configs': ?instance.configs?.map((e) => e.toJson()).toList(),
       'timeout': ?instance.timeout,
       'url': ?instance.url,
+      'locationUrl': ?instance.locationUrl,
     };
 
 PingBatchItemRequest _$PingBatchItemRequestFromJson(
@@ -159,50 +155,6 @@ RunXrayRequest _$RunXrayRequestFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$RunXrayRequestToJson(RunXrayRequest instance) =>
     <String, dynamic>{'xrayJson': ?instance.xrayJson};
-
-StartMinewireRequest _$StartMinewireRequestFromJson(
-  Map<String, dynamic> json,
-) => StartMinewireRequest(
-  json['serverAddress'] as String?,
-  json['password'] as String?,
-  mode: json['mode'] as String?,
-  localPort: (json['localPort'] as num?)?.toInt(),
-);
-
-Map<String, dynamic> _$StartMinewireRequestToJson(
-  StartMinewireRequest instance,
-) => <String, dynamic>{
-  'serverAddress': ?instance.serverAddress,
-  'password': ?instance.password,
-  'mode': ?instance.mode,
-  'localPort': ?instance.localPort,
-};
-
-StartMinewireResponse _$StartMinewireResponseFromJson(
-  Map<String, dynamic> json,
-) => StartMinewireResponse((json['localPort'] as num?)?.toInt());
-
-Map<String, dynamic> _$StartMinewireResponseToJson(
-  StartMinewireResponse instance,
-) => <String, dynamic>{'localPort': ?instance.localPort};
-
-MinewireStateResponse _$MinewireStateResponseFromJson(
-  Map<String, dynamic> json,
-) => MinewireStateResponse(
-  json['running'] as bool?,
-  json['connected'] as bool?,
-  json['localAddr'] as String?,
-  json['lastError'] as String?,
-);
-
-Map<String, dynamic> _$MinewireStateResponseToJson(
-  MinewireStateResponse instance,
-) => <String, dynamic>{
-  'running': ?instance.running,
-  'connected': ?instance.connected,
-  'localAddr': ?instance.localAddr,
-  'lastError': ?instance.lastError,
-};
 
 TestXrayRequest _$TestXrayRequestFromJson(Map<String, dynamic> json) =>
     TestXrayRequest(json['xrayJson'] as String?);
@@ -236,18 +188,22 @@ const _$LibXrayMethodEnumMap = {
   LibXrayMethod.runXray: 'runXray',
   LibXrayMethod.stopXray: 'stopXray',
   LibXrayMethod.xrayVersion: 'xrayVersion',
-  LibXrayMethod.getXrayState: 'getXrayState',
-  LibXrayMethod.startMinewire: 'startMinewire',
-  LibXrayMethod.stopMinewire: 'stopMinewire',
-  LibXrayMethod.minewireState: 'minewireState',
 };
 
 GetFreePortsRequest _$GetFreePortsRequestFromJson(Map<String, dynamic> json) =>
-    GetFreePortsRequest((json['count'] as num?)?.toInt());
+    GetFreePortsRequest(
+      (json['count'] as num?)?.toInt(),
+      excludePorts: (json['excludePorts'] as List<dynamic>?)
+          ?.map((e) => (e as num).toInt())
+          .toList(),
+    );
 
 Map<String, dynamic> _$GetFreePortsRequestToJson(
   GetFreePortsRequest instance,
-) => <String, dynamic>{'count': ?instance.count};
+) => <String, dynamic>{
+  'count': ?instance.count,
+  'excludePorts': ?instance.excludePorts,
+};
 
 ConvertShareLinksToXrayJsonRequest _$ConvertShareLinksToXrayJsonRequestFromJson(
   Map<String, dynamic> json,

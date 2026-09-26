@@ -1,12 +1,26 @@
 package net.yuandev.onexray.vpn
 
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ShortcutManager
+import android.content.pm.PackageManager
 import android.net.VpnService
+import android.os.Build
 import android.service.quicksettings.TileService
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.elvishew.xlog.XLog
+import net.yuandev.onexray.MainActivity
+import net.yuandev.onexray.R
+import net.yuandev.onexray.pigeon.PlatformPermissionKind
+import net.yuandev.onexray.pigeon.PlatformPermissionResult
+import net.yuandev.onexray.pigeon.PlatformPermissionState
 import net.yuandev.onexray.tile.OneQuickSettingsTileService
 import java.io.File
 import java.net.InetAddress
@@ -14,20 +28,15 @@ import java.net.NetworkInterface
 import java.net.SocketException
 
 object VpnController {
-    private const val startSnapshotRelativePath = "run/start.json"
+    enum class SavedStartResult { STARTED, OPEN_APP, FAILED }
+
+    var lastError: String? = null
     private const val stopRequestRelativePath = "run/vpn.stop"
     private val vpnAddresses by lazy {
         setOf(
             InetAddress.getByName(OneVpnService.IPV4_ADDRESS),
             InetAddress.getByName(OneVpnService.IPV6_ADDRESS),
         )
-    }
-
-    enum class StartResult {
-        STARTED,
-        MISSING_START_SNAPSHOT,
-        NEED_PERMISSION,
-        FAILED,
     }
 
     fun readVpnRunning(context: Context): Boolean {
@@ -52,38 +61,102 @@ object VpnController {
         return false
     }
 
-    fun hasStartSnapshot(context: Context): Boolean =
-        File(context.filesDir, startSnapshotRelativePath).isFile
+    fun buildShortcutStartIntent(context: Context): Intent {
+        // Missing configuration or permission still goes through the App coordinator.
+        val shortcutIntent = try {
+            context.getSystemService(ShortcutManager::class.java)
+                ?.dynamicShortcuts?.firstOrNull { it.id == "startVpn" }
+                ?.intent?.let { Intent(it) }
+        } catch (_: RuntimeException) {
+            XLog.w("VpnController: unable to read start shortcut; opening App")
+            null
+        }
+        return (shortcutIntent ?: Intent(context, MainActivity::class.java)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+    }
 
     fun buildStartIntent(context: Context): Intent =
         Intent(context, OneVpnService::class.java).apply {
             action = OneVpnService.ACTION_START
         }
 
-    fun startVpnWithLastProfile(context: Context): StartResult {
-        if (!hasStartSnapshot(context)) {
-            return StartResult.MISSING_START_SNAPSHOT
+    fun queryPermission(context: Context): PlatformPermissionResult {
+        val kind = when {
+            VpnService.prepare(context) != null -> PlatformPermissionKind.ANDROID_VPN
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&
+                context.checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) !=
+                PackageManager.PERMISSION_GRANTED -> PlatformPermissionKind.ANDROID_LOCAL_NETWORK
+            else -> return PlatformPermissionResult(
+                PlatformPermissionKind.ANDROID_VPN, PlatformPermissionState.GRANTED, null,
+            )
         }
-        if (VpnService.prepare(context) != null) {
-            return StartResult.NEED_PERMISSION
-        }
-        return if (startVpn(context)) StartResult.STARTED else StartResult.FAILED
+        return PlatformPermissionResult(kind, PlatformPermissionState.NOT_DETERMINED, null)
     }
 
-    fun startVpn(context: Context): Boolean {
+    fun startFile(context: Context): File = File(context.filesDir, "run/start.json")
+
+    fun startSavedVpn(context: Context): SavedStartResult {
+        try {
+            if (queryPermission(context).state != PlatformPermissionState.GRANTED) {
+                return SavedStartResult.OPEN_APP
+            }
+            SavedVpnConfig.read(startFile(context))
+        } catch (_: Exception) {
+            return SavedStartResult.OPEN_APP
+        }
+        return if (startVpn(context, reuseConfiguration = true)) SavedStartResult.STARTED
+            else SavedStartResult.FAILED
+    }
+
+    fun startVpn(context: Context, reuseConfiguration: Boolean = false): Boolean {
+        lastError = null
         if (!clearStopRequest(context)) {
+            lastError = "Unable to clear the VPN stop marker."
             return false
         }
         return try {
-            ContextCompat.startForegroundService(context, buildStartIntent(context))
+            val intent = buildStartIntent(context).putExtra(OneVpnService.EXTRA_REUSE_CONFIGURATION, reuseConfiguration)
+            ContextCompat.startForegroundService(context, intent)
             true
         } catch (error: RuntimeException) {
             XLog.e("VpnController: failed to start VPN service", error)
+            lastError = error.message ?: error.toString()
             false
         }
     }
 
+    fun reportStartFailure(context: Context, reason: String?) {
+        val title = context.getString(R.string.notification_vpn_start_failed)
+        val text = reason?.takeIf { it.isNotBlank() } ?: title
+        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        try {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            val channel = "net.yuandev.onexray"
+            manager.createNotificationChannel(NotificationChannel(
+                channel, context.getString(R.string.quick_settings_tile_label), NotificationManager.IMPORTANCE_DEFAULT,
+            ))
+            val openApp = PendingIntent.getActivity(
+                context, 3, Intent(context, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            manager.notify(OneVpnService.NOTIFICATION_ID, Notification.Builder(context, channel)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setContentIntent(openApp)
+                .setAutoCancel(true)
+                .build())
+        } catch (error: Exception) {
+            // Notification permission must not change the VPN result or open the App.
+            XLog.e("Unable to show VPN start failure", error)
+        }
+    }
+
     fun stopVpn(context: Context): Boolean {
+        lastError = null
         val markerWritten = writeStopRequest(context)
         val broadcastSent = try {
             context.sendBroadcast(
@@ -92,8 +165,10 @@ object VpnController {
             true
         } catch (error: RuntimeException) {
             XLog.e("VpnController: failed to broadcast VPN stop", error)
+            lastError = error.message ?: error.toString()
             false
         }
+        if (!markerWritten && lastError == null) lastError = "Unable to write the VPN stop marker."
         return markerWritten && broadcastSent
     }
 

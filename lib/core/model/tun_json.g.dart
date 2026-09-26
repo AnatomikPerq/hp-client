@@ -7,19 +7,21 @@ part of 'tun_json.dart';
 // **************************************************************************
 
 TunJson _$TunJsonFromJson(Map<String, dynamic> json) => TunJson(
+  json['tunIPv4'] as String?,
+  json['tunIPv6'] as String?,
   json['tunDnsIPv4'] as String?,
   json['tunDnsIPv6'] as String?,
   json['enableDot'] as bool?,
   json['dnsServerName'] as String?,
   json['enableIPv6'] as bool?,
-  json['metricsEnabled'] as bool?,
-  json['tunName'] as String?,
   json['autoOutboundsInterface'] as String?,
   json['includeAllNetworks'] as bool?,
   json['excludeLocalNetworks'] as bool?,
   json['excludeCellularServices'] as bool?,
   json['excludeAPNs'] as bool?,
   json['excludeDeviceCommunication'] as bool?,
+  (json['excludedRoutes'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  json['hideVpnIcon'] as bool?,
   json['onDemandEnabled'] as bool?,
   (json['onDemandRules'] as List<dynamic>?)
       ?.map((e) => OnDemandRule.fromJson(e as Map<String, dynamic>))
@@ -30,19 +32,21 @@ TunJson _$TunJsonFromJson(Map<String, dynamic> json) => TunJson(
 );
 
 Map<String, dynamic> _$TunJsonToJson(TunJson instance) => <String, dynamic>{
+  'tunIPv4': ?instance.tunIPv4,
+  'tunIPv6': ?instance.tunIPv6,
   'tunDnsIPv4': ?instance.tunDnsIPv4,
   'tunDnsIPv6': ?instance.tunDnsIPv6,
   'enableDot': ?instance.enableDot,
   'dnsServerName': ?instance.dnsServerName,
   'enableIPv6': ?instance.enableIPv6,
-  'metricsEnabled': ?instance.metricsEnabled,
-  'tunName': ?instance.tunName,
   'autoOutboundsInterface': ?instance.autoOutboundsInterface,
   'includeAllNetworks': ?instance.includeAllNetworks,
   'excludeLocalNetworks': ?instance.excludeLocalNetworks,
   'excludeCellularServices': ?instance.excludeCellularServices,
   'excludeAPNs': ?instance.excludeAPNs,
   'excludeDeviceCommunication': ?instance.excludeDeviceCommunication,
+  'excludedRoutes': ?instance.excludedRoutes,
+  'hideVpnIcon': ?instance.hideVpnIcon,
   'onDemandEnabled': ?instance.onDemandEnabled,
   'onDemandRules': ?instance.onDemandRules?.map((e) => e.toJson()).toList(),
   'perAppVPNMode': ?instance.perAppVPNMode,

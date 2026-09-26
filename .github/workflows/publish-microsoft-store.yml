@@ -1,0 +1,122 @@
+#
+# Creates a multi-architecture MSIX bundle from Windows x64 and arm64 packages
+# produced by a manually selected successful Build run and uploads it as a
+# GitHub Actions artifact for manual submission to Microsoft Partner Center.
+#
+# Trigger:
+#   - workflow_dispatch only
+#
+
+name: Publish Microsoft Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Build workflow run id containing Windows Store artifacts
+        required: true
+        type: string
+
+concurrency:
+  group: publish-microsoft-store-${{ inputs.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_id: ${{ steps.build.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Inspect Build run
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          echo "run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+
+          run_json="$(gh api "repos/${{ github.repository }}/actions/runs/$BUILD_RUN_ID")"
+          printf '%s\n' "$run_json" > build-run.json
+          if [ "$(jq -r '.path' <<<"$run_json")" != ".github/workflows/build.yml" ]; then
+            echo "Workflow run $BUILD_RUN_ID is not a Build run." >&2
+            exit 1
+          fi
+          if [ "$(jq -r '.conclusion' <<<"$run_json")" != "success" ]; then
+            echo "Build run $BUILD_RUN_ID did not complete successfully." >&2
+            exit 1
+          fi
+          artifact_names="$(gh api --paginate \
+            "repos/${{ github.repository }}/actions/runs/$BUILD_RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[].name')"
+
+          for artifact in release-metadata windows-store-x64 windows-store-arm64 \
+            provenance-windows-x64-msix provenance-windows-arm64-msix; do
+            if ! grep -Fxq "$artifact" <<<"$artifact_names"; then
+              echo "Build run $BUILD_RUN_ID is missing artifact: $artifact" >&2
+              exit 1
+            fi
+            gh run download "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "$artifact" --dir "artifacts/$artifact"
+          done
+          if [ -f artifacts/release-metadata/tag.txt ]; then
+            metadata_tag="$(cat artifacts/release-metadata/tag.txt)"
+            tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$metadata_tag" --jq '.sha')"
+            python3 build_scripts/verify_release.py artifacts build-run.json \
+              --windows-only --tag "$metadata_tag" --tag-sha "$tag_sha"
+          else
+            python3 build_scripts/verify_release.py artifacts build-run.json --windows-only
+          fi
+
+  publish:
+    needs: inspect
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - name: Download Microsoft Store packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: windows-store-*
+          path: store-packages/input
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.inspect.outputs.run_id }}
+
+      - name: Create multi-architecture MSIX bundle
+        id: bundle
+        shell: pwsh
+        run: |
+          $inputDirectory = Join-Path $PWD "store-packages/input"
+          $packages = @(Get-ChildItem $inputDirectory -Filter "*.msix" -File)
+          if ($packages.Count -ne 2) {
+            throw "Expected x64 and arm64 MSIX packages, found $($packages.Count)."
+          }
+
+          $windowsSdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+          $makeAppx = Get-ChildItem $windowsSdkBin -Filter "MakeAppx.exe" -Recurse -File |
+            Where-Object { $_.Directory.Name -eq "x64" } |
+            Sort-Object FullName |
+            Select-Object -Last 1
+          if ($null -eq $makeAppx) {
+            throw "MakeAppx.exe was not found in the Windows SDK."
+          }
+
+          $bundlePath = Join-Path $PWD "store-packages/OneXray.msixbundle"
+          & $makeAppx.FullName bundle /d $inputDirectory /p $bundlePath /o
+          if ($LASTEXITCODE -ne 0) {
+            throw "MakeAppx failed with exit code $LASTEXITCODE."
+          }
+          "bundle_path=$bundlePath" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Microsoft Store bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-store-bundle
+          path: ${{ steps.bundle.outputs.bundle_path }}
+          if-no-files-found: error

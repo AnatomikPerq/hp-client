@@ -2,16 +2,54 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart' show protected;
 import 'package:isolate_manager/isolate_manager.dart';
 import 'package:onexray/core/ffi/generated_bindings.dart';
-import 'package:onexray/core/pigeon/flutter_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
-import 'package:onexray/core/pigeon/model_reader.dart';
 import 'package:onexray/core/tools/empty.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:path/path.dart' as p;
+
+List<String> desktopCoreRunArguments({
+  required String dns,
+  required String interfaceName,
+  required String configPath,
+  String? errorFile,
+}) {
+  if (dns.isEmpty || interfaceName.isEmpty || configPath.isEmpty) {
+    throw const FormatException(
+      'Desktop Core DNS, interface, or config path is missing',
+    );
+  }
+  return <String>[
+    'run',
+    '-dns',
+    '$dns:53',
+    '-interface',
+    interfaceName,
+    '-config',
+    configPath,
+    if (errorFile != null) ...['-error-file', errorFile],
+  ];
+}
+
+File desktopCoreErrorFile(String configPath) => File('$configPath.error');
+
+Future<String> readDesktopCoreStartError(
+  String configPath,
+  String fallback,
+) async {
+  try {
+    final file = desktopCoreErrorFile(configPath);
+    final error = (await file.readAsString()).trim();
+    if (error.isNotEmpty) return error;
+  } on FileSystemException {
+    // A crash before the CLI starts may leave no diagnostic file.
+  }
+  return fallback;
+}
 
 abstract class BaseFfiApi {
   Future<String> getTunFilesDir() async {
@@ -19,42 +57,17 @@ abstract class BaseFfiApi {
     return dir.path;
   }
 
-  var _vpnStatus = VpnStatus.disconnected;
+  Future<NativeVpnCommandResult> readVpnStatus();
 
-  Future<NativeVpnCommandResult> readVpnStatus() async {
-    final running = await queryCoreRunning();
-    if (running != null &&
-        _vpnStatus != VpnStatus.connecting &&
-        _vpnStatus != VpnStatus.disconnecting) {
-      _vpnStatus = running ? VpnStatus.connected : VpnStatus.disconnected;
-    }
-    await AppFlutterApi().vpnStatusChanged(_vpnStatus);
-    return _commandSuccess();
-  }
+  /// Successful commands return the confirmed terminal status. Each platform
+  /// owns its notification/wait mechanism; callers do not poll for completion.
+  Future<NativeVpnCommandResult> startVpn();
+  Future<NativeVpnCommandResult> stopVpn();
+  Future<void> observeVpnStatus();
+  void disposeVpnStatus();
 
-  Future<bool?> queryCoreRunning() async => null;
-
-  Future<void> updateVpnStatus(VpnStatus status) async {
-    _vpnStatus = status;
-    await AppFlutterApi().vpnStatusChanged(_vpnStatus);
-  }
-
-  Future<NativeVpnCommandResult> startVpn() async {
-    await updateVpnStatus(VpnStatus.connecting);
-
-    final request = await StartVpnRequestReader.readFromStartFile();
-    final coreRequest = _readRunXrayRequest(request);
-
-    var res = await startCore(coreRequest);
-    if (!res) {
-      await stopVpn();
-      return _commandFailed();
-    }
-    await updateVpnStatus(VpnStatus.connected);
-    return _commandSuccess();
-  }
-
-  LibXrayRunConfig _readRunXrayRequest(StartVpnRequest request) {
+  @protected
+  LibXrayRunConfig readRunXrayRequest(StartVpnRequest request) {
     if (!EmptyTool.checkString(request.coreInvokeText)) {
       return LibXrayRunConfig(
         LibXrayInvokeRequest(
@@ -66,41 +79,30 @@ abstract class BaseFfiApi {
     return LibXrayRunConfig.fromInvokeText(request.coreInvokeText!);
   }
 
-  Future<bool> startCore(LibXrayRunConfig request) async {
-    return true;
-  }
-
   Future<String?> materializeRunXrayConfig(LibXrayRunConfig request) async {
+    final runPath = p.join(await getTunFilesDir(), 'run');
+    final root = Directory(p.join(runPath, 'core-inputs'));
+    final type = await FileSystemEntity.type(root.path, followLinks: false);
+    if (type == FileSystemEntityType.directory) {
+      await root.delete(recursive: true);
+    } else if (type != FileSystemEntityType.notFound) {
+      throw const FormatException('Invalid desktop Core input directory');
+    }
+    await root.create(recursive: true);
     final xrayJson = request.request.xrayJson;
     if (xrayJson == null || xrayJson.isEmpty) {
       return null;
     }
 
-    final runDir = Directory(p.join(await getTunFilesDir(), "run"));
-    await runDir.create(recursive: true);
-    final configPath = p.join(runDir.path, "xray.json");
-    final temporary = File("$configPath.tmp");
-    await temporary.writeAsString(xrayJson, flush: true);
-    final config = File(configPath);
-    if (Platform.isWindows && await config.exists()) {
-      await config.delete();
+    final directory = await root.createTemp('input-');
+    try {
+      final config = File(p.join(directory.path, 'xray.json'));
+      await config.writeAsString(xrayJson, flush: true);
+      return config.path;
+    } catch (_) {
+      if (await directory.exists()) await directory.delete(recursive: true);
+      rethrow;
     }
-    await temporary.rename(configPath);
-    return configPath;
-  }
-
-  Future<bool> stopCore() async => true;
-
-  Future<NativeVpnCommandResult> stopVpn() async {
-    await updateVpnStatus(VpnStatus.disconnecting);
-    final stopped = await stopCore();
-    if (!stopped) {
-      await updateVpnStatus(VpnStatus.connected);
-      return _commandFailed();
-    }
-    await Future.delayed(Duration(seconds: 1));
-    await updateVpnStatus(VpnStatus.disconnected);
-    return _commandSuccess();
   }
 
   PlatformPermissionResult _permissionNotRequired() {
@@ -110,17 +112,21 @@ abstract class BaseFfiApi {
     );
   }
 
-  NativeVpnCommandResult _commandSuccess() {
+  @protected
+  NativeVpnCommandResult commandSuccess({VpnStatus? status}) {
     return NativeVpnCommandResult(
       state: NativeVpnCommandState.success,
+      status: status,
       permission: _permissionNotRequired(),
     );
   }
 
-  NativeVpnCommandResult _commandFailed() {
+  @protected
+  NativeVpnCommandResult commandFailed([String? message]) {
     return NativeVpnCommandResult(
       state: NativeVpnCommandState.failed,
       permission: _permissionNotRequired(),
+      message: message,
     );
   }
 

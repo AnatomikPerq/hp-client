@@ -10,10 +10,14 @@ class Subscription extends Table {
   TextColumn get ageSecretKey => text().nullable()();
 
   TextColumn get agePublicKey => text().nullable()();
+  BoolColumn get hwidEnabled => boolean().withDefault(const Constant(false))();
+  TextColumn get hwid => text().nullable()();
 
   DateTimeColumn get timestamp => dateTime()();
 
-  IntColumn get count => integer()();
-
-  BoolColumn get expanded => boolean()();
+  IntColumn get uploadBytes => integer().nullable()();
+  IntColumn get downloadBytes => integer().nullable()();
+  IntColumn get totalBytes => integer().nullable()();
+  IntColumn get expireTimestamp => integer().nullable()();
+  DateTimeColumn get userInfoUpdatedAt => dateTime().nullable()();
 }

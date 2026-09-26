@@ -2,8 +2,13 @@ app_id: 346eafc3-85a2-4bbe-9f2b-5ee624666817
 publisher_name: HYPER CLIENT
 publisher_url: https://github.com/AnatomikPerq/hp-client
 display_name: HYPER CLIENT
+executable_name: HyperClient.exe
 script_template: inno_setup.iss
 create_desktop_icon: true
 setup_icon_file: windows\runner\resources\app_icon.ico
+install_dir_name: '{autopf}\HYPER CLIENT'
+privileges_required: lowest
+architectures_allowed: x64os
+architectures_install_in_64bit_mode: x64os
 locales:
   - en

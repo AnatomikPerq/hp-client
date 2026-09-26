@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:onexray/core/db/database/constants.dart';
 
 @immutable
 class AppPalette {
+  // The confirmation overlay is shared by both prototype themes.
+  static const restoreOverlay = Color.fromRGBO(5, 12, 30, 0.4);
+
   const AppPalette({
     required this.background,
     required this.foreground,
@@ -10,21 +14,31 @@ class AppPalette {
     required this.popover,
     required this.popoverForeground,
     required this.primary,
+    required this.primaryHover,
+    required this.primarySolid,
+    required this.primarySolidHover,
     required this.primaryForeground,
+    required this.surfaceHover,
     required this.secondary,
     required this.secondaryForeground,
     required this.muted,
     required this.mutedForeground,
+    required this.mutedStrong,
     required this.accent,
     required this.accentForeground,
     required this.destructive,
+    required this.destructiveSolid,
+    required this.destructiveSolidHover,
     required this.destructiveForeground,
     required this.border,
+    required this.borderStrong,
     required this.input,
     required this.ring,
     required this.selection,
     required this.scannerBackground,
+    required this.overlay,
     required this.header,
+    required this.brand,
     required this.sidebar,
     required this.sidebarForeground,
     required this.sidebarPrimary,
@@ -42,6 +56,7 @@ class AppPalette {
     required this.runningSurface,
     required this.restarting,
     required this.restartingText,
+    required this.warningSurface,
     required this.destructiveSurface,
     required this.chart1,
     required this.chart2,
@@ -50,10 +65,9 @@ class AppPalette {
     required this.chart5,
   });
 
-  // HYPER CLIENT — космическая тема.
-  // Голубой ведёт интерактив (ссылки, кнопки, фокус), жёлтый — бренд и
-  // состояние «подключено». Жёлтый используется заливками с тёмным текстом,
-  // а не как цвет текста: на светлом фоне он нечитаем.
+  // HYPER CLIENT space palette. Cyan leads interaction (links, buttons,
+  // focus); yellow is the brand and the "connected" state. Yellow is used as
+  // a fill with dark text, never as text on the light background.
   static const light = AppPalette(
     background: Color(0xFFF6F9FE),
     foreground: Color(0xFF0B1220),
@@ -61,47 +75,59 @@ class AppPalette {
     cardForeground: Color(0xFF0B1220),
     popover: Color(0xFFFFFFFF),
     popoverForeground: Color(0xFF0B1220),
-    primary: Color(0xFF0A84C7),
+    primary: Color(0xFF0877B5),
+    primaryHover: Color(0xFF066497),
+    primarySolid: Color(0xFF0877B5),
+    primarySolidHover: Color(0xFF066497),
     primaryForeground: Color(0xFFFFFFFF),
+    surfaceHover: Color(0xFFEEF4FB),
     secondary: Color(0xFFEDF3FA),
     secondaryForeground: Color(0xFF16202E),
     muted: Color(0xFFEDF3FA),
     mutedForeground: Color(0xFF5A6779),
+    mutedStrong: Color(0xFF465366),
     accent: Color(0xFFE2F1FB),
-    accentForeground: Color(0xFF0C3550),
+    accentForeground: Color(0xFF0A6FA8),
     destructive: Color(0xFFDC2B33),
+    destructiveSolid: Color(0xFFDC2B33),
+    destructiveSolidHover: Color(0xFFC0222A),
     destructiveForeground: Color(0xFFFFFFFF),
     border: Color(0xFFD6DFEA),
+    borderStrong: Color(0xFFC4D0DE),
     input: Color(0xFFD6DFEA),
-    ring: Color(0xFF0A84C7),
+    ring: Color(0xFF0877B5),
     selection: Color(0xFFCBE7F8),
     scannerBackground: Color(0xFF05080F),
+    overlay: Color.fromRGBO(5, 8, 15, 0.48),
     header: Color(0xFFF9FBFE),
+    brand: Color(0xFF0B2A4A),
     sidebar: Color(0xFFF2F7FC),
     sidebarForeground: Color(0xFF16202E),
-    sidebarPrimary: Color(0xFF0A84C7),
+    sidebarPrimary: Color(0xFF0877B5),
     sidebarPrimaryForeground: Color(0xFFFFFFFF),
     sidebarAccent: Color(0xFFDFEEF9),
     sidebarAccentForeground: Color(0xFF0C3550),
     sidebarBorder: Color(0xFFD6DFEA),
-    sidebarRing: Color(0xFF0A84C7),
+    sidebarRing: Color(0xFF0877B5),
     selectedSurface: Color(0xFFEFF7FE),
     running: Color(0xFFE0A400),
-    runningText: Color(0xFFA97400),
-    runningBadge: Color(0xFFE0A400),
-    runningBadgeForeground: Color(0xFF1A1200),
+    runningText: Color(0xFF8F6200),
+    runningBadge: Color(0xFF8F6200),
+    runningBadgeForeground: Color(0xFFFFFFFF),
     runningForeground: Color(0xFF0B1220),
     runningSurface: Color(0xFFFDF8E8),
     restarting: Color(0xFFE07B18),
-    restartingText: Color(0xFFC25E00),
-    destructiveSurface: Color(0x1ADC2B33),
-    chart1: Color(0xFF0A84C7),
+    restartingText: Color(0xFFA34F00),
+    warningSurface: Color(0xFFFFF4E5),
+    destructiveSurface: Color(0xFFFDEDEE),
+    chart1: Color(0xFF0877B5),
     chart2: Color(0xFFE0A400),
     chart3: Color(0xFF7C5CE0),
     chart4: Color(0xFFE0475A),
     chart5: Color(0xFF14A88A),
   );
 
+  // The dark theme is the primary one: deep navy with a cyan accent.
   static const dark = AppPalette(
     background: Color(0xFF060A14),
     foreground: Color(0xFFE8EEF7),
@@ -110,28 +136,38 @@ class AppPalette {
     popover: Color(0xFF0D1424),
     popoverForeground: Color(0xFFE8EEF7),
     primary: Color(0xFF4CC9F0),
-    primaryForeground: Color(0xFF04121B),
+    primaryHover: Color(0xFF7AD8F5),
+    primarySolid: Color(0xFF0A75B0),
+    primarySolidHover: Color(0xFF08689C),
+    primaryForeground: Color(0xFFFFFFFF),
+    surfaceHover: Color(0xFF16203A),
     secondary: Color(0xFF182236),
     secondaryForeground: Color(0xFFE3EAF5),
     muted: Color(0xFF141C2C),
     mutedForeground: Color(0xFF93A3BC),
+    mutedStrong: Color(0xFFB9C6D8),
     accent: Color(0xFF1B2942),
-    accentForeground: Color(0xFFCFE6FF),
+    accentForeground: Color(0xFF7AD8F5),
     destructive: Color(0xFFFF5F6D),
-    destructiveForeground: Color(0xFF170406),
-    border: Color(0x1FFFFFFF),
-    input: Color(0x29FFFFFF),
+    destructiveSolid: Color(0xFFDC2B33),
+    destructiveSolidHover: Color(0xFFC0222A),
+    destructiveForeground: Color(0xFFFFFFFF),
+    border: Color(0xFF25324A),
+    borderStrong: Color(0xFF2C3A52),
+    input: Color(0xFF25324A),
     ring: Color(0xFF4CC9F0),
     selection: Color(0xFF1C3450),
     scannerBackground: Color(0xFF05080F),
+    overlay: Color.fromRGBO(2, 5, 12, 0.56),
     header: Color(0xFF070C16),
+    brand: Color(0xFFFFC93C),
     sidebar: Color(0xFF0A1020),
     sidebarForeground: Color(0xFFE3EAF5),
     sidebarPrimary: Color(0xFF4CC9F0),
     sidebarPrimaryForeground: Color(0xFF04121B),
     sidebarAccent: Color(0xFF16233A),
     sidebarAccentForeground: Color(0xFFCFE6FF),
-    sidebarBorder: Color(0x1AFFFFFF),
+    sidebarBorder: Color(0xFF25324A),
     sidebarRing: Color(0xFF4CC9F0),
     selectedSurface: Color(0xFF121D30),
     running: Color(0xFFFFC93C),
@@ -142,7 +178,8 @@ class AppPalette {
     runningSurface: Color(0xFF1E1A0C),
     restarting: Color(0xFFFF9F43),
     restartingText: Color(0xFFFFB067),
-    destructiveSurface: Color(0x33FF5F6D),
+    warningSurface: Color(0xFF2E2112),
+    destructiveSurface: Color(0xFF3A1A22),
     chart1: Color(0xFF4CC9F0),
     chart2: Color(0xFFFFC93C),
     chart3: Color(0xFF9D7BFF),
@@ -157,22 +194,33 @@ class AppPalette {
   final Color popover;
   final Color popoverForeground;
   final Color primary;
+  final Color primaryHover;
+  final Color primarySolid;
+  final Color primarySolidHover;
+  // Foregrounds pair with solid fills, not the dark theme's interactive colors.
   final Color primaryForeground;
+  final Color surfaceHover;
   final Color secondary;
   final Color secondaryForeground;
   final Color muted;
   final Color mutedForeground;
+  final Color mutedStrong;
   final Color accent;
   final Color accentForeground;
   final Color destructive;
+  final Color destructiveSolid;
+  final Color destructiveSolidHover;
   final Color destructiveForeground;
   final Color border;
+  final Color borderStrong;
   final Color input;
   final Color ring;
   final Color selection;
   final Color scannerBackground;
+  final Color overlay;
   final Color header;
   final Color sidebar;
+  final Color brand;
   final Color sidebarForeground;
   final Color sidebarPrimary;
   final Color sidebarPrimaryForeground;
@@ -189,6 +237,7 @@ class AppPalette {
   final Color runningSurface;
   final Color restarting;
   final Color restartingText;
+  final Color warningSurface;
   final Color destructiveSurface;
   final Color chart1;
   final Color chart2;
@@ -207,7 +256,11 @@ class AppPalette {
       popover: color(begin.popover, end.popover),
       popoverForeground: color(begin.popoverForeground, end.popoverForeground),
       primary: color(begin.primary, end.primary),
+      primaryHover: color(begin.primaryHover, end.primaryHover),
+      primarySolid: color(begin.primarySolid, end.primarySolid),
+      primarySolidHover: color(begin.primarySolidHover, end.primarySolidHover),
       primaryForeground: color(begin.primaryForeground, end.primaryForeground),
+      surfaceHover: color(begin.surfaceHover, end.surfaceHover),
       secondary: color(begin.secondary, end.secondary),
       secondaryForeground: color(
         begin.secondaryForeground,
@@ -215,20 +268,29 @@ class AppPalette {
       ),
       muted: color(begin.muted, end.muted),
       mutedForeground: color(begin.mutedForeground, end.mutedForeground),
+      mutedStrong: color(begin.mutedStrong, end.mutedStrong),
       accent: color(begin.accent, end.accent),
       accentForeground: color(begin.accentForeground, end.accentForeground),
       destructive: color(begin.destructive, end.destructive),
+      destructiveSolid: color(begin.destructiveSolid, end.destructiveSolid),
+      destructiveSolidHover: color(
+        begin.destructiveSolidHover,
+        end.destructiveSolidHover,
+      ),
       destructiveForeground: color(
         begin.destructiveForeground,
         end.destructiveForeground,
       ),
       border: color(begin.border, end.border),
+      borderStrong: color(begin.borderStrong, end.borderStrong),
       input: color(begin.input, end.input),
       ring: color(begin.ring, end.ring),
       selection: color(begin.selection, end.selection),
       scannerBackground: color(begin.scannerBackground, end.scannerBackground),
+      overlay: color(begin.overlay, end.overlay),
       header: color(begin.header, end.header),
       sidebar: color(begin.sidebar, end.sidebar),
+      brand: color(begin.brand, end.brand),
       sidebarForeground: color(begin.sidebarForeground, end.sidebarForeground),
       sidebarPrimary: color(begin.sidebarPrimary, end.sidebarPrimary),
       sidebarPrimaryForeground: color(
@@ -254,6 +316,7 @@ class AppPalette {
       runningSurface: color(begin.runningSurface, end.runningSurface),
       restarting: color(begin.restarting, end.restarting),
       restartingText: color(begin.restartingText, end.restartingText),
+      warningSurface: color(begin.warningSurface, end.warningSurface),
       destructiveSurface: color(
         begin.destructiveSurface,
         end.destructiveSurface,
@@ -275,20 +338,12 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
 
   final AppPalette palette;
 
-  Color get pageBackground => palette.background;
   Color get surface => palette.card;
   Color get surfaceBorder => palette.border;
   Color get primaryText => palette.foreground;
   Color get secondaryText => palette.mutedForeground;
   Color get tagBackground => palette.muted;
   Color get selectedBackground => palette.selectedSurface;
-  Color get runningBackground => palette.runningSurface;
-  Color get stopButtonBackground => palette.destructiveSurface;
-  Color get stopButtonForeground => palette.destructive;
-  Color get sectionTitle => palette.mutedForeground;
-  Color get interactiveText => palette.primary;
-  Color get secondaryButtonBackground => palette.secondary;
-  Color get secondaryButtonForeground => palette.secondaryForeground;
 
   static AppColorTokens fallback(Brightness brightness) {
     return brightness == Brightness.light ? light : dark;
@@ -316,16 +371,23 @@ class ColorManager {
 
   static AppPalette palette(BuildContext context) => tokens(context).palette;
 
-  static Color scaffoldBackground(Brightness brightness) {
-    return AppColorTokens.fallback(brightness).pageBackground;
-  }
-
   static Color surface(BuildContext context) => tokens(context).surface;
 
   static Color primaryText(BuildContext context) => tokens(context).primaryText;
 
   static Color secondaryText(BuildContext context) {
     return tokens(context).secondaryText;
+  }
+
+  static Color nodeLatency(BuildContext context, int delay) {
+    final colors = palette(context);
+    if (!PingDelayConstants.isSuccessful(delay)) return colors.mutedForeground;
+    // These tones remain legible as small text on normal and selected cards.
+    return delay <= 500
+        ? colors.runningBadge
+        : delay <= 1000
+        ? colors.restartingText
+        : colors.primaryHover;
   }
 
   static Color tagBackground(BuildContext context) {
@@ -336,37 +398,5 @@ class ColorManager {
 
   static Color selected(BuildContext context) {
     return tokens(context).selectedBackground;
-  }
-
-  static Color running(BuildContext context) {
-    return tokens(context).runningBackground;
-  }
-
-  static Color buttonStop(BuildContext context) {
-    return tokens(context).stopButtonBackground;
-  }
-
-  static Color buttonStopForeground(BuildContext context) {
-    return tokens(context).stopButtonForeground;
-  }
-
-  static Color sectionTitle(BuildContext context) {
-    return tokens(context).sectionTitle;
-  }
-
-  static Color interactiveText(BuildContext context) {
-    return tokens(context).interactiveText;
-  }
-
-  static Color formTitle(BuildContext context) {
-    return interactiveText(context);
-  }
-
-  static Color secondaryButtonBackground(BuildContext context) {
-    return tokens(context).secondaryButtonBackground;
-  }
-
-  static Color secondaryButtonForeground(BuildContext context) {
-    return tokens(context).secondaryButtonForeground;
   }
 }

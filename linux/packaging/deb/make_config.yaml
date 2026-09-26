@@ -15,7 +15,7 @@ dependencies:
 essential: false
 icon: assets/logo.png
 postinstall_scripts:
-  - setcap cap_net_admin,cap_net_raw+eip /opt/HyperClient/bin/HyperClientCore
+  - setcap cap_net_admin,cap_net_raw+eip /opt/HyperClient/HyperClientCore
 keywords:
   - HYPER CLIENT
   - Xray

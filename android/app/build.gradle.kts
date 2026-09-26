@@ -33,7 +33,7 @@ android {
     defaultConfig {
         applicationId = "net.yuandev.onexray"
         minSdk = 29
-        targetSdk = 36
+        targetSdk = 37
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         if (!splitPerAbi) {
@@ -77,6 +77,10 @@ android {
                 ?: signingConfigs.getByName("debug")
         }
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 kotlin {
@@ -89,12 +93,21 @@ flutter {
     source = "../.."
 }
 
+// Resource-backed JVM tests also package the assets written by Flutter.
+tasks.matching { it.name.startsWith("package") && it.name.endsWith("UnitTestForUnitTest") }
+    .configureEach {
+        val variant = name.removePrefix("package").removeSuffix("UnitTestForUnitTest")
+        dependsOn("copyFlutterAssets$variant")
+    }
+
 dependencies {
-    val coreVersion = "1.18.0"
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    val coreVersion = "1.19.0"
     implementation("androidx.core:core-ktx:$coreVersion")
     implementation("androidx.core:core-splashscreen:1.2.0")
 
-    implementation("androidx.fragment:fragment-ktx:1.8.9")
+    implementation("androidx.fragment:fragment-ktx:1.9.0")
     implementation("androidx.activity:activity-ktx:1.13.0")
 
     val kotlinxCoroutinesVersion = "1.11.0"

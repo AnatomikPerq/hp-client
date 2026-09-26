@@ -1,16 +1,23 @@
+import 'dart:typed_data';
+
+import 'package:onexray/core/errors/failure.dart';
+
 import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/core/ffi/linux_ffi_api.dart';
-import 'package:onexray/core/ffi/windows_ffi_api.dart';
-import 'package:onexray/core/model/xray_json.dart';
-import 'package:onexray/core/model/xray_standard.dart';
+import 'package:onexray/core/ffi/windows/ffi_api.dart';
+import 'package:onexray/core/ffi/windows/model.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/invoke_limits.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/pigeon/model_reader.dart';
 import 'package:onexray/core/tools/json.dart';
 import 'package:onexray/core/tools/logger.dart';
+import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 
 class AppHostApi {
+  Future<AppleVpnCapabilities> appleVpnCapabilities() =>
+      _api.appleVpnCapabilities();
   final _api = BridgeHostApi();
 
   static final AppHostApi _singleton = AppHostApi._internal();
@@ -20,31 +27,54 @@ class AppHostApi {
   AppHostApi._internal();
 
   // ===============
-  final _errorResult = "error";
   var _tunFilesDir = "";
-
-  Future<void> initTunFilesDir() async {
-    if (AppPlatform.isLinux) {
-      _tunFilesDir = await LinuxFfiApi().getTunFilesDir();
-    } else if (AppPlatform.isWindows) {
-      _tunFilesDir = await WindowsFfiApi().getTunFilesDir();
-    } else {
-      _tunFilesDir = await _api.getTunFilesDir();
+  // Mobile and Apple notifications are registered by the native bridge.
+  Future<void> observeVpnStatus() async {
+    if (AppPlatform.isWindows) {
+      await WindowsFfiApi().observeVpnStatus();
+    } else if (AppPlatform.isLinux) {
+      await LinuxFfiApi().observeVpnStatus();
     }
   }
 
+  void disposeVpnStatus() {
+    if (AppPlatform.isWindows) {
+      WindowsFfiApi().disposeVpnStatus();
+    } else if (AppPlatform.isLinux) {
+      LinuxFfiApi().disposeVpnStatus();
+    }
+  }
+
+  Future<void> initTunFilesDir() async {
+    if (AppPlatform.isLinux) {
+      _setTunFilesDir(await LinuxFfiApi().getTunFilesDir());
+    } else if (AppPlatform.isWindows) {
+      _setTunFilesDir(await WindowsFfiApi().getTunFilesDir());
+    } else {
+      _setTunFilesDir(await _api.getTunFilesDir());
+    }
+  }
+
+  void _setTunFilesDir(String value) {
+    if (value.isEmpty || !p.isAbsolute(value)) {
+      _tunFilesDir = '';
+      throw StateError('VPN data directory is unavailable');
+    }
+    _tunFilesDir = p.normalize(value);
+  }
+
   Future<bool?> cleanupStaleDesktopCore() async {
+    if (!AppPlatform.isLinux && !AppPlatform.isWindows) {
+      return null;
+    }
     try {
-      if (AppPlatform.isLinux) {
-        return LinuxFfiApi().cleanupStaleCore();
-      } else if (AppPlatform.isWindows) {
-        return WindowsFfiApi().cleanupStaleCore();
-      }
+      return AppPlatform.isWindows
+          ? await WindowsFfiApi().cleanupStaleCore()
+          : await LinuxFfiApi().cleanupStaleCore();
     } catch (error, stackTrace) {
       _reportUnexpected('cleanupStaleDesktopCore', error, stackTrace);
       return false;
     }
-    return null;
   }
 
   Future<NativeVpnCommandResult> readVpnStatus() async {
@@ -52,7 +82,7 @@ class AppHostApi {
       return await _readVpnStatus();
     } catch (error, stackTrace) {
       _reportUnexpected('readVpnStatus', error, stackTrace);
-      return _commandFailed();
+      return _commandFailed(failureDetails(error));
     }
   }
 
@@ -66,20 +96,40 @@ class AppHostApi {
     }
   }
 
-  Future<NativeVpnCommandResult> startVpn() async {
+  Future<NativeVpnCommandResult> startVpn({
+    String? windowsConfigYaml,
+    WindowsVpnNetworkSettings? windowsNetworkSettings,
+    WindowsVpnPolicy windowsPolicy = const WindowsVpnPolicy(
+      alwaysOn: false,
+      allowLocalNetwork: true,
+      excludedCidrs: [],
+    ),
+  }) async {
     try {
-      return await _startVpn();
+      return await _startVpn(
+        windowsConfigYaml,
+        windowsNetworkSettings,
+        windowsPolicy,
+      );
     } catch (error, stackTrace) {
       _reportUnexpected('startVpn', error, stackTrace);
-      return _commandFailed();
+      return _commandFailed(failureDetails(error));
     }
   }
 
-  Future<NativeVpnCommandResult> _startVpn() async {
+  Future<NativeVpnCommandResult> _startVpn(
+    String? windowsConfigYaml,
+    WindowsVpnNetworkSettings? windowsNetworkSettings,
+    WindowsVpnPolicy windowsPolicy,
+  ) async {
     if (AppPlatform.isLinux) {
       return LinuxFfiApi().startVpn();
     } else if (AppPlatform.isWindows) {
-      return WindowsFfiApi().startVpn();
+      return WindowsFfiApi().startVpn(
+        configYaml: windowsConfigYaml,
+        networkSettings: windowsNetworkSettings,
+        policy: windowsPolicy,
+      );
     } else {
       return _api.startVpn();
     }
@@ -90,7 +140,7 @@ class AppHostApi {
       return await _stopVpn();
     } catch (error, stackTrace) {
       _reportUnexpected('stopVpn', error, stackTrace);
-      return _commandFailed();
+      return _commandFailed(failureDetails(error));
     }
   }
 
@@ -106,15 +156,17 @@ class AppHostApi {
 
   String get tunFilesDir => _tunFilesDir;
 
-  Future<List<int>> getFreePorts(int num) async {
+  Future<List<int>> getFreePorts(int num, {List<int>? excludePorts}) async {
     try {
-      final res = await _invoke(
+      final resp = await _invoke(
         LibXrayInvokeRequest(
           method: LibXrayMethod.getFreePorts,
-          payload: GetFreePortsRequest(num).toJson(),
+          payload: GetFreePortsRequest(
+            num,
+            excludePorts: excludePorts,
+          ).toJson(),
         ),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       if (resp.data != null) {
         if (resp.success) {
           final ports = GetFreePortsResponse.fromJson(resp.data!);
@@ -123,89 +175,21 @@ class AppHostApi {
           }
         }
       }
+      throw LibXrayInvokeException(
+        resp.error.isEmpty ? 'No free ports returned' : resp.error,
+      );
     } catch (error, stackTrace) {
       _reportUnexpected('getFreePorts', error, stackTrace);
-    }
-    return [];
-  }
-
-  /// Поднять туннель minewire внутри libXray и получить локальный порт.
-  ///
-  /// Бросает при неудаче: вызывающий должен показать ошибку, а не молча
-  /// подключаться в никуда.
-  Future<int> startMinewire({
-    required String serverAddress,
-    required String password,
-    required String mode,
-  }) async {
-    final res = await _invoke(
-      LibXrayInvokeRequest(
-        method: LibXrayMethod.startMinewire,
-        payload: StartMinewireRequest(
-          serverAddress,
-          password,
-          mode: mode,
-        ).toJson(),
-      ),
-    );
-    final resp = LibXrayInvokeResponseParser.parse(res);
-    final port = resp.success && resp.data != null
-        ? StartMinewireResponse.fromJson(resp.data!).localPort
-        : null;
-    if (port == null || port <= 0) {
-      throw LibXrayInvokeException(
-        resp.error.isNotEmpty ? resp.error : 'minewire start failed',
-      );
-    }
-    return port;
-  }
-
-  Future<void> stopMinewire() async {
-    try {
-      await _invoke(
-        LibXrayInvokeRequest(method: LibXrayMethod.stopMinewire),
-      );
-    } catch (error, stackTrace) {
-      _reportUnexpected('stopMinewire', error, stackTrace);
+      rethrow;
     }
   }
 
-  Future<MinewireStateResponse?> minewireState() async {
-    try {
-      final res = await _invoke(
-        LibXrayInvokeRequest(method: LibXrayMethod.minewireState),
-      );
-      final resp = LibXrayInvokeResponseParser.parse(res);
-      if (resp.success && resp.data != null) {
-        return MinewireStateResponse.fromJson(resp.data!);
-      }
-    } catch (error, stackTrace) {
-      _reportUnexpected('minewireState', error, stackTrace);
-    }
-    return null;
-  }
-
-  Future<XrayJson> convertShareLinksToXrayJson(
-    String text, {
-    String? ageSecretKey,
-  }) async {
-    try {
-      return await convertShareLinksToXrayJsonStrict(
-        text,
-        ageSecretKey: ageSecretKey,
-      );
-    } catch (error, stackTrace) {
-      _reportUnexpected('convertShareLinksToXrayJson', error, stackTrace);
-    }
-    return XrayJsonStandard.standard;
-  }
-
-  Future<XrayJson> convertShareLinksToXrayJsonStrict(
+  Future<List<Map<String, dynamic>>> convertShareLinksToXrayJson(
     String text, {
     String? ageSecretKey,
   }) async {
     final key = ageSecretKey?.trim();
-    final res = await _invoke(
+    final response = await _invoke(
       LibXrayInvokeRequest(
         method: LibXrayMethod.convertShareLinksToXrayJson,
         payload: ConvertShareLinksToXrayJsonRequest(
@@ -214,23 +198,26 @@ class AppHostApi {
         ).toJson(),
       ),
     );
-    final resp = LibXrayInvokeResponseParser.parse(res);
-    if (resp.success && resp.data != null) {
-      return XrayJson.fromJson(resp.data!);
+    final data = response.data;
+    if (!response.success || data == null) {
+      throw LibXrayInvokeException(response.error);
     }
-    throw LibXrayInvokeException(resp.error);
+    final outbounds = data['outbounds'];
+    if (outbounds is! List) {
+      throw const FormatException('Invalid import outbounds');
+    }
+    return outbounds.cast<Map<String, dynamic>>();
   }
 
   Future<GenerateAgeKeyPairResponse> generateAgeKeyPair({
     AgeKeyType keyType = AgeKeyType.x25519,
   }) async {
-    final res = await _invoke(
+    final resp = await _invoke(
       LibXrayInvokeRequest(
         method: LibXrayMethod.generateAgeKeyPair,
         payload: GenerateAgeKeyPairRequest(keyType).toJson(),
       ),
     );
-    final resp = LibXrayInvokeResponseParser.parse(res);
     if (resp.success && resp.data != null) {
       final response = GenerateAgeKeyPairResponse.fromJson(resp.data!);
       if ((response.secretKey?.isNotEmpty ?? false) &&
@@ -241,170 +228,90 @@ class AppHostApi {
     throw LibXrayInvokeException(resp.error);
   }
 
-  Future<String> convertXrayJsonToShareLinks(XrayJson xrayJson) async {
+  Future<String> convertXrayJsonToShareLinks(
+    Map<String, dynamic> xrayJson,
+  ) async {
     try {
-      final xrayJsonText = JsonTool.encoder.convert(xrayJson.toJson());
-      final res = await _invoke(
+      final xrayJsonText = JsonTool.encoder.convert(xrayJson);
+      final resp = await _invoke(
         LibXrayInvokeRequest(
           method: LibXrayMethod.convertXrayJsonToShareLinks,
           payload: ConvertXrayJsonToShareLinksRequest(xrayJsonText).toJson(),
         ),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       if (resp.data != null) {
         if (resp.success) {
           final data = ConvertXrayJsonToShareLinksResponse.fromJson(resp.data!);
           return data.links ?? "";
         }
       }
+      throw LibXrayInvokeException(resp.error);
     } catch (error, stackTrace) {
       _reportUnexpected('convertXrayJsonToShareLinks', error, stackTrace);
+      rethrow;
     }
-    return "";
   }
 
   Future<String> countGeoData(CountGeoDataRequest request) async {
     try {
-      final res = await _invoke(
+      final resp = await _invoke(
         LibXrayInvokeRequest(
           method: LibXrayMethod.countGeoData,
           payload: request.toJson(),
         ),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       if (resp.success) {
         return "";
       }
       return resp.error;
     } catch (error, stackTrace) {
       _reportUnexpected('countGeoData', error, stackTrace);
+      rethrow;
     }
-    return _errorResult;
   }
 
   Future<PingBatchResponse?> pingBatch(PingBatchRequest request) async {
     try {
-      final res = await _invoke(
+      final resp = await _invoke(
         LibXrayInvokeRequest(
           method: LibXrayMethod.pingBatch,
           payload: request.toJson(),
         ),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       ygLogger("pingBatch result success:${resp.success} error:${resp.error}");
       if (resp.success && resp.data != null) {
         return PingBatchResponse.fromJson(resp.data!);
       }
+      throw LibXrayInvokeException(resp.error);
     } catch (error, stackTrace) {
       _reportUnexpected('pingBatch', error, stackTrace);
+      rethrow;
     }
-    return null;
   }
 
   Future<String> testXray(String xrayJson) async {
     try {
-      final res = await _invoke(
+      final resp = await _invoke(
         LibXrayInvokeRequest(
           method: LibXrayMethod.testXray,
           payload: TestXrayRequest(xrayJson).toJson(),
         ),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       if (resp.success) {
         return "";
       }
       return resp.error;
     } catch (error, stackTrace) {
       _reportUnexpected('testXray', error, stackTrace);
+      rethrow;
     }
-    return _errorResult;
-  }
-
-  Future<String> runXray(String coreInvokeText) async {
-    try {
-      final request = _runXrayRequestFromText(coreInvokeText);
-      if (AppPlatform.isLinux) {
-        return await _runDesktopProxyCore(
-          () => LinuxFfiApi().startProxyCore(request),
-        );
-      } else if (AppPlatform.isWindows) {
-        return await _runDesktopProxyCore(
-          () => WindowsFfiApi().startProxyCore(request),
-        );
-      }
-      final res = await _invoke(request.invoke);
-      final resp = LibXrayInvokeResponseParser.parse(res);
-      if (resp.success) {
-        return "";
-      }
-      return resp.error;
-    } catch (error, stackTrace) {
-      _reportUnexpected('runXray', error, stackTrace);
-    }
-    return _errorResult;
-  }
-
-  LibXrayRunConfig _runXrayRequestFromText(String coreInvokeText) {
-    return LibXrayRunConfig.fromInvokeText(coreInvokeText);
-  }
-
-  Future<String> _runDesktopProxyCore(Future<bool> Function() start) async {
-    try {
-      final started = await start();
-      return started ? "" : _errorResult;
-    } catch (error, stackTrace) {
-      _reportUnexpected('runDesktopProxyCore', error, stackTrace);
-      return _errorResult;
-    }
-  }
-
-  Future<String> stopXray() async {
-    if (AppPlatform.isLinux) {
-      return await LinuxFfiApi().stopProxyCore();
-    } else if (AppPlatform.isWindows) {
-      return await WindowsFfiApi().stopProxyCore();
-    }
-    try {
-      final res = await _invoke(
-        LibXrayInvokeRequest(method: LibXrayMethod.stopXray),
-      );
-      final resp = LibXrayInvokeResponseParser.parse(res);
-      if (resp.success) {
-        return "";
-      }
-      return resp.error;
-    } catch (error, stackTrace) {
-      _reportUnexpected('stopXray', error, stackTrace);
-    }
-    return _errorResult;
-  }
-
-  Future<bool> getXrayState() async {
-    if (AppPlatform.isLinux) {
-      return await LinuxFfiApi().proxyCoreRunning();
-    } else if (AppPlatform.isWindows) {
-      return await WindowsFfiApi().proxyCoreRunning();
-    }
-    try {
-      final res = await _invoke(
-        LibXrayInvokeRequest(method: LibXrayMethod.getXrayState),
-      );
-      final resp = LibXrayInvokeResponseParser.parse(res);
-      if (resp.success && resp.data != null) {
-        return GetXrayStateResponse.fromJson(resp.data!).running ?? false;
-      }
-    } catch (error, stackTrace) {
-      _reportUnexpected('getXrayState', error, stackTrace);
-    }
-    return false;
   }
 
   Future<String> xrayVersion() async {
     try {
-      final res = await _invoke(
+      final resp = await _invoke(
         LibXrayInvokeRequest(method: LibXrayMethod.xrayVersion),
       );
-      final resp = LibXrayInvokeResponseParser.parse(res);
       if (resp.data != null) {
         if (resp.success) {
           return XrayVersionResponse.fromJson(resp.data!).version ?? "";
@@ -416,7 +323,7 @@ class AppHostApi {
     return "";
   }
 
-  Future<String> _invoke(LibXrayInvokeRequest request) async {
+  Future<LibXrayInvokeResponse> _invoke(LibXrayInvokeRequest request) async {
     final requestJson = JsonTool.encoder.convert(request.toJson());
     LibXrayInvokeLimits.validate(requestJson, "request");
     late final String responseJson;
@@ -434,7 +341,7 @@ class AppHostApi {
         "libXray ${request.method?.name ?? 'unknown'} failed: ${response.error}",
       );
     }
-    return responseJson;
+    return response;
   }
 
   Future<PlatformPermissionResult> queryPlatformPermission() async {
@@ -445,7 +352,7 @@ class AppHostApi {
       return await _api.queryPlatformPermission();
     } catch (error, stackTrace) {
       _reportUnexpected('queryPlatformPermission', error, stackTrace);
-      return _platformPermissionFailed();
+      return _platformPermissionFailed(failureDetails(error));
     }
   }
 
@@ -454,10 +361,25 @@ class AppHostApi {
       return _platformPermissionNotRequired();
     }
     try {
-      return await _api.requestPlatformPermission();
+      final permission = await _api.requestPlatformPermission();
+      if (permission.kind != PlatformPermissionKind.androidLocalNetwork) {
+        return permission;
+      }
+      if (await Permission.accessLocalNetwork.isPermanentlyDenied) {
+        await openAppSettings();
+        return permission;
+      }
+      final status = await Permission.accessLocalNetwork.request();
+      if (!status.isGranted) {
+        return PlatformPermissionResult(
+          kind: PlatformPermissionKind.androidLocalNetwork,
+          state: PlatformPermissionState.denied,
+        );
+      }
+      return await _api.queryPlatformPermission();
     } catch (error, stackTrace) {
       _reportUnexpected('requestPlatformPermission', error, stackTrace);
-      return _platformPermissionFailed();
+      return _platformPermissionFailed(failureDetails(error));
     }
   }
 
@@ -468,9 +390,21 @@ class AppHostApi {
         return result;
       } catch (error, stackTrace) {
         _reportUnexpected('getInstalledApps', error, stackTrace);
+        rethrow;
       }
     }
     return [];
+  }
+
+  Future<Uint8List?> getAppIcon(String packageName) async {
+    if (AppPlatform.isAndroid) {
+      try {
+        return await _api.getAppIcon(packageName);
+      } catch (error, stackTrace) {
+        _reportUnexpected('getAppIcon', error, stackTrace);
+      }
+    }
+    return null;
   }
 
   // macOS
@@ -489,6 +423,7 @@ class AppHostApi {
         return await _api.setAppIcon(appIcon);
       } catch (error, stackTrace) {
         _reportUnexpected('setAppIcon', error, stackTrace);
+        rethrow;
       }
     }
     return false;
@@ -512,17 +447,19 @@ class AppHostApi {
     );
   }
 
-  PlatformPermissionResult _platformPermissionFailed() {
+  PlatformPermissionResult _platformPermissionFailed([String? message]) {
     return PlatformPermissionResult(
       kind: PlatformPermissionKind.none,
       state: PlatformPermissionState.failed,
+      message: message,
     );
   }
 
-  NativeVpnCommandResult _commandFailed() {
+  NativeVpnCommandResult _commandFailed([String? message]) {
     return NativeVpnCommandResult(
       state: NativeVpnCommandState.failed,
       permission: _platformPermissionFailed(),
+      message: message,
     );
   }
 
@@ -531,6 +468,9 @@ class AppHostApi {
     Object error,
     StackTrace stackTrace,
   ) {
-    ygLogger('AppHostApi.$operation failed: $error\n$stackTrace');
+    // Native parser errors can contain the offending JSON or credentials.
+    ygLogger(
+      'AppHostApi.$operation failed (${error.runtimeType})\n$stackTrace',
+    );
   }
 }

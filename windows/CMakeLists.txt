@@ -10,6 +10,9 @@ set(BINARY_NAME "HyperClient")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# my fix, https://github.com/Baseflow/flutter-permission-handler/issues/1534
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if (IS_MULTICONFIG)
@@ -71,6 +74,12 @@ endif ()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+# Deploy the target toolchain's redistributable CRT beside the app, including
+# standalone EXE/ZIP builds that cannot rely on a preinstalled VC++ runtime.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION "${INSTALL_BUNDLE_LIB_DIR}")
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_COMPONENT Runtime)
+include(InstallRequiredSystemLibraries)
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
         COMPONENT Runtime)

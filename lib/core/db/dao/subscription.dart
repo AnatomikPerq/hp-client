@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
-import 'package:onexray/core/constants/preferences.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/db/table/core_config.dart';
 import 'package:onexray/core/db/table/subscription.dart';
 
@@ -11,8 +11,13 @@ class SubscriptionDao extends DatabaseAccessor<AppDatabase>
     with _$SubscriptionDaoMixin {
   SubscriptionDao(super.db);
 
-  Future<List<SubscriptionData>> get allRows async =>
-      select(subscription).get();
+  Future<List<SubscriptionData>> get allRows async => (select(
+    subscription,
+  )..orderBy([(table) => OrderingTerm.asc(table.id)])).get();
+
+  Stream<List<SubscriptionData>> get allRowsStream => (select(
+    subscription,
+  )..orderBy([(table) => OrderingTerm.asc(table.id)])).watch();
 
   Future<SubscriptionData?> searchRow(int id) async {
     return (select(
@@ -31,40 +36,41 @@ class SubscriptionDao extends DatabaseAccessor<AppDatabase>
 
   Future<bool> updateRow(SubscriptionData entry) async {
     final result = await update(subscription).replace(entry);
-    notifyUpdates({
-      TableUpdate.onTable(coreConfig, kind: UpdateKind.update),
-      TableUpdate.onTable(subscription, kind: UpdateKind.update),
-    });
     return result;
   }
 
   Future<int> insertRow(SubscriptionCompanion entry) async {
     final result = await into(subscription).insert(entry);
-    notifyUpdates({
-      TableUpdate.onTable(coreConfig, kind: UpdateKind.update),
-      TableUpdate.onTable(subscription, kind: UpdateKind.insert),
-    });
     return result;
   }
 
-  Future<int> deleteRow(int id) async {
-    final res = await (delete(
+  /// Explicit user deletion, after the connection layer resolves live references.
+  /// Refreshes must use [deleteConfigs] instead; no orphan nodes are kept here.
+  Future<int> deleteRow(int id) => attachedDatabase.transaction(() async {
+    if (id <= 0) {
+      return 0;
+    }
+    final result = await (delete(
       subscription,
-    )..where((tbl) => tbl.id.equals(id))).go();
-    await deleteConfigs(id);
-    notifyUpdates({
-      TableUpdate.onTable(coreConfig, kind: UpdateKind.delete),
-      TableUpdate.onTable(subscription, kind: UpdateKind.delete),
-    });
-    return res;
-  }
+    )..where((table) => table.id.equals(id))).go();
+    if (result > 0) {
+      await (delete(coreConfig)
+            ..where((table) => table.subId.equals(id))
+            ..where((table) => table.type.equals(CoreConfigType.outbound.name)))
+          .go();
+    }
+    return result;
+  });
 
-  Future<int> deleteConfigs(int subId) async {
-    final runningConfigId = await PreferencesKey().readRunningConfigId();
-    return (delete(coreConfig)
-          ..where((tbl) => tbl.subId.equals(subId))
-          ..where((tbl) => tbl.id.equals(runningConfigId).not()))
-        .go();
+  Future<int> deleteConfigs(int subId, {required Set<int> protectedIds}) async {
+    final query = delete(coreConfig)
+      ..where((table) => table.subId.equals(subId))
+      ..where((table) => table.type.equals(CoreConfigType.outbound.name))
+      ..where((table) => table.favorite.equals(false));
+    if (protectedIds.isNotEmpty) {
+      query.where((table) => table.id.isNotIn(protectedIds));
+    }
+    return query.go();
   }
 
   Future<int> clear() async {

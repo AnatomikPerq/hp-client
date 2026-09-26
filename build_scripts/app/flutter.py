@@ -1,13 +1,12 @@
 import os
 import shutil
 
-import yaml
-
 from app.android import AndroidBuilder
 from app.apple import AppleBuilder
 from app.builder import Builder
-from app.command_line import run_command, cp_dir_files, flutter_command, dart_command
+from app.command_line import cp_dir_files, dart_command, flutter_command, run_command
 from app.linux import LinuxBuilder
+from app.provenance import begin_build, finish_build
 from app.windows import WindowsBuilder
 
 
@@ -17,18 +16,23 @@ class FlutterBuilder(Builder):
         project: str,
         system: str,
         build_scripts_dir: str,
+        *,
+        windows_mode: str = "exe",
     ):
-        new_system = self.prepare_macos_se(system, build_scripts_dir)
+        self.requested_system = system
+        new_system = "macos" if system == "macos_se" else system
         super().__init__(project, new_system, build_scripts_dir)
-        builders = {
-            "ios": AppleBuilder(project, new_system, build_scripts_dir),
-            "macos": AppleBuilder(project, new_system, build_scripts_dir),
-            "android": AndroidBuilder(project, new_system, build_scripts_dir),
-            "linux": LinuxBuilder(project, new_system, build_scripts_dir),
-            "windows": WindowsBuilder(project, new_system, build_scripts_dir),
+        builder_types = {
+            "ios": AppleBuilder,
+            "macos": AppleBuilder,
+            "android": AndroidBuilder,
+            "linux": LinuxBuilder,
+            "windows": WindowsBuilder,
         }
-        self.builder = builders[self.system]
-
+        if new_system not in builder_types:
+            raise ValueError(f"unsupported system: {system}")
+        options = {"mode": windows_mode} if new_system == "windows" else {}
+        self.builder = builder_types[new_system](project, new_system, build_scripts_dir, **options)
         self.build_type = {
             "android": "appbundle",
             "ios": "ipa",
@@ -37,7 +41,8 @@ class FlutterBuilder(Builder):
             "windows": "windows",
         }
 
-    def prepare_macos_se(self, system: str, build_scripts_dir: str) -> str:
+    @staticmethod
+    def prepare_macos_se(system: str, build_scripts_dir: str) -> str:
         if system != "macos_se":
             return system
 
@@ -63,58 +68,43 @@ class FlutterBuilder(Builder):
         return "macos"
 
     def build(self):
+        receipt = begin_build(self, self.requested_system)
         self.before_build()
-
         self.build_app()
-
         self.after_build()
+        finish_build(self, receipt)
 
     def before_build(self):
+        self.prepare_macos_se(self.requested_system, os.path.join(self.root_dir, "build_scripts"))
         super().before_build()
-
         self.update_build_number()
         self.pub_get()
         self.run_ffi_gen()
-
         self.builder.before_build()
 
     def update_build_number(self):
-        file_path = os.path.join(self.project_dir, "..", "pubspec.yaml")
-        with open(file_path, mode="r") as f:
-            pubspec = yaml.load(f, Loader=yaml.CLoader)
-            version = pubspec["version"]
-            versions = version.split("+")
-            pubspec["version"] = f"{versions[0]}+{self.build_number}"
-
-        with open(file_path, mode="w") as f:
-            yaml.dump(pubspec, f, Dumper=yaml.CDumper)
+        marketing_version = self.read_version().split("+", maxsplit=1)[0]
+        self.write_version(f"{marketing_version}+{self.build_number}")
 
     def pub_get(self):
-        root_dir = os.path.join(self.project_dir, "..")
-        os.chdir(root_dir)
-        run_command([flutter_command(), "pub", "get"])
+        run_command([flutter_command(), "pub", "get"], cwd=self.root_dir)
 
     def run_ffi_gen(self):
-        root_dir = os.path.join(self.project_dir, "..")
-        os.chdir(root_dir)
-        run_command([dart_command(), "run", "ffigen"])
+        run_command([dart_command(), "run", "ffigen"], cwd=self.root_dir)
 
     def build_app(self):
-        if self.system == "ios" or self.system == "macos":
+        if self.system in ("ios", "macos") or (
+            self.system == "windows" and self.builder.mode == "exe"
+        ):
             self.builder.build_app()
             return
 
-        root_dir = os.path.join(self.project_dir, "..")
-        os.chdir(root_dir)
-        cmd = [
-            flutter_command(),
-            "build",
-            self.build_type[self.system],
-        ]
+        cmd = [flutter_command(), "build", self.build_type[self.system]]
         if self.system == "android":
             cmd.extend(["--target-platform", "android-arm64,android-x64"])
-        run_command(cmd)
-
+        elif self.system == "windows":
+            cmd.append(f"--dart-define=ONEXRAY_WINDOWS_MODE={self.builder.mode}")
+        run_command(cmd, cwd=self.root_dir)
         self.builder.build_app()
 
     def after_build(self):
@@ -122,6 +112,5 @@ class FlutterBuilder(Builder):
         app_key = f"app.release.dir.{self.system}"
         if app_key in self.project_config:
             app_src_dir = os.path.join(self.project_dir, self.project_config[app_key])
-            cp_dir_files(str(app_src_dir), self.output_dir)
-
+            cp_dir_files(app_src_dir, self.output_dir)
         self.builder.after_build()

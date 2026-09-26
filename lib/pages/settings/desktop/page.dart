@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:onexray/core/desktop_startup/model.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/settings/desktop/controller.dart';
-import 'package:onexray/pages/widget/setting_row.dart';
-import 'package:onexray/pages/widget/settings_page.dart';
+import 'package:onexray/pages/shared/widgets/setting_row.dart';
+import 'package:onexray/pages/shared/widgets/settings_page.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class DesktopSettingsPage extends StatelessWidget {
@@ -73,7 +74,7 @@ class DesktopSettingsView extends StatelessWidget {
                     ? l10n.settingsPageLaunchAtLoginUnavailable
                     : l10n.settingsPageLaunchAtLoginDescription,
                 leading: const Icon(LucideIcons.logIn),
-                value: launchStatus.registered,
+                value: launchStatus.enabled,
                 onChanged: state.launchToggleEnabled
                     ? onLaunchAtLoginChanged
                     : null,
@@ -83,8 +84,12 @@ class DesktopSettingsView extends StatelessWidget {
                   title: l10n.settingsPageLaunchAtLoginRequiresApproval,
                   subtitle: l10n.settingsPageLaunchAtLoginApprovalDescription,
                   leading: const Icon(LucideIcons.settings2),
-                  trailing: const Icon(LucideIcons.externalLink),
-                  onTap: onOpenSystemSettings,
+                  trailing: state.openingSystemSettings
+                      ? const ButtonProgressIndicator()
+                      : const Icon(LucideIcons.externalLink),
+                  onTap: state.openingSystemSettings
+                      ? null
+                      : onOpenSystemSettings,
                 ),
               SwitchSettingRow(
                 title: l10n.settingsPageStartHidden,

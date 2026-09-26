@@ -1,12 +1,12 @@
-import 'package:onexray/core/db/database/constants.dart';
-import 'package:onexray/core/model/core_routing_mode.dart';
 import 'package:onexray/core/network/user_agent.dart';
 import 'package:onexray/core/tools/json.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PreferencesKey {
   final _prefs = SharedPreferencesAsync();
-  static const _defaultXrayProfileId = -1;
+  // New product settings deliberately do not inherit the retired UI's choices.
+  // System VPN authorization is maintained by the platform, not these keys.
+  static const _namespace = 'app2.';
 
   static final PreferencesKey _singleton = PreferencesKey._internal();
 
@@ -14,7 +14,7 @@ class PreferencesKey {
 
   PreferencesKey._internal();
 
-  static const _privacyAccepted = "privacyAccepted04";
+  static const _privacyAccepted = "${_namespace}privacyAccepted";
 
   Future<bool> readPrivacyAccepted() async {
     final value = await _prefs.getBool(_privacyAccepted);
@@ -28,7 +28,7 @@ class PreferencesKey {
     await _prefs.setBool(_privacyAccepted, value);
   }
 
-  static const _firstRun = "firstRun02";
+  static const _firstRun = "${_namespace}firstRun";
 
   Future<bool> readFirstRun() async {
     final value = await _prefs.getBool(_firstRun);
@@ -42,64 +42,8 @@ class PreferencesKey {
     await _prefs.setBool(_firstRun, value);
   }
 
-  static const _localSubscriptionExpanded = "localSubscriptionExpanded";
-
-  Future<bool> readLocalSubscriptionExpanded() async {
-    final value = await _prefs.getBool(_localSubscriptionExpanded);
-    if (value == null) {
-      return true;
-    }
-    return value;
-  }
-
-  Future<void> saveLocalSubscriptionExpanded(bool value) async {
-    await _prefs.setBool(_localSubscriptionExpanded, value);
-  }
-
-  static const _runningConfigId = "runningConfigId";
-
-  Future<int> readRunningConfigId() async {
-    final value = await _prefs.getInt(_runningConfigId);
-    if (value == null) {
-      return DBConstants.defaultId;
-    }
-    return value;
-  }
-
-  Future<void> saveRunningConfigId(int value) async {
-    await _prefs.setInt(_runningConfigId, value);
-  }
-
-  static const _lastConfigId = "lastConfigId";
-
-  Future<int> readLastConfigId() async {
-    final value = await _prefs.getInt(_lastConfigId);
-    if (value == null) {
-      return DBConstants.defaultId;
-    }
-    return value;
-  }
-
-  Future<void> saveLastConfigId(int value) async {
-    await _prefs.setInt(_lastConfigId, value);
-  }
-
-  static const _vpnStartTimestamp = "vpnStartTimestamp";
-
-  Future<DateTime> readVpnStartTimestamp() async {
-    final value = await _prefs.getInt(_vpnStartTimestamp);
-    if (value == null) {
-      return DateTime.now();
-    }
-    return DateTime.fromMillisecondsSinceEpoch(value * 1000);
-  }
-
-  Future<void> saveVpnStartTimestamp() async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    await _prefs.setInt(_vpnStartTimestamp, timestamp);
-  }
-
-  static const _appUpdateLastCheckTimestamp = "appUpdateLastCheckTimestamp";
+  static const _appUpdateLastCheckTimestamp =
+      "${_namespace}appUpdateLastCheckTimestamp";
 
   Future<DateTime?> readAppUpdateLastCheckTimestamp() async {
     final value = await _prefs.getInt(_appUpdateLastCheckTimestamp);
@@ -114,7 +58,8 @@ class PreferencesKey {
     await _prefs.setInt(_appUpdateLastCheckTimestamp, timestamp);
   }
 
-  static const _appUpdateSkippedVersion = "appUpdateSkippedVersion";
+  static const _appUpdateSkippedVersion =
+      "${_namespace}appUpdateSkippedVersion";
 
   Future<String?> readAppUpdateSkippedVersion() async {
     return _prefs.getString(_appUpdateSkippedVersion);
@@ -124,7 +69,7 @@ class PreferencesKey {
     await _prefs.setString(_appUpdateSkippedVersion, value);
   }
 
-  static const _pingState = "pingState";
+  static const _pingState = "${_namespace}pingState";
 
   Future<Map<String, dynamic>?> readPingState() async {
     final value = await _prefs.getString(_pingState);
@@ -139,85 +84,7 @@ class PreferencesKey {
     await _prefs.setString(_pingState, text);
   }
 
-  // Legacy storage key. Keep the original value to avoid migrating preferences.
-  static const _xrayProfileId = "xraySettingId";
-
-  Future<int> readXrayProfileId() async {
-    final value = await _prefs.getInt(_xrayProfileId);
-    if (value == null) {
-      return _defaultXrayProfileId;
-    }
-    if (value == DBConstants.defaultId) {
-      return _defaultXrayProfileId;
-    }
-    return value;
-  }
-
-  Future<void> saveXrayProfileId(int value) async {
-    final nextValue = value == DBConstants.defaultId
-        ? _defaultXrayProfileId
-        : value;
-    await _prefs.setInt(_xrayProfileId, nextValue);
-  }
-
-  static const _coreRoutingMode = "coreRoutingMode";
-
-  Future<CoreRoutingMode> readCoreRoutingMode() async {
-    final value = await _prefs.getString(_coreRoutingMode);
-    return CoreRoutingMode.fromString(value);
-  }
-
-  Future<void> saveCoreRoutingMode(CoreRoutingMode value) async {
-    await _prefs.setString(_coreRoutingMode, value.name);
-  }
-
-  // Legacy storage key. Keep the original value to avoid migrating preferences.
-  static const _xrayProfileSimple = "xraySettingSimple";
-
-  Future<Map<String, dynamic>?> readXrayProfileSimple() async {
-    final value = await _prefs.getString(_xrayProfileSimple);
-    if (value != null) {
-      return JsonTool.decodeBase64ToJson(value);
-    }
-    return null;
-  }
-
-  Future<void> saveXrayProfileSimple(Map<String, dynamic> value) async {
-    final text = JsonTool.encodeJsonToBase64(value);
-    await _prefs.setString(_xrayProfileSimple, text);
-  }
-
-  // Legacy storage key. Keep the original value to avoid migrating preferences.
-  static const _tunSettings = "tunSetting";
-
-  Future<Map<String, dynamic>?> readTunSettings() async {
-    final value = await _prefs.getString(_tunSettings);
-    if (value != null) {
-      return JsonTool.decodeBase64ToJson(value);
-    }
-    return null;
-  }
-
-  Future<void> saveTunSettings(Map<String, dynamic> value) async {
-    final text = JsonTool.encodeJsonToBase64(value);
-    await _prefs.setString(_tunSettings, text);
-  }
-
-  static const _queryAllPackagesAccepted = "queryAllPackagesAccepted";
-
-  Future<bool> readQueryAllPackagesAccepted() async {
-    final value = await _prefs.getBool(_queryAllPackagesAccepted);
-    if (value == null) {
-      return false;
-    }
-    return value;
-  }
-
-  Future<void> saveQueryAllPackagesAccepted(bool value) async {
-    await _prefs.setBool(_queryAllPackagesAccepted, value);
-  }
-
-  static const _hideDockIcon = "hideIconInDock";
+  static const _hideDockIcon = "${_namespace}hideIconInDock";
 
   Future<bool> readHideDockIcon() async {
     final value = await _prefs.getBool(_hideDockIcon);
@@ -231,7 +98,7 @@ class PreferencesKey {
     await _prefs.setBool(_hideDockIcon, value);
   }
 
-  static const _desktopStartHidden = "desktopStartHidden";
+  static const _desktopStartHidden = "${_namespace}desktopStartHidden";
 
   Future<bool> readDesktopStartHidden() async {
     return await _prefs.getBool(_desktopStartHidden) ?? false;
@@ -241,7 +108,7 @@ class PreferencesKey {
     await _prefs.setBool(_desktopStartHidden, value);
   }
 
-  static const _connectOnAppLaunch = "connectOnAppLaunch";
+  static const _connectOnAppLaunch = "${_namespace}connectOnAppLaunch";
 
   Future<bool> readConnectOnAppLaunch() async {
     return await _prefs.getBool(_connectOnAppLaunch) ?? false;
@@ -251,7 +118,7 @@ class PreferencesKey {
     await _prefs.setBool(_connectOnAppLaunch, value);
   }
 
-  static const _downloadUserAgentMode = "downloadUserAgentMode";
+  static const _downloadUserAgentMode = "${_namespace}downloadUserAgentMode";
 
   Future<DownloadUserAgentMode> readDownloadUserAgentMode() async {
     final value = await _prefs.getString(_downloadUserAgentMode);
@@ -262,7 +129,7 @@ class PreferencesKey {
     await _prefs.setString(_downloadUserAgentMode, value.name);
   }
 
-  static const _autoUpdate = "autoUpdate";
+  static const _autoUpdate = "${_namespace}autoUpdate";
 
   Future<Map<String, dynamic>?> readAutoUpdate() async {
     final value = await _prefs.getString(_autoUpdate);
@@ -277,7 +144,41 @@ class PreferencesKey {
     await _prefs.setString(_autoUpdate, text);
   }
 
-  static const _themeCode = "themeCode";
+  static const _backup = '${_namespace}backup';
+  static const _localApi = '${_namespace}localApi';
+  static const _automaticBackup = '${_namespace}automaticBackup';
+  static const _backupInterval = '${_namespace}backupInterval';
+
+  Future<Map<String, dynamic>?> readLocalApi() async {
+    final value = await _prefs.getString(_localApi);
+    return value == null
+        ? null
+        : JsonTool.decoder.convert(value) as Map<String, dynamic>;
+  }
+
+  Future<void> saveLocalApi(Map<String, dynamic> value) =>
+      _prefs.setString(_localApi, JsonTool.encoder.convert(value));
+
+  Future<Map<String, dynamic>?> readBackup() async {
+    final value = await _prefs.getString(_backup);
+    return value == null ? null : JsonTool.decodeBase64ToJson(value);
+  }
+
+  Future<void> saveBackup(Map<String, dynamic> value) =>
+      _prefs.setString(_backup, JsonTool.encodeJsonToBase64(value));
+
+  Future<bool> readAutomaticBackup() async =>
+      await _prefs.getBool(_automaticBackup) ?? true;
+
+  Future<void> saveAutomaticBackup(bool value) =>
+      _prefs.setBool(_automaticBackup, value);
+
+  Future<int?> readBackupInterval() => _prefs.getInt(_backupInterval);
+
+  Future<void> saveBackupInterval(int hours) =>
+      _prefs.setInt(_backupInterval, hours);
+
+  static const _themeCode = "${_namespace}themeCode";
 
   Future<String?> readThemeCode() async {
     return _prefs.getString(_themeCode);
@@ -287,7 +188,7 @@ class PreferencesKey {
     await _prefs.setString(_themeCode, value);
   }
 
-  static const _languageCode = "languageCode";
+  static const _languageCode = "${_namespace}languageCode";
 
   Future<String?> readLanguageCode() async {
     return _prefs.getString(_languageCode);
@@ -299,15 +200,18 @@ class PreferencesKey {
 
   Future<void> clearUserDataPreferences() async {
     await Future.wait([
-      _prefs.remove(_localSubscriptionExpanded),
-      _prefs.remove(_runningConfigId),
-      _prefs.remove(_lastConfigId),
-      _prefs.remove(_vpnStartTimestamp),
+      _prefs.remove('app2.runningConfigId'),
+      _prefs.remove('app2.lastConfigId'),
+      _prefs.remove('app2.vpnStartTimestamp'),
       _prefs.remove(_appUpdateLastCheckTimestamp),
       _prefs.remove(_appUpdateSkippedVersion),
       _prefs.remove(_pingState),
       _prefs.remove(_autoUpdate),
-      _prefs.remove(_xrayProfileId),
+      _prefs.remove(_backup),
+      _prefs.remove(_localApi),
+      _prefs.remove(_automaticBackup),
+      _prefs.remove(_backupInterval),
+      _prefs.remove('app2.xraySettingId'),
       _prefs.remove(_desktopStartHidden),
       _prefs.remove(_connectOnAppLaunch),
       _prefs.remove(_downloadUserAgentMode),

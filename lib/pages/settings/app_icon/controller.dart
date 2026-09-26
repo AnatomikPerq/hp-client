@@ -1,10 +1,11 @@
+import 'package:onexray/service/shared/failure.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/gen/assets.gen.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
-import 'package:flutter/material.dart';
-import 'package:onexray/pages/mixin/page_cubit.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/shared/page_cubit.dart';
 import 'package:go_router/go_router.dart';
-import 'package:onexray/pages/mixin/alert.dart';
+import 'package:onexray/pages/shared/alert.dart';
 
 enum AppIcon {
   primary("IconBlue"),
@@ -69,11 +70,21 @@ enum AppIcon {
 
 class AppIconPageState {
   final AppIcon appIcon;
+  final bool loading;
+  final bool saving;
 
-  const AppIconPageState({this.appIcon = AppIcon.primary});
+  const AppIconPageState({
+    this.appIcon = AppIcon.primary,
+    this.loading = true,
+    this.saving = false,
+  });
 
-  AppIconPageState copyWith({AppIcon? appIcon}) {
-    return AppIconPageState(appIcon: appIcon ?? this.appIcon);
+  AppIconPageState copyWith({AppIcon? appIcon, bool? loading, bool? saving}) {
+    return AppIconPageState(
+      appIcon: appIcon ?? this.appIcon,
+      loading: loading ?? this.loading,
+      saving: saving ?? this.saving,
+    );
   }
 }
 
@@ -83,34 +94,60 @@ class AppIconController extends PageCubit<AppIconPageState> {
   }
 
   Future<void> _readCurrentIcon() async {
-    final currentIcon = await AppHostApi().getCurrentAppIcon();
-    if (currentIcon.isNotEmpty) {
-      final appIcon = AppIcon.fromString(currentIcon);
-      if (appIcon != null) {
-        emit(state.copyWith(appIcon: appIcon));
-      }
+    try {
+      final currentIcon = await AppHostApi().getCurrentAppIcon();
+      emit(
+        state.copyWith(
+          appIcon: AppIcon.fromString(currentIcon) ?? AppIcon.primary,
+        ),
+      );
+    } catch (error) {
+      // Keep the default preview if the optional native icon query fails.
+    } finally {
+      emit(state.copyWith(loading: false));
     }
   }
 
   void updateIcon(AppIcon value) {
+    if (state.loading || state.saving) return;
     emit(state.copyWith(appIcon: value));
   }
 
   Future<void> save(BuildContext context) async {
+    if (state.loading || state.saving) return;
+    emit(state.copyWith(saving: true));
     var name = state.appIcon.name;
     if (state.appIcon == AppIcon.primary) {
       name = "";
     }
-    final res = await AppHostApi().setAppIcon(name);
-    if (context.mounted) {
-      if (res) {
-        context.pop();
-      } else {
+    try {
+      if (!await AppHostApi().setAppIcon(name)) {
+        throw StateError('Icon update failed');
+      }
+      if (context.mounted) {
         ContextAlert.showToast(
           context,
-          AppLocalizations.of(context)!.appIconPageSetFailed,
+          AppLocalizations.of(context)!.prototypeSettingsSaved,
+        );
+        if (ModalRoute.of(context)?.isCurrent == true) context.pop();
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ContextAlert.showToast(
+          context,
+          appFailureMessage(
+            AppLocalizations.of(context)!,
+            error,
+            operation: AppLocalizations.of(context)!.appIconPageSetFailed,
+          ),
         );
       }
+    } finally {
+      emit(state.copyWith(saving: false));
     }
+  }
+
+  void cancel(BuildContext context) {
+    context.pop();
   }
 }

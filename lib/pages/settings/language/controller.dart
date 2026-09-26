@@ -1,16 +1,26 @@
-import 'package:flutter/material.dart';
-import 'package:onexray/pages/mixin/page_cubit.dart';
+import 'package:onexray/service/shared/failure.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/shared/page_cubit.dart';
 import 'package:go_router/go_router.dart';
-import 'package:onexray/service/event_bus/enum.dart';
-import 'package:onexray/service/event_bus/service.dart';
+import 'package:onexray/service/shared/event_bus/enum.dart';
+import 'package:onexray/service/shared/event_bus/service.dart';
+import 'package:onexray/pages/shared/alert.dart';
+import 'package:onexray/l10n/localizations/app_localizations.dart';
 
 class LanguagePageState {
   final LanguageCode languageCode;
+  final bool saving;
 
-  const LanguagePageState({this.languageCode = LanguageCode.system});
+  const LanguagePageState({
+    this.languageCode = LanguageCode.system,
+    this.saving = false,
+  });
 
-  LanguagePageState copyWith({LanguageCode? languageCode}) {
-    return LanguagePageState(languageCode: languageCode ?? this.languageCode);
+  LanguagePageState copyWith({LanguageCode? languageCode, bool? saving}) {
+    return LanguagePageState(
+      languageCode: languageCode ?? this.languageCode,
+      saving: saving ?? this.saving,
+    );
   }
 }
 
@@ -25,16 +35,40 @@ class LanguageController extends PageCubit<LanguagePageState> {
   }
 
   void updateLanguageCode(LanguageCode? value) {
-    if (value != null) {
+    if (value != null && !state.saving) {
       emit(state.copyWith(languageCode: value));
     }
   }
 
   Future<void> save(BuildContext context) async {
-    final eventBus = AppEventBus.instance;
-    await eventBus.updateLanguageCode(state.languageCode);
-    if (context.mounted) {
-      context.pop();
+    if (state.saving) return;
+    emit(state.copyWith(saving: true));
+    try {
+      await AppEventBus.instance.updateLanguageCode(state.languageCode);
+      if (context.mounted) {
+        ContextAlert.showToast(
+          context,
+          AppLocalizations.of(context)!.prototypeSettingsSaved,
+        );
+        if (ModalRoute.of(context)?.isCurrent == true) context.pop();
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ContextAlert.showToast(
+          context,
+          appFailureMessage(
+            AppLocalizations.of(context)!,
+            error,
+            operation: AppLocalizations.of(context)!.buttonSaveFailed,
+          ),
+        );
+      }
+    } finally {
+      emit(state.copyWith(saving: false));
     }
+  }
+
+  void cancel(BuildContext context) {
+    context.pop();
   }
 }

@@ -4,6 +4,9 @@ part 'tun_json.g.dart';
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class TunJson {
+  // windows
+  String? tunIPv4;
+  String? tunIPv6;
   // all
   String? tunDnsIPv4;
   String? tunDnsIPv6;
@@ -12,9 +15,6 @@ class TunJson {
   String? dnsServerName;
   // all
   bool? enableIPv6;
-  bool? metricsEnabled;
-  // linux, windows
-  String? tunName;
   // linux, windows
   String? autoOutboundsInterface;
 
@@ -24,6 +24,9 @@ class TunJson {
   bool? excludeCellularServices;
   bool? excludeAPNs;
   bool? excludeDeviceCommunication;
+  List<String>? excludedRoutes;
+  // iOS only
+  bool? hideVpnIcon;
   bool? onDemandEnabled;
   List<OnDemandRule>? onDemandRules;
   // android
@@ -32,19 +35,21 @@ class TunJson {
   List<String>? disallowAppList;
 
   TunJson(
+    this.tunIPv4,
+    this.tunIPv6,
     this.tunDnsIPv4,
     this.tunDnsIPv6,
     this.enableDot,
     this.dnsServerName,
     this.enableIPv6,
-    this.metricsEnabled,
-    this.tunName,
     this.autoOutboundsInterface,
     this.includeAllNetworks,
     this.excludeLocalNetworks,
     this.excludeCellularServices,
     this.excludeAPNs,
     this.excludeDeviceCommunication,
+    this.excludedRoutes,
+    this.hideVpnIcon,
     this.onDemandEnabled,
     this.onDemandRules,
     this.perAppVPNMode,

@@ -21,19 +21,21 @@ enum class PerAppVPNMode {
 
 @Serializable
 data class TunJson(
+    val tunIPv4: String? = null,
+    val tunIPv6: String? = null,
     val tunDnsIPv4: String?,
     val tunDnsIPv6: String?,
     val enableDot: Boolean?,
     val dnsServerName: String?,
     val enableIPv6: Boolean?,
-    val metricsEnabled: Boolean?,
-    val tunName: String?,
     val autoOutboundsInterface: String?,
     val includeAllNetworks: Boolean?,
     val excludeLocalNetworks: Boolean?,
     val excludeCellularServices: Boolean?,
     val excludeAPNs: Boolean?,
     val excludeDeviceCommunication: Boolean?,
+    val excludedRoutes: List<String>? = null,
+    val hideVpnIcon: Boolean? = null,
     val onDemandEnabled: Boolean?,
     val onDemandRules: List<OnDemandRule>?,
     val perAppVPNMode: PerAppVPNMode?,
@@ -42,18 +44,13 @@ data class TunJson(
 )
 
 @Serializable
-data class XrayInboundAccount(
-    val user: String?,
-    val pass: String?,
-)
-
-@Serializable
 data class StartVpnRequest(
     val tun: TunJson?,
-    val pingPort: String?,
-    val pingAuth: XrayInboundAccount?,
+    val socksPort: String? = null,
     val metricsPort: String?,
     val coreInvokeText: String?,
+    val snapshotToken: String? = null,
+    val metadataJson: String? = null,
 )
 
 @Serializable
@@ -106,7 +103,7 @@ data class XrayEnv(
 
 @Serializable
 data class LibXrayInvokeRequest(
-    val apiVersion: Int? = 2,
+    val apiVersion: Int? = 3,
     val method: LibXrayMethod? = null,
     val payload: RunXrayRequest? = null,
 )

@@ -23,8 +23,8 @@ class AppFlutterApi {
         }
     }
 
-    func vpnStatusChanged() {
-        if let status = VPNManager.shared.readStatus() {
+    func readVpnStatus() async throws -> VpnStatus {
+        if let status = try await VPNManager.shared.readStatus() {
             YGLog("readRunningVpn \(status.rawValue)")
             var vpnStatus: VpnStatus = .disconnected
             switch status {
@@ -32,19 +32,22 @@ class AppFlutterApi {
                 vpnStatus = .disconnecting
             case .disconnected, .invalid:
                 vpnStatus = .disconnected
-            case .connecting:
+            case .connecting, .reasserting:
                 vpnStatus = .connecting
             case .connected:
                 vpnStatus = .connected
             default:
                 break
             }
-            flutterApi.vpnStatusChanged(status: vpnStatus) { _ in
-            }
+            return vpnStatus
         } else {
-            flutterApi.vpnStatusChanged(status: .disconnected) { _ in
-            }
+            return .disconnected
         }
+    }
+
+    func vpnStatusChanged() async throws {
+        let status = try await readVpnStatus()
+        flutterApi.vpnStatusChanged(status: status) { _ in }
     }
 
     func refreshVpn(result: RefreshVpnResult) {

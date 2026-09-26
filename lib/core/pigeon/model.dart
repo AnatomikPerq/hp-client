@@ -1,5 +1,4 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/tools/json.dart';
 
@@ -8,18 +7,20 @@ part 'model.g.dart';
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class StartVpnRequest {
   TunJson? tun;
-  String? pingPort;
-  XrayInboundAccount? pingAuth;
+  String? socksPort;
   String? metricsPort;
   String? coreInvokeText;
+  String? snapshotToken;
+  String? metadataJson;
 
   StartVpnRequest(
     this.tun,
-    this.pingPort,
-    this.pingAuth,
+    this.socksPort,
     this.metricsPort,
-    this.coreInvokeText,
-  );
+    this.coreInvokeText, {
+    this.snapshotToken,
+    this.metadataJson,
+  });
 
   factory StartVpnRequest.fromJson(Map<String, dynamic> json) =>
       _$StartVpnRequestFromJson(json);
@@ -104,8 +105,16 @@ class PingBatchItemResponse {
   bool? success;
   int? delay;
   String? error;
+  String? locationJson;
+  String? locationError;
 
-  PingBatchItemResponse(this.success, this.delay, this.error);
+  PingBatchItemResponse(
+    this.success,
+    this.delay,
+    this.error, {
+    this.locationJson,
+    this.locationError,
+  });
 
   factory PingBatchItemResponse.fromJson(Map<String, dynamic> json) =>
       _$PingBatchItemResponseFromJson(json);
@@ -123,18 +132,6 @@ class XrayVersionResponse {
       _$XrayVersionResponseFromJson(json);
 
   Map<String, dynamic> toJson() => _$XrayVersionResponseToJson(this);
-}
-
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class GetXrayStateResponse {
-  bool? running;
-
-  GetXrayStateResponse(this.running);
-
-  factory GetXrayStateResponse.fromJson(Map<String, dynamic> json) =>
-      _$GetXrayStateResponseFromJson(json);
-
-  Map<String, dynamic> toJson() => _$GetXrayStateResponseToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
@@ -156,8 +153,9 @@ class PingBatchRequest {
   List<PingBatchItemRequest>? configs;
   int? timeout;
   String? url;
+  String? locationUrl;
 
-  PingBatchRequest(this.configs, this.timeout, this.url);
+  PingBatchRequest(this.configs, this.timeout, this.url, {this.locationUrl});
 
   factory PingBatchRequest.fromJson(Map<String, dynamic> json) =>
       _$PingBatchRequestFromJson(json);
@@ -188,62 +186,6 @@ class RunXrayRequest {
       _$RunXrayRequestFromJson(json);
 
   Map<String, dynamic> toJson() => _$RunXrayRequestToJson(this);
-}
-
-/// Запуск туннеля minewire внутри libXray.
-///
-/// Адрес сервера передаём уже разрешённым: после поднятия туннеля DNS может
-/// сам зависеть от этого туннеля, который ещё не работает.
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class StartMinewireRequest {
-  String? serverAddress;
-  String? password;
-  String? mode;
-  int? localPort;
-
-  StartMinewireRequest(
-    this.serverAddress,
-    this.password, {
-    this.mode,
-    this.localPort,
-  });
-
-  factory StartMinewireRequest.fromJson(Map<String, dynamic> json) =>
-      _$StartMinewireRequestFromJson(json);
-
-  Map<String, dynamic> toJson() => _$StartMinewireRequestToJson(this);
-}
-
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class StartMinewireResponse {
-  int? localPort;
-
-  StartMinewireResponse(this.localPort);
-
-  factory StartMinewireResponse.fromJson(Map<String, dynamic> json) =>
-      _$StartMinewireResponseFromJson(json);
-
-  Map<String, dynamic> toJson() => _$StartMinewireResponseToJson(this);
-}
-
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
-class MinewireStateResponse {
-  bool? running;
-  bool? connected;
-  String? localAddr;
-  String? lastError;
-
-  MinewireStateResponse(
-    this.running,
-    this.connected,
-    this.localAddr,
-    this.lastError,
-  );
-
-  factory MinewireStateResponse.fromJson(Map<String, dynamic> json) =>
-      _$MinewireStateResponseFromJson(json);
-
-  Map<String, dynamic> toJson() => _$MinewireStateResponseToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
@@ -279,14 +221,6 @@ enum LibXrayMethod {
   stopXray,
   @JsonValue("xrayVersion")
   xrayVersion,
-  @JsonValue("getXrayState")
-  getXrayState,
-  @JsonValue("startMinewire")
-  startMinewire,
-  @JsonValue("stopMinewire")
-  stopMinewire,
-  @JsonValue("minewireState")
-  minewireState,
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
@@ -295,7 +229,7 @@ class LibXrayInvokeRequest {
   LibXrayMethod? method;
   Map<String, dynamic>? payload;
 
-  LibXrayInvokeRequest({this.method, this.payload}) : apiVersion = 2;
+  LibXrayInvokeRequest({this.method, this.payload}) : apiVersion = 3;
 
   factory LibXrayInvokeRequest.fromJson(Map<String, dynamic> json) =>
       _$LibXrayInvokeRequestFromJson(json);
@@ -306,8 +240,9 @@ class LibXrayInvokeRequest {
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
 class GetFreePortsRequest {
   int? count;
+  List<int>? excludePorts;
 
-  GetFreePortsRequest(this.count);
+  GetFreePortsRequest(this.count, {this.excludePorts});
 
   factory GetFreePortsRequest.fromJson(Map<String, dynamic> json) =>
       _$GetFreePortsRequestFromJson(json);

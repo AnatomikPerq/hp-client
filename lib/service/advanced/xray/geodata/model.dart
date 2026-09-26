@@ -1,0 +1,105 @@
+import 'dart:io';
+
+import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/model/geo_dat.dart';
+import 'package:onexray/core/model/geo_data_type.dart';
+import 'package:path/path.dart' as p;
+
+class GeoDataInput {
+  final String fileName;
+  final GeoDataType type;
+  final String url;
+  const GeoDataInput({
+    required this.fileName,
+    required this.type,
+    required this.url,
+  });
+
+  /// New entries use one lowercase .dat suffix. Existing database basenames are
+  /// never normalized: their historical '$name.dat' references remain intact.
+  String get name {
+    final file = canonicalFileName(fileName);
+    return file.substring(0, file.length - 4);
+  }
+
+  /// References must already use the exact filename; importing cannot rename it.
+  static String referenceFileName(String file) {
+    if (canonicalFileName(file) != file) {
+      throw const FormatException('Invalid custom Geodata filename');
+    }
+    return file;
+  }
+
+  static String canonicalFileName(String input) {
+    final value = input.trim();
+    final file = value.toLowerCase().endsWith('.dat')
+        ? '${value.substring(0, value.length - 4)}.dat'
+        : '$value.dat';
+    if (value.isEmpty ||
+        file.length > 255 ||
+        p.posix.basename(file) != file ||
+        p.windows.basename(file) != file ||
+        file.contains(RegExp(r'[\\/:*?"<>|\x00-\x1f\x7f]')) ||
+        file.startsWith('.') ||
+        file.substring(0, file.length - 4).endsWith('.') ||
+        file.substring(0, file.length - 4).endsWith(' ') ||
+        RegExp(
+          r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])\.',
+          caseSensitive: false,
+        ).hasMatch(file) ||
+        {'geoip.dat', 'geosite.dat'}.contains(file.toLowerCase())) {
+      throw const FormatException('Invalid custom Geodata filename');
+    }
+    return file;
+  }
+
+  static Uri httpsUri(String value) {
+    final uri = Uri.tryParse(value);
+    if (value.contains(RegExp(r'\s')) ||
+        uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment) {
+      throw const FormatException('An HTTPS Geodata URL is required');
+    }
+    return uri;
+  }
+}
+
+class PublishedGeoData {
+  final GeoDataData row;
+  final File data;
+  final File indexFile;
+  final XrayGeoList index;
+  final int bytes;
+  const PublishedGeoData({
+    required this.row,
+    required this.data,
+    required this.indexFile,
+    required this.index,
+    required this.bytes,
+  });
+
+  String get fileName => '${row.name}.dat';
+  String get sourceHost => Uri.tryParse(row.url)?.host ?? row.url;
+  bool get builtIn => row.id == -1 || row.id == -2;
+  String reference(String code) =>
+      builtIn ? '${row.name}:$code' : 'ext:$fileName:$code';
+}
+
+class GeoDataRestorePlan {
+  final List<GeoDataInput> sources;
+  final Map<String, GeoDataData> reusable;
+  final List<GeoDataData> conflicts;
+
+  GeoDataRestorePlan({
+    required Iterable<GeoDataInput> sources,
+    required Map<String, GeoDataData> reusable,
+    required Iterable<GeoDataData> conflicts,
+  }) : sources = List.unmodifiable(sources),
+       reusable = Map.unmodifiable(reusable),
+       conflicts = List.unmodifiable(conflicts);
+
+  int get pendingCount => sources.length - reusable.length;
+}

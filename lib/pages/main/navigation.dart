@@ -1,134 +1,117 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:onexray/pages/settings/app_update/params.dart';
-import 'package:onexray/service/app_update/service.dart';
+import 'package:onexray/service/settings/app_update/service.dart';
 
-abstract final class AppDialogRoutePath {
-  static const appUpdate = "/app-update";
-}
+/// Root tabs choose their entry page from the same business-page registry.
+enum AppPrimaryDestination {
+  connect(AppPageDestination.connect),
+  servers(AppPageDestination.servers),
+  advanced(AppPageDestination.advanced),
+  settings(AppPageDestination.settings);
 
-/// Разделы нижней панели / бокового рельса.
-///
-/// Ветки `StatefulShellRoute` и индексы переходов строятся из `values`, поэтому
-/// добавление или удаление раздела здесь автоматически расходится по
-/// роутеру и оболочке — руками индексы нигде не прописаны.
-enum AppPrimaryRoute {
-  home("/home"),
-  subscriptions("/subscriptions"),
-  settings("/settings");
+  final AppPageDestination page;
 
-  final String rootPath;
+  const AppPrimaryDestination(this.page);
 
-  const AppPrimaryRoute(this.rootPath);
+  String get rootPath => "/${page.segment}";
 
-  static AppPrimaryRoute fromPath(String path) {
-    for (final primary in values) {
-      if (path == primary.rootPath || path.startsWith("${primary.rootPath}/")) {
-        return primary;
+  static AppPrimaryDestination fromPath(String path) {
+    for (final destination in values) {
+      if (path == destination.rootPath ||
+          path.startsWith("${destination.rootPath}/")) {
+        return destination;
       }
     }
-    return home;
+    return connect;
   }
 }
 
-enum AppSecondaryDestination {
-  overview("overview"),
-  core("core"),
-  nodeInfo("node-info"),
-  qrcode("qrcode"),
+/// Every business page can be pushed inside the current tab, including roots.
+/// Launch and Setup routes are registered separately.
+enum AppPageDestination {
+  connect("connect"),
+  servers("servers"),
+  advanced("advanced"),
+  settings("settings"),
+  serversImport("servers-import"),
+  serverGroup("server-group"),
+  serverEditor("server-editor"),
+  serverFinalExitPicker("server-final-exit-picker"),
+  rawEditor("raw-editor"),
+  smartRouting("smart-routing"),
+  directRegions("direct-regions"),
+  customRouting("custom-routing"),
+  advancedRouting("advanced-routing"),
+  customRule("custom-rule"),
+  appleVpn("apple-vpn"),
+  appleWifi("apple-wifi"),
+  androidVpn("android-vpn"),
+  androidApps("android-apps"),
+  windowsVpn("windows-vpn"),
+  outboundInterface("outbound-interface"),
+  routingData("routing-data"),
+  routingDataFile("routing-data-file"),
   share("share"),
-  outboundSelect("outbound-select"),
-  subscriptionList("subscription-list"),
-  subscriptionNodes("subscription-nodes"),
-  subscriptionAdd("subscription-add"),
   subscriptionEdit("subscription-edit"),
-  tun("tun"),
-  onDemandRule("on-demand-rule"),
-  networkInterface("network-interface"),
-  selectedApp("selected-app"),
-  installedApp("installed-app"),
-  xray("xray"),
-  xrayFullConfig("xray-full-config"),
-  xrayProfileSimple("xray-profile-simple"),
-  xrayProfileUI("xray-profile-ui"),
-  dnsHosts("dns-hosts"),
-  dnsServer("dns-server"),
-  routingRule("routing-rule"),
-  routingRuleDnsQuery("routing-rule-dns-query"),
-  routingRuleDnsOut("routing-rule-dns-out"),
-  routingRuleDnsDot("routing-rule-dns-dot"),
-  inboundTun("inbound-tun"),
-  inboundSniffing("inbound-sniffing"),
-  inboundPing("inbound-ping"),
-  inboundAdditional("inbound-additional"),
-  outboundFreedom("outbound-freedom"),
-  outboundFragment("outbound-fragment"),
-  outboundBlackHole("outbound-black-hole"),
-  outboundDns("outbound-dns"),
-  outboundUI("outbound-ui"),
-  xrayRaw("xray-raw"),
-  xrayRawEdit("xray-raw-edit"),
-  geoData("geo-data"),
-  geoDatAdd("geo-data-add"),
-  geoDatSelect("geo-data-select"),
-  geoDatShow("geo-data-show"),
   ping("ping"),
   logFile("log-file"),
   configFileViewer("config-file-viewer"),
-  generalSettings("general-settings"),
   autoUpdate("auto-update"),
-  desktopSettings("desktop-settings"),
+  localApi("local-api"),
   backup("backup"),
+  desktopSettings("desktop-settings"),
   appIcon("app-icon"),
   theme("theme"),
   language("language"),
-  support("support");
+  aboutOneXray("about-onexray"),
+  appUpdate("app-update");
 
   final String segment;
 
-  const AppSecondaryDestination(this.segment);
+  const AppPageDestination(this.segment);
+
+  static const adaptiveDialogs = {
+    serversImport,
+    serverEditor,
+    share,
+    subscriptionEdit,
+  };
 }
 
 extension AppNavigationContext on BuildContext {
-  AppPrimaryRoute get currentPrimaryRoute {
+  AppPrimaryDestination get currentPrimaryDestination {
     final path = GoRouterState.of(this).uri.path;
-    return AppPrimaryRoute.fromPath(path);
+    return AppPrimaryDestination.fromPath(path);
   }
 
-  String scopedPath(AppSecondaryDestination destination) {
-    final primary = currentPrimaryRoute;
+  String scopedPath(AppPageDestination destination) {
+    final primary = currentPrimaryDestination;
     return "${primary.rootPath}/${destination.segment}";
   }
 
   void goPrimary(
     StatefulNavigationShell navigationShell,
-    AppPrimaryRoute primary,
+    AppPrimaryDestination destination,
   ) {
-    final index = AppPrimaryRoute.values.indexOf(primary);
+    final index = AppPrimaryDestination.values.indexOf(destination);
     navigationShell.goBranch(
       index,
       initialLocation: navigationShell.currentIndex == index,
     );
   }
 
-  void goPrimaryRoot(AppPrimaryRoute primary) {
-    go(primary.rootPath);
+  void goPrimaryRoot(AppPrimaryDestination destination) {
+    go(destination.rootPath);
   }
 
-  void goScoped(AppSecondaryDestination destination, {Object? extra}) {
-    go(scopedPath(destination), extra: extra);
-  }
-
-  Future<T?> pushScoped<T>(
-    AppSecondaryDestination destination, {
-    Object? extra,
-  }) {
+  Future<T?> pushScoped<T>(AppPageDestination destination, {Object? extra}) {
     return push<T>(scopedPath(destination), extra: extra);
   }
 
   Future<T?> pushAppUpdateDialog<T>(AppUpdateInfo updateInfo) {
-    return push<T>(
-      AppDialogRoutePath.appUpdate,
+    return pushScoped<T>(
+      AppPageDestination.appUpdate,
       extra: AppUpdateDialogParams(updateInfo: updateInfo),
     );
   }

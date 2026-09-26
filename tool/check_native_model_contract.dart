@@ -12,19 +12,21 @@ const _contracts = [
   _Contract(
     'TunJson',
     {
+      'tunIPv4',
+      'tunIPv6',
       'tunDnsIPv4',
       'tunDnsIPv6',
       'enableDot',
       'dnsServerName',
       'enableIPv6',
-      'metricsEnabled',
-      'tunName',
       'autoOutboundsInterface',
       'includeAllNetworks',
       'excludeLocalNetworks',
       'excludeCellularServices',
       'excludeAPNs',
       'excludeDeviceCommunication',
+      'excludedRoutes',
+      'hideVpnIcon',
       'onDemandEnabled',
       'onDemandRules',
       'perAppVPNMode',
@@ -32,19 +34,21 @@ const _contracts = [
       'disallowAppList',
     },
     {
+      'tunIPv4',
+      'tunIPv6',
       'tunDnsIPv4',
       'tunDnsIPv6',
       'enableDot',
       'dnsServerName',
       'enableIPv6',
-      'metricsEnabled',
-      'tunName',
       'autoOutboundsInterface',
       'includeAllNetworks',
       'excludeLocalNetworks',
       'excludeCellularServices',
       'excludeAPNs',
       'excludeDeviceCommunication',
+      'excludedRoutes',
+      'hideVpnIcon',
       'onDemandEnabled',
       'onDemandRules',
       'perAppVPNMode',
@@ -54,8 +58,22 @@ const _contracts = [
   ),
   _Contract(
     'StartVpnRequest',
-    {'tun', 'pingPort', 'pingAuth', 'metricsPort', 'coreInvokeText'},
-    {'tun', 'pingPort', 'pingAuth', 'metricsPort', 'coreInvokeText'},
+    {
+      'tun',
+      'socksPort',
+      'metricsPort',
+      'coreInvokeText',
+      'snapshotToken',
+      'metadataJson',
+    },
+    {
+      'tun',
+      'socksPort',
+      'metricsPort',
+      'coreInvokeText',
+      'snapshotToken',
+      'metadataJson',
+    },
   ),
   _Contract(
     'XrayEnv',
@@ -80,6 +98,11 @@ void main() {
   final kotlin = File(
     'android/app/src/main/kotlin/net/yuandev/onexray/pigeon/Model.kt',
   ).readAsStringSync();
+
+  if (!swift.contains('apiVersion: Int? = 3,') ||
+      !kotlin.contains('apiVersion: Int? = 3,')) {
+    throw StateError('Native libXray requests must use API version 3');
+  }
 
   for (final contract in _contracts) {
     _check(

@@ -14,60 +14,99 @@ import 'package:pigeon/pigeon.dart';
 )
 @HostApi()
 abstract class BridgeHostApi {
-  @async
+  @asyncCallback
   String getTunFilesDir();
 
-  @async
+  @asyncCallback
   NativeVpnCommandResult readVpnStatus();
 
-  @async
+  @asyncCallback
   NativeVpnCommandResult startVpn();
 
-  @async
+  @asyncCallback
   NativeVpnCommandResult stopVpn();
 
-  @async
+  @asyncCallback
   String invoke(String requestJson);
 
   //platform======================
-  @async
+  @asyncCallback
   PlatformPermissionResult queryPlatformPermission();
 
-  @async
+  @asyncCallback
   PlatformPermissionResult requestPlatformPermission();
 
   //android=======================
 
-  @async
+  @asyncCallback
   List<AndroidAppInfo> getInstalledApps();
 
+  @asyncCallback
+  Uint8List? getAppIcon(String packageName);
+
   //macOS======================
-  @async
+  @asyncCallback
   bool useSystemExtension();
 
-  @async
+  @asyncCallback
+  AppleVpnCapabilities appleVpnCapabilities();
+
+  @asyncCallback
   NativeLaunchAtLoginResult queryLaunchAtLogin();
 
-  @async
+  @asyncCallback
   NativeLaunchAtLoginResult setLaunchAtLogin(bool enabled);
 
-  @async
+  @asyncCallback
   bool openLaunchAtLoginSettings();
 
   //Apple app icon======================
-  @async
+  @asyncCallback
   bool setAppIcon(String appIcon);
 
-  @async
+  @asyncCallback
   String getCurrentAppIcon();
 }
 
 enum VpnStatus { disconnecting, disconnected, connecting, connected }
 
-// macOS only
+class BackupLocation {
+  BackupLocation({required this.identifier, required this.label});
+  final String identifier;
+  final String label;
+}
+
+@HostApi()
+abstract class BackupHostApi {
+  @asyncCallback
+  BackupLocation? selectBackupFile(bool create);
+
+  @asyncCallback
+  void requireBackupAccess(String identifier);
+
+  @asyncCallback
+  void releaseBackupFile(String identifier);
+}
+
+class AppleVpnCapabilities {
+  AppleVpnCapabilities({
+    required this.serviceExclusions,
+    required this.deviceCommunication,
+  });
+  final bool serviceExclusions;
+  final bool deviceCommunication;
+}
+
+// Apple VPN profile and System Extension readiness.
 enum RefreshVpnResult { installed, notInstalled, waitForApproval }
 
-enum PlatformPermissionKind { none, androidVpn, macosSystemExtension }
+enum PlatformPermissionKind {
+  none,
+  androidVpn,
+  macosSystemExtension,
+  appleVpn,
+  androidLocalNetwork,
+}
 
 enum PlatformPermissionState {
   notRequired,
@@ -108,9 +147,16 @@ class PlatformPermissionResult {
 }
 
 class NativeVpnCommandResult {
-  NativeVpnCommandResult({required this.state, this.permission, this.message});
+  NativeVpnCommandResult({
+    required this.state,
+    this.permission,
+    this.message,
+    this.status,
+  });
 
   final NativeVpnCommandState state;
+  // A successful readVpnStatus supplies status directly; commands may omit it.
+  final VpnStatus? status;
   final PlatformPermissionResult? permission;
   final String? message;
 }
@@ -124,9 +170,9 @@ class AndroidAppInfo {
 
 @FlutterApi()
 abstract class BridgeFlutterApi {
-  @async
+  @asyncCallback
   void vpnStatusChanged(VpnStatus status);
 
-  @async
+  @asyncCallback
   void refreshVpn(RefreshVpnResult result);
 }
