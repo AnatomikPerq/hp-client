@@ -49,6 +49,9 @@ void main() {
         notifyError: (error) => errors.add(error),
         // Upstream lifecycle tests model Cores that only a terminate stops.
         gracefulStop: Duration.zero,
+        // The platform factory probes the host: on Linux it runs gsettings,
+        // which delays exit notifications past the tick these tests check.
+        systemProxy: (_) async => null,
       );
 
   setUp(() async {
@@ -584,6 +587,7 @@ void main() {
       notify: (status) async => events.add(status),
       notifyError: (error) => errors.add(error),
       gracefulStop: const Duration(milliseconds: 300),
+      systemProxy: (_) async => null,
     );
     expect((await api.stopVpn()).status, VpnStatus.disconnected);
     expect(process.stops, 1);
