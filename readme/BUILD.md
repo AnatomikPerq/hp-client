@@ -2,121 +2,116 @@
 
 ## Раскладка рабочей папки
 
-Скрипты сборки ищут соседей от корня рабочей папки, поэтому раскладка
-обязательна именно такая:
+`build_scripts/app/builder.py` ищет соседей от **родителя** этого
+репозитория, поэтому раскладка обязательна именно такая:
 
 ```
-hp-client/
-  app/         — этот репозиторий
+<рабочая папка>/
+  hp-client/   — этот репозиторий (у владельца лежит прямо на Рабочем столе)
   libXray/     — НАШ форк: github.com/AnatomikPerq/libXray
-  Xray-core/   — тег под версию libXray (сейчас v26.7.28)
   output/      — сюда складываются готовые пакеты
 ```
 
-libXray именно наш форк, а не апстрим: в него встроены нестандартные
-протоколы (см. [protocols/README.md](../protocols/README.md)). Апстрим
+Отдельный checkout Xray-core больше не нужен: версию ядра задаёт `go.mod`
+форка libXray, а десктопное ядро `HyperClientCore` собирается из его же
+`desktop_bin/`. libXray именно наш форк, а не апстрим: в него встроены
+нестандартные протоколы и защищённое управление ядром (см.
+[protocols/README.md](../protocols/README.md)). Апстрим XTLS/libXray
 подключён вторым remote под именем `upstream`.
 
 ## Инструменты
 
-Flutter — последний stable:
-
-```shell
-git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$HOME/flutter/stable"
-export PATH="$HOME/flutter/stable/bin:$PATH"
-flutter pub get
-```
-
-Для Windows нужны сразу все, иначе сборка падает на середине:
-
-| Что | Куда | Зачем |
+| Что | Где на машине владельца | Зачем |
 |---|---|---|
-| Go | любой в `PATH` | сборка `libXray` и ядра |
-| Visual Studio 2022 | — | **именно workload** `Microsoft.VisualStudio.Workload.NativeDesktop`; отдельных компонентов Flutter не засчитывает |
-| LLVM | `C:\Program Files\LLVM` | `ffigen` ищет `libclang.dll` строго там |
-| llvm-mingw | любой в `PATH` | `gcc` для `libXray.dll` — она собирается как c-shared с `CGO_ENABLED=1` |
-| Inno Setup 6 | путь передать в `INNO_SETUP_PATH` | установщик |
-| Режим разработчика Windows | — | симлинки для плагинов Flutter |
+| Flutter stable | `C:\Users\BADAB\flutter\stable` | приложение; `git clone --depth 1 --branch stable` |
+| Go | `C:\Program Files\Go` | libXray и ядро. `go.mod` требует go 1.27+, при `GOTOOLCHAIN=auto` нужный тулчейн скачивается сам |
+| llvm-mingw | `C:\Users\BADAB\toolchains\llvm-mingw-*-ucrt-x86_64` | `gcc` для c-shared `libXray.dll`. **gcc из w64devkit не годится**: он по умолчанию пишет объектники big-obj, которые cgo не читает («cannot parse gcc output … as ELF, Mach-O, PE») |
+| LLVM | `C:\Program Files\LLVM` | `dart run ffigen` ищет `bin\libclang.dll` строго там |
+| Visual Studio Build Tools | 2026 с MSVC 14.50 | `flutter build windows`; нужен workload C++ |
+| Inno Setup 6 | путь в `INNO_SETUP_PATH` | установщик (через Fastforge) |
 
-Python-зависимости ставить **в venv**, не в системный интерпретатор:
+## Путь с кириллицей
 
-```shell
-python -m venv .venv
-.venv/Scripts/pip install pyyaml requests typer fastforge
+Путь `…\Рабочий стол\hp-client` ломает Dart-тулинг: `flutter analyze`
+падает на разборе JSON анализатора, `dart run` пишет «package_config.json
+did not contain its own root package». Рецепт — ASCII-junction и
+**PowerShell** (bash из Git разворачивает junction обратно в настоящий путь):
+
+```powershell
+New-Item -ItemType Junction -Path C:\Users\BADAB\dev\hp-client -Target 'C:\Users\BADAB\Рабочий стол\hp-client'
+New-Item -ItemType Junction -Path C:\Users\BADAB\dev\libXray   -Target 'C:\Users\BADAB\Рабочий стол\libXray'
+Set-Location C:\Users\BADAB\dev\hp-client
+$env:Path = "C:\Users\BADAB\flutter\stable\bin;" + $env:Path
+flutter pub get
+dart run ffigen                       # lib/core/ffi/generated_bindings.dart, в .gitignore
+dart run build_runner build --delete-conflicting-outputs
+flutter gen-l10n
 ```
 
 ## Артефакты ядра
 
 ```shell
 cd ../libXray
-python3 build/main.py windows local   # или linux / android / apple
+export GOTOOLCHAIN=auto PATH="/c/Users/BADAB/toolchains/llvm-mingw-20260922-ucrt-x86_64/bin:$PATH"
+
+# библиотека в процессе приложения: разбор ссылок, пинг, minewire, controlXray
+CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+  go build -trimpath -ldflags "-s -w" -o windows_dll/libXray.dll -buildmode=c-shared ./cgo_bridge
+
+# десктопное ядро (отдельный процесс; в TUN запускается с правами администратора)
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o bin/xray.exe ./desktop_bin
+
+# GeoData для assets/dat
+go run download_geo/main.go
+
+cp windows_dll/libXray.dll       ../hp-client/windows/app/libXray.dll
+cp bin/xray.exe                  ../hp-client/windows/app/HyperClientCore.exe
+mkdir -p ../hp-client/assets/dat && cp dat/* ../hp-client/assets/dat/
 ```
 
-Собрать только `libXray.dll` вручную, без скрипта, можно так — флаги важны,
-без `-s -w` библиотека выходит вдвое тяжелее:
+`-s -w` не опционален: без него библиотека вдвое тяжелее. `wintun.dll` берут
+из официального `wintun-0.14.1.zip` (SHA-256 зашит в
+`build_scripts/app/windows.py`), только `bin/amd64/wintun.dll`.
 
-```shell
-CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" \
-  -o windows_dll/libXray.dll -buildmode=c-shared ./cgo_bridge
+`windows/app/`, `linux/app/` и `assets/dat/` в `.gitignore`: это артефакты
+сборки, чистый клон их не содержит.
+
+## Проверка
+
+```powershell
+dart analyze lib test
+flutter test          # одно ожидаемое падение на Windows: linux_adapter_test
+flutter build windows --release
 ```
 
-Затем разложить результат:
-
-```shell
-# Windows
-mkdir -p windows/app
-cp ../libXray/windows_dll/libXray.dll windows/app/
-(cd ../Xray-core && CGO_ENABLED=0 go build -o ../app/windows/app/HyperClientCore.exe \
-   -trimpath -buildvcs=false -ldflags="-s -w -buildid=" ./main)
-
-# Linux
-mkdir -p linux/app
-cp ../libXray/linux_so/libXray.so linux/app/
-(cd ../Xray-core && CGO_ENABLED=0 go build -o ../app/linux/app/HyperClientCore \
-   -trimpath -buildvcs=false -ldflags="-s -w -buildid=" ./main)
-```
-
-`wintun.dll` приходит не из `libXray` — её кладут в `windows/app/` отдельно.
-
-Каталог `windows/app/` (и `linux/app/`) в `.gitignore`: это артефакты
-сборки. **Бинарники нестандартных протоколов туда не кладут** — они живут в
-[`protocols/`](../protocols/) под контролем версий и попадают в сборку сами.
-
-## Отладочный запуск
-
-```shell
-flutter run -d windows
-flutter run -d linux    # нужны ninja-build clang cmake pkg-config libgtk-3-dev
-                        # liblzma-dev libblkid-dev libsecret-1-dev
-                        # libayatana-appindicator3-dev file
-flutter run -d android
-```
-
-Для Apple перед запуском — `cd ios && pod install`.
+В libXray: `go test ./control/ ./desktop_bin/ ./minewire/ .` (тест `dns`
+падает на машинах, где у первого интерфейса нет маршрута до 8.8.8.8, — это
+апстрим).
 
 ## Релизная сборка
 
-```shell
-BUILD_NUMBER=1 GOARCH=amd64 ONEXRAY_WINDOWS_ARCH=x64 \
-  python build_scripts/main.py HyperClient windows
+```powershell
+$env:BUILD_NUMBER = "1"
+$env:INNO_SETUP_PATH = "C:\Program Files (x86)\Inno Setup 6"
+uv run --project build_scripts python build_scripts/main.py HyperClient windows
 ```
 
-Готовые пакеты появятся в `../output/`.
+Собирается только режим EXE: MSIX/VCore апстрима не поставляется.
+Установщик ставит программу **в Program Files для всех пользователей** и
+просит права администратора: ядро TUN запускается с повышенными правами из
+папки установки, поэтому писать в неё обычным процессам нельзя. ZIP-сборка
+этой защиты не даёт (её можно распаковать куда угодно) — для TUN только
+установщик.
 
 ## Грабли
 
 - **Прерванная сборка оставляет `pubspec.yaml` и `make_config.yaml`
   переписанными.** Скрипт правит их временно и чинит в `finally`, который
   при убийстве процесса не выполняется. После прерывания — `git status`.
-- **Переименование бинарника требует удалить `app/build`**: CMake кеширует
-  имя цели и потом ругается `No target "..."`.
-- **Имя ядра прописано жёстко** в `windows/app.cmake` и `linux/app.cmake`
-  отдельно от `BINARY_NAME` в `CMakeLists.txt` — менять надо в обоих местах.
-- **Повторная локальная сборка Windows** раньше падала на `wintun.dll`:
-  `shutil.move` не перезаписывает существующий файл. Исправлено в
-  `build_scripts/app/windows.py`.
-
-## `.env`
-
-Для отладки может быть пустым: переменные `FASTLANE_*` нужны только для
-публикации в магазины. `BUILD_NUMBER` требуется скриптам упаковки.
+- **Переименование бинарника требует удалить `build/`**: CMake кеширует имя
+  цели и потом ругается `No target "..."`.
+- **Имя ядра прописано жёстко** в `windows/app.cmake`, `linux/app.cmake`,
+  `lib/core/ffi/windows/core_process.dart`, `exe_ffi_api.dart` и
+  `linux_ffi_api.dart` отдельно от `BINARY_NAME`.
+- **build_runner переписывает `lib/gen/assets.gen.dart`**, если нет
+  `assets/dat/`: сначала GeoData, потом генерация.

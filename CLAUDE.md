@@ -2,92 +2,103 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Read `AGENTS.md` first.** It defines the layering rules (`core → service → pages`, no reverse calls), the runtime config flow, generated-file policy, and UI conventions (LucideIcons only, no numeric font sizes). This file covers what AGENTS.md does not: the multi-repository setup, the desktop process model, and operational rules specific to this fork.
+**Read `AGENTS.md` first.** It holds the fork preface and the upstream contract (layering `pages → service → core`, `ConnectionCoordinator`, generated files, UI conventions). The upstream docs under `docs/` describe upstream behavior; this file lists what the fork does differently and the operational rules that cost time to rediscover.
 
-## This repo is one of three
+## This repo is one of two
 
-`build_scripts/app/builder.py` resolves sibling repositories from the parent of this checkout, so the layout is mandatory:
+`build_scripts/app/builder.py` resolves siblings from the **parent** of this checkout:
 
 ```
-hp-client/
-  app/         this repository
+<workspace>/
+  hp-client/   this repository (on the owner's machine: C:\Users\BADAB\Рабочий стол\hp-client)
   libXray/     OUR FORK: AnatomikPerq/libXray (upstream XTLS/libXray is remote `upstream`)
-  Xray-core/   tag matching the libXray revision
   output/      packaged builds land here
 ```
 
-`libXray` is a fork, not a checkout of upstream: non-standard protocol engines are compiled into it. Changing such a protocol means editing **two repositories** — the Go engine wrapper in `libXray/`, then rebuilding the shared library and copying it into `windows/app/`.
+No Xray-core checkout is needed: libXray's `go.mod` pins the core, and the desktop Core `HyperClientCore(.exe)` is built from libXray's `desktop_bin/`. Changing a non-standard protocol, the desktop Core or the control API means editing **two repositories**: the Go side in `libXray/`, then rebuilding and copying artifacts into `windows/app/`.
 
-`windows/app/` and `linux/app/` are gitignored build inputs (`libXray.dll`, `HyperClientCore.exe`, `wintun.dll`). A fresh clone has none of them; see `readme/BUILD.md`.
+`windows/app/` (`libXray.dll`, `HyperClientCore.exe`, `wintun.dll`), `linux/app/` and `assets/dat/` are gitignored build inputs. A fresh clone has none of them; see `readme/BUILD.md`.
 
 ## Commands
 
-Neither Flutter nor Go is on `PATH` on the usual dev machine:
+The Cyrillic path breaks Dart tooling (`flutter analyze` crashes, `dart run` misses its own package). Work through the ASCII junction `C:\Users\BADAB\dev\hp-client` **from PowerShell**; Git Bash resolves the junction back to the real path. Toolchains on the owner's machine:
 
-```shell
-$env:Path = "C:\Users\local\flutter\stable\bin;" + $env:Path
-$env:Path = "C:\Users\local\toolchains\go\bin;C:\Users\local\toolchains\llvm-mingw-20260616-ucrt-x86_64\bin;" + $env:Path
-```
-
-```shell
-flutter analyze lib
-flutter test                                          # whole suite
-flutter test test/service/xray/core_api_test.dart     # one file
-flutter test <file> --plain-name "<test name>"        # one test
+```powershell
+$env:Path = "C:\Users\BADAB\flutter\stable\bin;" + $env:Path
+Set-Location C:\Users\BADAB\dev\hp-client
+dart analyze lib test                                  # prefer over `flutter analyze`
+flutter test                                           # whole suite, ~5 min
+flutter test test/service/connect/live_swap_test.dart  # one file
+flutter test <file> --plain-name "<test name>"         # one test
 dart run build_runner build --delete-conflicting-outputs
-flutter build windows --release
+dart run ffigen                                        # needs C:\Program Files\LLVM\bin\libclang.dll
+flutter gen-l10n
 ```
 
-`flutter test` reports **one expected failure on Windows**: `test/core/desktop_startup/linux_adapter_test.dart` builds a POSIX desktop-entry path and asserts an unescaped `TryExec`, while `_escapeDesktopValue` correctly escapes the backslashes of a Windows temp path. It passes on Linux. Do not "fix" it by weakening the assertion.
+`flutter test` reports **one expected failure on Windows**: `test/core/desktop_startup/linux_adapter_test.dart` asserts an unescaped `TryExec` for a POSIX path, while `_escapeDesktopValue` correctly escapes a Windows temp path. It passes on Linux. Do not weaken the assertion.
 
-Rebuilding the shared library after touching `libXray/`:
+libXray builds with `GOTOOLCHAIN=auto` (go.mod wants 1.27+) and **llvm-mingw**, not w64devkit gcc (its big-obj objects break cgo). Exact commands are in `readme/BUILD.md`. `-s -w` is not optional.
 
-```shell
-cd ../libXray
-CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -trimpath -ldflags "-s -w" \
-  -o windows_dll/libXray.dll -buildmode=c-shared ./cgo_bridge
-cp windows_dll/libXray.dll ../app/windows/app/libXray.dll
-```
-
-`-s -w` is not optional: without it the library is 66 MB instead of 32 MB.
+ARB files: keys are added with a script that appends lines (see git history of `lib/l10n`); round-tripping through `json.dump` reformats `app_en.arb`/`app_fa.arb` wholesale.
 
 ## Desktop process model
 
-On Windows and Linux the Xray core is **not** in-process. `WindowsFfiApi` launches `bin/HyperClientCore.exe` (plain Xray) through `ShellExecuteEx` with verb `runas`, so TUN mode costs a UAC prompt. `libXray.dll` runs inside the app process and handles link parsing, ping, GeoData — and the embedded protocol engines.
+On Windows and Linux the Xray core is a **separate process** `HyperClientCore`, found by exact process name (no PID files). `libXray.dll` runs inside the App: link parsing, ping, GeoData, minewire engines and `controlXray`.
 
-Because restarting the core means another UAC prompt, **switching nodes does not restart it**. `XrayCoreApi` (`lib/service/xray/core_api.dart`) enables Xray's control interface in the generated config and drives it through the core binary's own `api` subcommand (`rmo` / `ado` / `rmrules` / `adrules`), which runs unelevated over loopback — no gRPC dependency in Dart. `VpnService._tryHotSwapNode` takes this path only when the run mode and routing mode are unchanged; anything else falls back to a full restart. Any failure falls back too: a half-configured tunnel is worse than an extra prompt.
+`desktopCoreRunArguments` (`lib/core/ffi/base_ffi_api.dart`) builds its CLI:
 
-Trade-off to keep in mind: while connected, the core listens on a loopback control port **with no authentication** — that is how Xray's API works. Tests assert it can only ever bind `127.0.0.1`.
+- `-dns`/`-interface` only in TUN mode: they pin the Core's own DNS to the physical interface. System proxy mode passes neither.
+- `-config-sha256`: the config lives in a directory any process of the user can write; the elevated Core refuses a config swapped after UAC.
+- `-error-file`, and the log paths in the config, are opened by the Core first and refused if their final path is redirected (junction/symlink); the handles stay open to pin the paths.
+- `-stop-file <run>/core.stop`: the Core exits gracefully once the file appears, so disconnecting an elevated Core needs **no second UAC prompt**. `WindowsExeFfiApi._stopGracefully` creates it and falls back to terminate (UAC) for Cores too old to know the flag.
+
+TUN mode starts the Core elevated (`ShellExecuteEx runas`); system proxy mode starts it detached and unelevated. The installer is **per machine (Program Files)** so unprivileged processes cannot replace the binary that UAC elevates; the ZIP build does not have this protection.
+
+### Live node switch
+
+`LiveControl` (`lib/service/connect/live_control.dart`) adds to every desktop non-Raw config an `api` section **without `listen`**, a loopback SOCKS inbound `app-control` with a random per-session password, and a first routing rule `app-control → api`. `controlXray` in libXray dials the gRPC API through that inbound only; Xray's API has no authentication of its own.
+
+`ConnectionCoordinator._trySwap` runs when only the selection changes (same policy, not Raw): it prepares the next runtime **reusing the running Core's ports, control password and start time**, checks `LiveControl.swappable` (only outbounds, routing rules and balancers may differ) and applies `LiveControl.operations`. Traps:
+
+- Xray's `AddRule` without `append` **replaces every rule and balancer**; the operations therefore always send the full new routing, including the control rule.
+- Removing the default (first) outbound leaves Xray without one until the next `addOutbound`; the first outbound is always replaced.
+- A balancer with `fallbackTag` needs `observatory`, and `RoutingService` needs `stats`; App configs always have both, hand-written test configs often do not ("not all dependencies are resolved").
+
+Any failure falls back to a full restart: a half-configured tunnel is worse than an extra prompt.
+
+## System proxy mode
+
+`PlatformPolicy.desktop` = `{runMode: tun|systemProxy, proxyPort: 10820}` (10808/10809 are the defaults of another common client, which runs on the owner's machine). A desktop `StartVpnRequest` **without `tun`** means proxy mode and its `socksPort` is the user-facing port; this keeps the native Kotlin/Swift model contract unchanged. The compiler turns `tunIn` into a loopback SOCKS/HTTP inbound (same tag, so traffic counters keep working) and drops `sockopt.interface`.
+
+`SystemProxyManager` (`lib/core/system_proxy/`) saves the previous settings to `run/system-proxy.json` **before** applying and restores them on stop, on an unexpected Core exit and on the next App start, but only while the system still points at the App's port. Windows keeps a legacy registry copy (`ProxyEnable`, `ProxyServer`, `ProxyOverride`, `AutoConfigURL`) next to the WinINet view; other software may write only that copy and it may disagree with WinINet (it does on the owner's machine), so it is snapshotted and restored verbatim.
 
 ## Config generation
 
-`XrayRuntimeConfigService` (`lib/service/vpn/runtime_config.dart`) is the single place where the runtime Xray JSON is assembled; `_writeSelectedConfig` branches per `CoreConfigType`. Two ordering traps:
+`ConnectionPreparation` (`lib/service/connect/preparation.dart`) resolves, allocates ports and calls the pure `ConnectionCompiler`. After compiling it applies two map transforms, in this order: the minewire bypass rules first in `routing.rules`, then `LiveControl.apply`, whose rule must end up above everything.
 
-- `XrayRoutingModeFix.applyToXrayJson` **deletes `routing` entirely** in Global mode. Anything that must survive (such as the minewire bypass rule) has to be re-applied *after* the routing-mode fix, not added to the profile beforehand.
-- Adding a `CoreConfigType` value is not enough to make a node visible. Two silent filters drop unknown types: `SubscriptionService._readConfigs` and the explicit type lists in `lib/core/db/dao/core_config.dart`. Exhaustive `switch`es are caught by the compiler; these filters are not.
+Fork deviations from the upstream Raw contract, enforced in `ConnectionCompiler._rawRuntimeMap` (Raw and Advanced templates):
+
+- an inbound without `listen` gets `127.0.0.1` (Xray's default is every interface); an explicit outside `listen` on socks/http/mixed requires accounts;
+- `env` keeps only `xray.*` keys (it becomes the Core's process environment);
+- on desktop a Raw `api` section, its rules and API-only inbounds are dropped.
 
 ## Non-standard protocols
 
-Engines are Go packages compiled into `libXray` and exposed as methods in its `Invoke` registry (`startMinewire`, `stopMinewire`, `minewireState`), reached from Dart through `AppHostApi`. Each engine opens a loopback SOCKS5 listener that Xray dials as an ordinary `socks` outbound.
-
-A protocol not written in Go cannot be embedded this way, and a sidecar process has no path to mobile. `protocols/README.md` documents the procedure for adding one.
-
-In TUN mode an engine's own uplink is captured by the tunnel that leads back into it. `XrayMinewireBypass` adds a first-position routing rule for the resolved server IPs, tagged so the live core can drop it via `rmrules`. Server addresses are resolved **before** the tunnel comes up, since DNS afterwards may depend on the tunnel that is not working yet.
+See `protocols/README.md`. minewire nodes are ordinary server rows whose outbound has `"protocol": "minewire"`; `MinewireRuntime` starts one engine per node in the App process before compiling and swaps the node for `socks` to its loopback port. Engines connect in the background: the runtime waits for `connected`, not just a listening port. Server addresses are resolved **before** the tunnel comes up. Engine ports are stored in the runtime metadata so a Core that survives an App restart gets its engines back on the same ports.
 
 ## Testing the VPN
 
-**Never start the tunnel system-wide.** The machine runs another VPN through the system proxy that must not be disturbed, and the app's Proxy run mode rewrites system proxy settings.
+**Never start the tunnel or the system proxy mode system-wide on the owner's machine.** It runs another VPN through the system proxy (`127.0.0.1:10808`) that must not be disturbed.
 
-Isolated verification instead:
+- **WinINet writes are never isolated.** Even a throwaway per-connection entry rewrites the legacy LAN registry values. Tests of `lib/core/system_proxy/windows.dart` are read-only; writes are covered with a fake backend.
+- The environment has `HTTP_PROXY`/`HTTPS_PROXY=127.0.0.1:10808` and `NO_PROXY=localhost,127.0.0.1`: Dart `HttpClient` and Go follow them unless told otherwise, curl skips a `--socks5` proxy for 127.0.0.1 targets without `--noproxy ""`, and Python urllib bypasses proxies for localhost.
+- Isolated chain check: run `HyperClientCore.exe run -config <file> [-config-sha256 …] [-stop-file …]` unelevated with only loopback inbounds, drive it through `libXray.dll` from Python `ctypes` (`CGoInvoke`/`CGoFree`, `apiVersion: 3`), and fetch a local HTTP target with `curl --noproxy "" --socks5-hostname`.
 
-- Chain check: run `bin/HyperClientCore.exe run -config <hand-written config>` with only a loopback SOCKS inbound, then `curl -x socks5h://127.0.0.1:<port> https://ifconfig.me/ip` and compare against the direct address.
-- Protocol engine: call `libXray.dll` directly from Python via `ctypes` (`CGoInvoke` / `CGoFree`, `apiVersion: 2`). Engines open their local port immediately but connect in the background — poll `minewireState` for `connected`, not just for an accepting socket.
-
-App state is faster to read from `%APPDATA%\HYPER CLIENT\HYPER CLIENT\db.sqlite` with Python `sqlite3` than by clicking through the UI. The elevated core cannot be driven by UI automation (Windows UIPI blocks input to elevated windows), so connection testing through TUN is the owner's job.
+App state is faster to read from `%APPDATA%\HYPER CLIENT\HYPER CLIENT\db.sqlite` with Python `sqlite3` than through the UI. The elevated Core cannot be driven by UI automation (UIPI), so connection testing through TUN and the real system proxy is the owner's job.
 
 ## Git and releases
 
-Push straight to `main`; do not create branches. Every full version gets a GitHub release with binaries.
+Push straight to `main`; do not create branches. Every full version gets a GitHub release with binaries. Merging upstream: `git fetch upstream` in both repositories; in the app, resolve conflicts toward upstream's architecture and re-port fork behavior (this file lists it).
 
 Two GitHub quirks cost real time here:
 
@@ -98,6 +109,6 @@ Multi-line commit messages must be passed with `git commit -F <file>`; double qu
 
 ## Fork boundaries
 
-Auto-update, issue, and source links point at this fork, never upstream — the version is `0.1.0-beta.x`, so checking against upstream releases would offer to install a different application. The internal Dart package name stays `onexray` deliberately.
+Auto-update, issue, source, documentation and privacy links point at this fork, never upstream; the update page URL from the API is accepted only for this repository's release pages. The version is `0.1.0-beta.x`. The internal Dart package name stays `onexray`, and internal identifiers keep upstream names to keep merges cheap; only user-visible text is rebranded. The upstream donation screen was removed on purpose (it showed the upstream author's wallet).
 
 Bundled third-party engines are documented in `LICENSE-THIRD-PARTY.md`. Since they are compiled in rather than aggregated, the combined work ships under GPL-3.0 and their own notices must be preserved.
