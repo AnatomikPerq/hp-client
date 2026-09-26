@@ -2992,5 +2992,9 @@
   "systemProxyPortInvalid": "Enter a port from 1 to 65535.",
   "systemProxyPortBusy": "The system proxy port is used by another program. Choose another port in the tunnel settings.",
   "minewireUnavailable": "The minewire server could not be reached",
-  "minewireInvalid": "The minewire server settings are invalid"
+  "minewireInvalid": "The minewire server settings are invalid",
+  "livePingTitle": "Check the live connection",
+  "livePingResult": "{ms} ms",
+  "@livePingResult": {"placeholders": {"ms": {"type": "int"}}},
+  "livePingFailed": "No response"
 }

@@ -13,6 +13,8 @@ import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/shared/alert.dart';
 import 'package:onexray/pages/shared/page_cubit.dart';
 import 'package:onexray/pages/connect/dialogs.dart';
+import 'package:onexray/pages/connect/hero.dart';
+import 'package:onexray/service/shared/ping/live_probe.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/theme.dart';
@@ -43,6 +45,7 @@ class ConnectPageState {
     this.failed = false,
     this.pendingChange,
     Set<int> deletingRawIds = const {},
+    this.livePing = LivePingView.idle,
   }) : configuration = configuration ?? ConnectionConfiguration(),
        catalog = catalog ?? ServerCatalog(),
        raws = List.unmodifiable(raws),
@@ -62,6 +65,7 @@ class ConnectPageState {
   final bool failed;
   final String? pendingChange;
   final Set<int> deletingRawIds;
+  final LivePingView livePing;
 
   ConnectPageState copyWith({
     ConnectionConfiguration? configuration,
@@ -75,6 +79,7 @@ class ConnectPageState {
     bool? failed,
     Object? pendingChange = _unchanged,
     Set<int>? deletingRawIds,
+    LivePingView? livePing,
   }) => ConnectPageState(
     configuration: configuration ?? this.configuration,
     connectionView: connectionView ?? this.connectionView,
@@ -89,6 +94,7 @@ class ConnectPageState {
         ? this.pendingChange
         : pendingChange as String?,
     deletingRawIds: deletingRawIds ?? this.deletingRawIds,
+    livePing: livePing ?? this.livePing,
   );
   bool sameContentAs(ConnectPageState other) =>
       configuration == other.configuration &&
@@ -103,6 +109,7 @@ class ConnectPageState {
       ready == other.ready &&
       failed == other.failed &&
       pendingChange == other.pendingChange &&
+      livePing == other.livePing &&
       connectedMinutes == other.connectedMinutes &&
       connectionView.phase == other.connectionView.phase &&
       connectionView.runtime == other.connectionView.runtime &&
@@ -160,6 +167,13 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
       final view = coordinator.state.value;
       emit(
         state.copyWith(
+          // A result belongs to the connection it measured.
+          livePing:
+              view.phase == ConnectionPhase.connected &&
+                  view.runtime?.identity ==
+                      state.connectionView.runtime?.identity
+              ? state.livePing
+              : LivePingView.idle,
           connectionView: view,
           connectedMinutes: view.runtime == null
               ? 0
@@ -365,6 +379,34 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     } finally {
       pendingChange = null;
     }
+  }
+
+  /// Measures the running connection along the path system traffic takes.
+  Future<void> measureLivePing() async {
+    final runtime = connectionView.runtime;
+    if (state.livePing.running ||
+        connectionView.phase != ConnectionPhase.connected ||
+        runtime == null) {
+      return;
+    }
+    emit(state.copyWith(livePing: const LivePingView(running: true)));
+    final policy = runtime.configuration.policy;
+    final result = await LivePingProbe(
+      proxyPort: policy.usesSystemProxy(runtime.platform)
+          ? policy.systemProxyPort
+          : null,
+    ).measure();
+    if (!isPageActive || connectionView.runtime?.identity != runtime.identity) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        livePing: LivePingView(
+          milliseconds: result.reachable ? result.milliseconds : null,
+          failed: !result.reachable,
+        ),
+      ),
+    );
   }
 
   bool get supportsRunMode =>

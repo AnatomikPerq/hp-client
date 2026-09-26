@@ -811,5 +811,8 @@
   "systemProxyPortInvalid": "請輸入 1 到 65535 之間的連接埠。",
   "systemProxyPortBusy": "系統代理連接埠已被其他程式佔用。請在通道設定中選擇其他連接埠。",
   "minewireUnavailable": "無法連線 minewire 伺服器",
-  "minewireInvalid": "minewire 伺服器設定無效"
+  "minewireInvalid": "minewire 伺服器設定無效",
+  "livePingTitle": "檢查目前連線",
+  "livePingResult": "{ms} 毫秒",
+  "livePingFailed": "無回應"
 }

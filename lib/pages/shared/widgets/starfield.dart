@@ -2,10 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Живой фон главного экрана: медленно дрейфующее звёздное поле.
+/// Звёздное поле за кнопкой подключения.
 ///
-/// Мерцание намеренно слабое — фон не должен перетягивать внимание с кнопки.
-/// Когда туннель поднят, поле теплеет и слегка разгорается.
+/// Анимации здесь только конечные: при подключении поле плавно теплеет и
+/// разгорается, при отключении остывает. Постоянного мерцания нет намеренно:
+/// окно клиента часто висит открытым часами, и бесконечная анимация тратила
+/// бы процессор ради фона.
 class Starfield extends StatefulWidget {
   const Starfield({
     super.key,
@@ -29,24 +31,30 @@ class Starfield extends StatefulWidget {
 
 class _StarfieldState extends State<Starfield>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final AnimationController _glow = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+    value: widget.active ? 1 : 0,
+  );
   List<_Star> _stars = const [];
   Size _lastSize = Size.zero;
 
   @override
-  void initState() {
-    super.initState();
-    // Длинный цикл: одна фаза дыхания занимает почти две минуты, поэтому
-    // движение читается как дрейф, а не как мигание.
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 110),
-    )..repeat();
+  void didUpdateWidget(covariant Starfield oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active == widget.active) return;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final target = widget.active ? 1.0 : 0.0;
+    if (reduceMotion) {
+      _glow.value = target;
+    } else {
+      _glow.animateTo(target, curve: Curves.easeOutCubic);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _glow.dispose();
     super.dispose();
   }
 
@@ -66,36 +74,33 @@ class _StarfieldState extends State<Starfield>
         dx: random.nextDouble(),
         dy: random.nextDouble(),
         radius: 0.4 + random.nextDouble() * 1.15,
-        phase: random.nextDouble() * math.pi * 2,
-        // Разброс скоростей небольшой, иначе поле начинает "кипеть".
-        speed: 0.35 + random.nextDouble() * 0.5,
-        drift: 0.25 + random.nextDouble() * 0.75,
+        // Неровная яркость вместо мерцания: поле живое и без анимации.
+        brightness: 0.55 + random.nextDouble() * 0.45,
       );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return LayoutBuilder(
       builder: (context, constraints) {
         _rebuildStars(constraints.biggest);
-        return RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              return CustomPaint(
-                size: constraints.biggest,
-                painter: _StarfieldPainter(
-                  stars: _stars,
-                  time: reduceMotion ? 0.25 : _controller.value,
-                  active: widget.active,
-                  idleColor: widget.idleColor,
-                  activeColor: widget.activeColor,
-                  animate: !reduceMotion,
-                ),
-              );
-            },
+        return IgnorePointer(
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _glow,
+              builder: (context, _) {
+                return CustomPaint(
+                  size: constraints.biggest,
+                  painter: _StarfieldPainter(
+                    stars: _stars,
+                    glow: _glow.value,
+                    idleColor: widget.idleColor,
+                    activeColor: widget.activeColor,
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
@@ -105,8 +110,8 @@ class _StarfieldState extends State<Starfield>
 
 /// Орбита вокруг кнопки подключения: тонкое кольцо и спутник на нём.
 ///
-/// Один медленный оборот вместо мигания — движение, за которое глаз
-/// цепляется, но которое не мешает.
+/// Спутник делает один оборот в момент подключения и останавливается:
+/// заметный знак «готово» без постоянного движения на экране.
 class OrbitRing extends StatefulWidget {
   const OrbitRing({
     super.key,
@@ -125,36 +130,41 @@ class OrbitRing extends StatefulWidget {
 
 class _OrbitRingState extends State<OrbitRing>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  /// Положение спутника в покое, в долях оборота.
+  static const _rest = 0.12;
+
+  late final AnimationController _turn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
 
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 34),
-    )..repeat();
+  void didUpdateWidget(covariant OrbitRing oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.active && !oldWidget.active && !reduceMotion) {
+      _turn.forward(from: 0);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _turn.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return IgnorePointer(
       child: SizedBox.square(
         dimension: widget.diameter,
         child: RepaintBoundary(
           child: AnimatedBuilder(
-            animation: _controller,
+            animation: _turn,
             builder: (context, _) {
               return CustomPaint(
                 painter: _OrbitPainter(
-                  turn: reduceMotion ? 0.12 : _controller.value,
+                  turn: _rest + Curves.easeInOutCubic.transform(_turn.value),
                   color: widget.color,
                   active: widget.active,
                 ),
@@ -228,60 +238,46 @@ class _Star {
     required this.dx,
     required this.dy,
     required this.radius,
-    required this.phase,
-    required this.speed,
-    required this.drift,
+    required this.brightness,
   });
 
   final double dx;
   final double dy;
   final double radius;
-  final double phase;
-  final double speed;
-  final double drift;
+  final double brightness;
 }
 
 class _StarfieldPainter extends CustomPainter {
   _StarfieldPainter({
     required this.stars,
-    required this.time,
-    required this.active,
+    required this.glow,
     required this.idleColor,
     required this.activeColor,
-    required this.animate,
   });
 
   final List<_Star> stars;
-  final double time;
-  final bool active;
+
+  /// 0 в покое, 1 при поднятом туннеле.
+  final double glow;
   final Color idleColor;
   final Color activeColor;
-  final bool animate;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) {
       return;
     }
-    final color = active ? activeColor : idleColor;
-    // Амплитуда мерцания намеренно мала: 0.86..1.0 вместо привычных 0..1.
-    const twinkleDepth = 0.14;
-    final baseAlpha = active ? 0.42 : 0.20;
+    final color = Color.lerp(idleColor, activeColor, glow)!;
+    final baseAlpha = 0.20 + 0.22 * glow;
+    final scale = 1.0 + 0.25 * glow;
     final paint = Paint()..style = PaintingStyle.fill;
-
     for (final star in stars) {
-      final wave = animate
-          ? math.sin(time * math.pi * 2 * star.speed + star.phase)
-          : 0.0;
-      final alpha =
-          baseAlpha * (1 - twinkleDepth + twinkleDepth * (wave + 1) / 2);
-      // Вертикальный дрейф на пару пикселей за цикл — движение есть,
-      // но заметить его можно только если специально смотреть.
-      final offsetY = animate ? wave * star.drift : 0.0;
-      paint.color = color.withValues(alpha: alpha.clamp(0.0, 1.0));
+      paint.color = color.withValues(
+        alpha: (baseAlpha * star.brightness).clamp(0.0, 1.0),
+      );
       canvas.drawCircle(
-        Offset(star.dx * size.width, star.dy * size.height + offsetY),
-        star.radius * (active ? 1.25 : 1.0),
+        Offset(star.dx * size.width, star.dy * size.height),
+        star.radius * scale,
         paint,
       );
     }
@@ -289,8 +285,7 @@ class _StarfieldPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StarfieldPainter oldDelegate) {
-    return oldDelegate.time != time ||
-        oldDelegate.active != active ||
+    return oldDelegate.glow != glow ||
         oldDelegate.idleColor != idleColor ||
         oldDelegate.activeColor != activeColor ||
         !identical(oldDelegate.stars, stars);

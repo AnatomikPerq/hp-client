@@ -102,6 +102,8 @@ class _ConnectPageState extends State<ConnectPage> {
                 runMode: controller.supportsRunMode ? controller.runMode : null,
                 proxyPort: controller.systemProxyPort,
                 onRunMode: (mode) => controller.setRunMode(context, mode),
+                livePing: state.livePing,
+                onLivePing: controller.measureLivePing,
               );
             },
           ),

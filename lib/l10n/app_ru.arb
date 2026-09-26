@@ -811,5 +811,8 @@
   "systemProxyPortInvalid": "Укажите порт от 1 до 65535.",
   "systemProxyPortBusy": "Порт системного прокси занят другой программой. Выберите другой порт в настройках туннеля.",
   "minewireUnavailable": "Сервер minewire недоступен",
-  "minewireInvalid": "Настройки сервера minewire неверны"
+  "minewireInvalid": "Настройки сервера minewire неверны",
+  "livePingTitle": "Проверить живое подключение",
+  "livePingResult": "{ms} мс",
+  "livePingFailed": "Нет ответа"
 }

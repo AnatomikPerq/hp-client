@@ -811,5 +811,8 @@
   "systemProxyPortInvalid": "درگاهی بین ۱ تا ۶۵۵۳۵ وارد کنید.",
   "systemProxyPortBusy": "درگاه پراکسی سیستم توسط برنامهٔ دیگری استفاده می‌شود. در تنظیمات تونل درگاه دیگری انتخاب کنید.",
   "minewireUnavailable": "دسترسی به سرور minewire ممکن نشد",
-  "minewireInvalid": "تنظیمات سرور minewire نامعتبر است"
+  "minewireInvalid": "تنظیمات سرور minewire نامعتبر است",
+  "livePingTitle": "بررسی اتصال فعلی",
+  "livePingResult": "{ms} میلی‌ثانیه",
+  "livePingFailed": "بدون پاسخ"
 }

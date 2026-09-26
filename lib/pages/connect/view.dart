@@ -10,6 +10,7 @@ import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:onexray/pages/connect/run_mode.dart';
+import 'package:onexray/pages/connect/hero.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/failure.dart';
@@ -44,6 +45,8 @@ class ConnectView extends StatelessWidget {
     this.runMode,
     this.proxyPort = 0,
     this.onRunMode,
+    this.livePing = LivePingView.idle,
+    this.onLivePing,
   });
   final ConnectionView view;
   final Widget Function(bool desktop)? trafficBuilder;
@@ -70,6 +73,10 @@ class ConnectView extends StatelessWidget {
   final DesktopRunMode? runMode;
   final int proxyPort;
   final ValueChanged<DesktopRunMode>? onRunMode;
+
+  /// Live connection check beside the orb; null hides it.
+  final LivePingView livePing;
+  final VoidCallback? onLivePing;
 
   bool get _connectionPending => pendingChange == 'connection';
   bool get _busy => view.busy || _connectionPending;
@@ -557,10 +564,24 @@ class ConnectView extends StatelessWidget {
     final color = failed
         ? palette.destructive
         : connected
-        ? palette.running
+        ? palette.runningText
         : _busy
         ? palette.primary
         : palette.mutedStrong;
+    // A pending command shows progress at once, even on a live connection.
+    final tone = failed
+        ? ConnectionHeroTone.failed
+        : _busy
+        ? ConnectionHeroTone.busy
+        : connected
+        ? ConnectionHeroTone.connected
+        : ConnectionHeroTone.idle;
+    final width = MediaQuery.sizeOf(context).width;
+    final orbDiameter = desktop
+        ? 112.0
+        : width < 380
+        ? 108.0
+        : 124.0;
     final waitingForPhase = _connectionPending && !view.busy;
     final button = FilledButton(
       onPressed:
@@ -601,6 +622,88 @@ class ConnectView extends StatelessWidget {
         ),
       ),
     );
+    // The orb is the brand's centerpiece; the text button remains the
+    // accessible control and does the same thing.
+    final hero = ConnectionHero(
+      tone: tone,
+      diameter: orbDiameter,
+      onTap:
+          view.phase == ConnectionPhase.disconnecting ||
+              (pendingChange != null && !view.busy)
+          ? null
+          : onConnection,
+      livePing: livePing,
+      onLivePing: onLivePing,
+    );
+    final status = <Widget>[
+      Text(
+        title,
+        style:
+            (desktop
+                    ? AppTypography.connectDesktopStatusTitle
+                    : AppTypography.connectStatusTitle)
+                .copyWith(color: color),
+        textAlign: TextAlign.center,
+      ),
+      SizedBox(height: desktop ? 16 : 8),
+      Text(
+        detail,
+        textAlign: TextAlign.center,
+        style:
+            (desktop
+                    ? AppTypography.connectDesktopStatusDetail
+                    : AppTypography.connectStatusDetail)
+                .copyWith(color: palette.mutedStrong),
+      ),
+      if (view.issue == 'selectionReset')
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              l.prototypeNameActive(l.prototypeAutomaticSelection),
+              textAlign: TextAlign.center,
+              style: AppTypography.metadata,
+            ),
+          ),
+        ),
+      if (view.failed && !failed)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            l.prototypeCheckNetwork,
+            style: AppTypography.supporting.copyWith(
+              color: palette.destructive,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      SizedBox(height: desktop ? 26 : 18),
+      if (desktop)
+        Align(
+          child: SizedBox(
+            width: AppLayout.connectDesktopButtonWidth,
+            child: button,
+          ),
+        )
+      else
+        button,
+      if (runMode != null && onRunMode != null) ...[
+        SizedBox(height: desktop ? 18 : 14),
+        Align(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: RunModeSwitch(
+              value: runMode!,
+              proxyPort: proxyPort,
+              enabled: !_busy && pendingChange == null,
+              pending: pendingChange == 'runMode',
+              onChanged: onRunMode!,
+            ),
+          ),
+        ),
+      ],
+    ];
     final content = ConstrainedBox(
       constraints: BoxConstraints(
         minHeight: desktop
@@ -609,131 +712,53 @@ class ConnectView extends StatelessWidget {
       ),
       child: Padding(
         padding: desktop
-            ? const EdgeInsets.fromLTRB(20, 66, 20, 39)
-            : const EdgeInsets.fromLTRB(15, 25, 15, 17),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_busy)
-                  SizedBox.square(
-                    dimension: desktop ? 29 : 24,
-                    child: MediaQuery.disableAnimationsOf(context)
-                        ? Icon(
-                            LucideIcons.loaderCircle,
-                            color: color,
-                            size: desktop ? 29 : 24,
-                          )
-                        : CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: color,
-                          ),
-                  )
-                else if (connected)
-                  Container(
-                    width: desktop ? 29 : 24,
-                    height: desktop ? 29 : 24,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+            ? const EdgeInsets.fromLTRB(20, 30, 20, 30)
+            : const EdgeInsets.fromLTRB(15, 18, 15, 17),
+        // Desktop panels share their height with the traffic panel, so the
+        // orb sits beside the status instead of stacking above it.
+        child: desktop
+            ? Row(
+                children: [
+                  hero,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: status,
                     ),
-                    child: Icon(
-                      LucideIcons.check,
-                      size: desktop ? 19 : 14,
-                      color: palette.primaryForeground,
-                    ),
-                  )
-                else
-                  Icon(
-                    failed ? LucideIcons.circleAlert : LucideIcons.shield,
-                    color: color,
-                    size: desktop ? 29 : 24,
                   ),
-                SizedBox(width: desktop ? 12 : 10),
-                Flexible(
-                  child: Text(
-                    title,
-                    style:
-                        (desktop
-                                ? AppTypography.connectDesktopStatusTitle
-                                : AppTypography.connectStatusTitle)
-                            .copyWith(color: color),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: desktop ? 16 : 8),
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              style:
-                  (desktop
-                          ? AppTypography.connectDesktopStatusDetail
-                          : AppTypography.connectStatusDetail)
-                      .copyWith(color: palette.mutedStrong),
-            ),
-            if (view.issue == 'selectionReset')
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    l.prototypeNameActive(l.prototypeAutomaticSelection),
-                    textAlign: TextAlign.center,
-                    style: AppTypography.metadata,
-                  ),
-                ),
-              ),
-            if (view.failed && !failed)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  l.prototypeCheckNetwork,
-                  style: AppTypography.supporting.copyWith(
-                    color: palette.destructive,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            SizedBox(height: desktop ? 30 : 18),
-            if (desktop)
-              Align(
-                child: SizedBox(
-                  width: AppLayout.connectDesktopButtonWidth,
-                  child: button,
-                ),
+                ],
               )
-            else
-              button,
-            if (runMode != null && onRunMode != null) ...[
-              SizedBox(height: desktop ? 20 : 14),
-              Align(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: RunModeSwitch(
-                    value: runMode!,
-                    proxyPort: proxyPort,
-                    enabled: !_busy && pendingChange == null,
-                    pending: pendingChange == 'runMode',
-                    onChanged: onRunMode!,
-                  ),
-                ),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: hero),
+                  const SizedBox(height: 10),
+                  ...status,
+                ],
               ),
-            ],
-          ],
-        ),
       ),
     );
-    if (!desktop) return Card(margin: EdgeInsets.zero, child: content);
+    final layered = Stack(
+      children: [
+        Positioned.fill(child: ConnectionStarfield(active: connected)),
+        content,
+      ],
+    );
+    if (!desktop) {
+      return Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: layered,
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: palette.border)),
       ),
-      child: content,
+      child: ClipRect(child: layered),
     );
   }
 
