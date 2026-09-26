@@ -140,6 +140,13 @@ class AppUpdateService {
     );
   }
 
+  static bool isReleasePage(Uri uri) =>
+      uri.scheme == 'https' &&
+      uri.host == 'github.com' &&
+      !uri.hasPort &&
+      uri.userInfo.isEmpty &&
+      uri.path.startsWith('/AnatomikPerq/hp-client/releases/');
+
   Future<void> openUpdate(AppUpdateInfo updateInfo) async {
     if (!await launchUrl(updateInfo.updateUri)) {
       throw StateError('Could not open update page');
@@ -203,8 +210,12 @@ class _GitHubRelease {
       return null;
     }
     final htmlUrl = json["html_url"];
-    final releaseUri = htmlUrl is String && htmlUrl.isNotEmpty
-        ? Uri.tryParse(htmlUrl)
+    final candidate = htmlUrl is String ? Uri.tryParse(htmlUrl) : null;
+    // The page is opened with the OS handler, which accepts any scheme or
+    // path; only a release page of this repository is followed.
+    final releaseUri =
+        candidate != null && AppUpdateService.isReleasePage(candidate)
+        ? candidate
         : Uri.tryParse(AppUpdateService._githubLatestReleaseUrl);
     if (releaseUri == null) {
       return null;

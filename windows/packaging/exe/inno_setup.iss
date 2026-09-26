@@ -1,4 +1,8 @@
 ; Fastforge renders this template; EXE and ZIP share one Flutter build.
+; HYPER CLIENT installs per machine (Program Files): the TUN Core is started
+; elevated from the install folder, which therefore must not be writable by
+; unprivileged processes. HKA is HKLM in this mode. [Run] postinstall entries
+; run as the original, non-elevated user by default.
 [Setup]
 AppId={{APP_ID}}
 AppName={{DISPLAY_NAME}}
@@ -37,10 +41,10 @@ Name: "{autoprograms}\{{DISPLAY_NAME}}"; Filename: "{app}\{{EXECUTABLE_NAME}}"; 
 Name: "{autodesktop}\{{DISPLAY_NAME}}"; Filename: "{app}\{{EXECUTABLE_NAME}}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Classes\hyperclient"; ValueType: string; ValueName: ""; ValueData: "URL:HYPER CLIENT Protocol"
-Root: HKCU; Subkey: "Software\Classes\hyperclient"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
-Root: HKCU; Subkey: "Software\Classes\hyperclient\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{{EXECUTABLE_NAME}}"",0"
-Root: HKCU; Subkey: "Software\Classes\hyperclient\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{{EXECUTABLE_NAME}}"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\hyperclient"; ValueType: string; ValueName: ""; ValueData: "URL:HYPER CLIENT Protocol"
+Root: HKA; Subkey: "Software\Classes\hyperclient"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\hyperclient\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{{EXECUTABLE_NAME}}"",0"
+Root: HKA; Subkey: "Software\Classes\hyperclient\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{{EXECUTABLE_NAME}}"" ""%1"""
 
 [Run]
 Filename: "{app}\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: nowait postinstall skipifsilent
@@ -77,8 +81,8 @@ begin
      not DeleteFile(ShortcutPath) then
     Log('Unable to remove the HYPER CLIENT startup shortcut.');
   { Never remove another installation's protocol registration. }
-  if RegQueryStringValue(HKCU, 'Software\Classes\hyperclient\shell\open\command',
+  if RegQueryStringValue(HKA, 'Software\Classes\hyperclient\shell\open\command',
       '', CurrentCommand) and
      (CompareText(CurrentCommand, '"' + ExpectedTarget + '" "%1"') = 0) then
-    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\hyperclient');
+    RegDeleteKeyIncludingSubkeys(HKA, 'Software\Classes\hyperclient');
 end;

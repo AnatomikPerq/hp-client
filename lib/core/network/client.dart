@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -114,10 +116,10 @@ class NetClient {
         redirectCount <= _maxDownloadRedirects;
         redirectCount++
       ) {
-        final res = await _downloadClient.getUri<String>(
+        final res = await _downloadClient.getUri<ResponseBody>(
           uri,
           options: Options(
-            responseType: ResponseType.plain,
+            responseType: ResponseType.stream,
             headers: headers,
             followRedirects: false,
             validateStatus: (status) =>
@@ -126,8 +128,16 @@ class NetClient {
         );
         final status = res.statusCode ?? 0;
         if (status < 300) {
-          return res;
+          return Response<String>(
+            data: await _readCapped(res),
+            headers: res.headers,
+            requestOptions: res.requestOptions,
+            statusCode: res.statusCode,
+            statusMessage: res.statusMessage,
+          );
         }
+        // Redirect bodies are never read.
+        res.data?.stream.listen(null).cancel();
         final location = res.headers.value(HttpHeaders.locationHeader);
         if (location == null ||
             location.isEmpty ||
@@ -165,6 +175,36 @@ class NetClient {
       ygLogger('text download failed: ${failureDetails(e)}');
       rethrow;
     }
+  }
+
+  /// Subscriptions and other text downloads are small. A body beyond this
+  /// comes from a broken or hostile server and would otherwise be buffered
+  /// whole, on every automatic refresh.
+  static const maxTextDownloadBytes = 16 * 1024 * 1024;
+
+  static Future<String> _readCapped(Response<ResponseBody> response) async {
+    final declared = int.tryParse(
+      response.headers.value(Headers.contentLengthHeader) ?? '',
+    );
+    if (declared != null && declared > maxTextDownloadBytes) {
+      throw const AppFailure(
+        FailureCategory.network,
+        'downloadTooLarge',
+        cause: 'The download exceeds 16 MiB',
+      );
+    }
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.data!.stream) {
+      bytes.add(chunk);
+      if (bytes.length > maxTextDownloadBytes) {
+        throw const AppFailure(
+          FailureCategory.network,
+          'downloadTooLarge',
+          cause: 'The download exceeds 16 MiB',
+        );
+      }
+    }
+    return utf8.decode(bytes.takeBytes(), allowMalformed: true);
   }
 
   Future<Map<String, dynamic>?> getJson(String url) async {

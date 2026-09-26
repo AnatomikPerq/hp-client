@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/ffi/windows/mode.dart';
@@ -500,7 +501,9 @@ class ConnectionCompiler {
           'Raw inbound conflicts with an App-managed port',
         );
       }
+      _guardListen(inbound);
     }
+    if (options.desktop) _dropUserApi(config, inbounds);
     final managed = inbounds.where((value) => value['tag'] == 'tunIn').toList();
     if (managed.length > 1) {
       throw const FormatException('Only one App-managed tunIn is allowed');
@@ -545,7 +548,10 @@ class ConnectionCompiler {
       }
     }
     config['inbounds'] = inbounds;
-    final env = _object(config, 'env');
+    final env = _object(config, 'env')
+      // `env` becomes process environment of the Core, which may run as
+      // admin. Only Xray's own options; nothing like GODEBUG or HTTP_PROXY.
+      ..removeWhere((key, _) => !key.toLowerCase().startsWith('xray.'));
     env['xray.location.asset'] = VpnConstants.datDir;
     env['xray.location.cert'] = VpnConstants.datDir;
     config.remove(
@@ -626,6 +632,90 @@ class ConnectionCompiler {
     } else {
       sockopt.remove('interface');
     }
+  }
+
+  /// A shared Raw config or template must not quietly turn this computer
+  /// into an open proxy for the local network. Xray listens on every
+  /// interface when `listen` is missing, so a missing value means loopback
+  /// here; an explicit outside address stays, but only with authentication.
+  static void _guardListen(Map<String, dynamic> inbound) {
+    final listen = inbound['listen'];
+    if (listen == null) {
+      inbound['listen'] = '127.0.0.1';
+      return;
+    }
+    if (listen is! String || _loopbackListen(listen)) return;
+    final settings = inbound['settings'];
+    final authenticated = switch (inbound['protocol']) {
+      'socks' || 'mixed' =>
+        settings is Map &&
+            settings['auth'] == 'password' &&
+            settings['accounts'] is List &&
+            (settings['accounts'] as List).isNotEmpty,
+      'http' =>
+        settings is Map &&
+            settings['accounts'] is List &&
+            (settings['accounts'] as List).isNotEmpty,
+      // Port forwards and server protocols carry their own access control.
+      _ => true,
+    };
+    if (!authenticated) {
+      throw FormatException(
+        'Inbound ${inbound['tag'] ?? inbound['protocol']} listens on $listen '
+        'without authentication; add accounts or listen on 127.0.0.1',
+      );
+    }
+  }
+
+  static bool _loopbackListen(String listen) {
+    final value = listen.trim().toLowerCase();
+    if (value == 'localhost' ||
+        value.startsWith('/') ||
+        value.startsWith('@')) {
+      return true; // Unix sockets are local by definition.
+    }
+    final address = InternetAddress.tryParse(value);
+    return address != null && address.isLoopback;
+  }
+
+  /// A desktop Core is a separate, possibly elevated process. A Raw `api`
+  /// section would expose its gRPC API, which has no authentication, to any
+  /// local process; the App's own authenticated control replaces it where
+  /// needed. The API rules and the inbounds only they use go with it.
+  static void _dropUserApi(
+    Map<String, dynamic> config,
+    List<Map<String, dynamic>> inbounds,
+  ) {
+    final api = config.remove('api');
+    final apiTag = api is Map ? api['tag'] : null;
+    if (apiTag is! String || apiTag.isEmpty) return;
+    final routing = config['routing'];
+    if (routing is! Map<String, dynamic>) return;
+    final rules = [
+      for (final rule in routing['rules'] as List? ?? const [])
+        if (rule is Map<String, dynamic>) rule,
+    ];
+    final apiInbounds = <String>{};
+    final kept = <Map<String, dynamic>>[];
+    for (final rule in rules) {
+      if (rule['outboundTag'] == apiTag) {
+        final tags = rule['inboundTag'];
+        if (tags is List) apiInbounds.addAll(tags.whereType<String>());
+      } else {
+        kept.add(rule);
+      }
+    }
+    routing['rules'] = kept;
+    final stillRouted = <String>{
+      for (final rule in kept)
+        if (rule['inboundTag'] is List)
+          ...(rule['inboundTag'] as List).whereType<String>(),
+    };
+    inbounds.removeWhere(
+      (inbound) =>
+          apiInbounds.contains(inbound['tag']) &&
+          !stillRouted.contains(inbound['tag']),
+    );
   }
 
   static bool portIncludes(Object? value, int port) {

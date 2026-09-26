@@ -283,7 +283,11 @@ void main() {
             options: options(ipv6: false),
           ).config;
           expect(config['inbounds'].first['sniffing'], {'enabled': false});
-          expect(config['inbounds'].last, (source['inbounds'] as List).last);
+          // Fork: an inbound without `listen` stays on loopback.
+          expect(config['inbounds'].last, {
+            ...(source['inbounds'] as List).last as Map,
+            'listen': '127.0.0.1',
+          });
           if (poolKey == null) {
             expect(config.containsKey('fakedns'), false);
           } else {
@@ -474,7 +478,11 @@ void main() {
       regions: catalog,
       options: options(),
     );
-    expect(plan.config['inbounds'].last, source['inbounds'].single);
+    // Fork: an inbound without `listen` stays on loopback.
+    expect(plan.config['inbounds'].last, {
+      ...source['inbounds'].single as Map,
+      'listen': '127.0.0.1',
+    });
     expect(plan.config['outbounds'], source['outbounds']);
     expect(plan.config['routing'], source['routing']);
     expect(plan.config['inbounds'].first['tag'], 'tunIn');
