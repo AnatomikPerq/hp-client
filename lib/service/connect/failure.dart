@@ -48,6 +48,8 @@ String connectionFailureMessage(
     'interfaceRequired' ||
     'interfaceUnavailable' => l.prototypeChooseInterfaceNotice,
     'systemProxyPortBusy' => l.systemProxyPortBusy,
+    'minewireUnavailable' => l.minewireUnavailable,
+    'minewireInvalid' => l.minewireInvalid,
     'readFailed' ||
     'runtimeUnavailable' ||
     'nativeStatusFailed' => l.prototypeTemporarilyUnavailable,

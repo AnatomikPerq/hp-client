@@ -172,6 +172,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
                input.name,
                input.url,
                excludingId: id,
+               allowEmptyName: id == null,
              );
              return result.item1 ? null : result.item2;
            }),

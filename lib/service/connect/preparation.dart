@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/model.dart';
@@ -18,6 +19,7 @@ import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/custom/configuration.dart';
+import 'package:onexray/service/minewire/runtime.dart';
 import 'package:path/path.dart' as p;
 
 Future<List<int>> allocateRuntimePorts(
@@ -187,10 +189,58 @@ class ConnectionPreparation {
       reserved: {?proxyPort},
     );
     final ports = [proxyPort ?? allocated[0], allocated[1]];
-    final compiled = ConnectionCompiler.compile(
+    // minewire engines run in the App and are reached through loopback SOCKS;
+    // the servers handed to the compiler point at them.
+    final minewire = await MinewireRuntime.instance.materialize([
+      ...entries,
+      ?finalExit,
+    ]);
+    try {
+      return await _finish(
+        configuration: configuration,
+        settings: settings,
+        platform: platform,
+        policy: policy,
+        tun: tun,
+        ports: ports,
+        systemProxy: systemProxy,
+        entries: entries,
+        finalExit: finalExit,
+        minewire: minewire,
+        rawConfig: rawConfig,
+        custom: custom,
+        regions: regions,
+        serverDrafts: serverDrafts,
+        notice: notice,
+      );
+    } catch (_) {
+      await MinewireRuntime.instance.stopPorts(minewire.ports.values);
+      rethrow;
+    }
+  }
+
+  Future<ConnectionRuntime> _finish({
+    required ConnectionConfiguration configuration,
+    required ConnectionSettings settings,
+    required ConnectionPlatform platform,
+    required PlatformPolicy policy,
+    required TunJson? tun,
+    required List<int> ports,
+    required bool systemProxy,
+    required List<ResolvedServer> entries,
+    required ResolvedServer? finalExit,
+    required MinewireMaterialized minewire,
+    required Map<String, dynamic>? rawConfig,
+    required RoutingConfiguration? custom,
+    required RegionCatalog regions,
+    required Map<int, ResolvedServer> serverDrafts,
+    required String? notice,
+  }) async {
+    final runtimeServers = minewire.servers;
+    var compiled = ConnectionCompiler.compile(
       settings: settings,
-      entries: entries,
-      finalExit: finalExit,
+      entries: runtimeServers.take(entries.length).toList(),
+      finalExit: finalExit == null ? null : runtimeServers.last,
       raw: rawConfig,
       custom: custom,
       regions: regions,
@@ -210,6 +260,16 @@ class ConnectionPreparation {
         maskAddress: policy.maskAddress,
       ),
     );
+    if (minewire.endpoints.isNotEmpty) {
+      final config = compiled.config;
+      MinewireRuntime.applyBypass(config, minewire.bypassRules);
+      compiled = CompiledConnection(
+        xrayJson: jsonEncode(config),
+        entries: compiled.entries,
+        finalExit: compiled.finalExit,
+        nodeTags: compiled.nodeTags,
+      );
+    }
     await GeoDataService().requireDependencies(
       geoDataReferences(jsonDecode(compiled.xrayJson) as Map<String, dynamic>),
     );
@@ -248,6 +308,7 @@ class ConnectionPreparation {
       platform: platform,
       request: request,
       notice: notice,
+      minewirePorts: minewire.ports,
     );
   }
 }

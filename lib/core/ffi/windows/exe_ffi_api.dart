@@ -41,9 +41,8 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     Future<void> Function(VpnStatus)? notify,
     void Function(Object)? notifyError,
     Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
-    Duration gracefulStop = const Duration(seconds: 3),
-  }) : _gracefulStop = gracefulStop,
-       _process = process ?? WindowsCoreProcess(),
+    this._gracefulStop = const Duration(seconds: 3),
+  }) : _process = process ?? WindowsCoreProcess(),
        _createSystemProxy = systemProxy ?? createSystemProxyManager,
        _corePath =
            executable ??

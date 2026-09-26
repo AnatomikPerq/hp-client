@@ -184,6 +184,67 @@ class AppHostApi {
     }
   }
 
+  /// Starts one minewire engine inside libXray and returns its local port.
+  Future<int> startMinewire({
+    required String serverAddress,
+    required String password,
+    required String mode,
+    int? localPort,
+  }) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.startMinewire,
+        payload: StartMinewireRequest(
+          serverAddress,
+          password,
+          mode: mode,
+          localPort: localPort,
+        ).toJson(),
+      ),
+    );
+    final port = response.success && response.data != null
+        ? StartMinewireResponse.fromJson(response.data!).localPort
+        : null;
+    if (port == null || port <= 0) {
+      throw LibXrayInvokeException(
+        response.error.isNotEmpty ? response.error : 'minewire start failed',
+      );
+    }
+    return port;
+  }
+
+  /// Stops the engine on [localPort], or all engines.
+  Future<void> stopMinewire({int? localPort}) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.stopMinewire,
+        payload: StopMinewireRequest(localPort: localPort).toJson(),
+      ),
+    );
+    if (!response.success) throw LibXrayInvokeException(response.error);
+  }
+
+  Future<List<MinewireEngineState>> minewireState() async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(method: LibXrayMethod.minewireState),
+    );
+    if (!response.success || response.data == null) {
+      throw LibXrayInvokeException(response.error);
+    }
+    return MinewireStateResponse.fromJson(response.data!).engines ?? const [];
+  }
+
+  /// Applies [request] to a running Core; throws with the Core's reason.
+  Future<void> controlXray(ControlXrayRequest request) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.controlXray,
+        payload: request.toJson(),
+      ),
+    );
+    if (!response.success) throw LibXrayInvokeException(response.error);
+  }
+
   Future<List<Map<String, dynamic>>> convertShareLinksToXrayJson(
     String text, {
     String? ageSecretKey,

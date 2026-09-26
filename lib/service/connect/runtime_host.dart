@@ -18,6 +18,7 @@ import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/traffic.dart';
+import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/shared/xray/metrics/model.dart';
 import 'package:path/path.dart' as p;
 
@@ -53,6 +54,7 @@ class ConnectionRuntimeHost {
   final Future<NativeVpnCommandResult> Function(ConnectionRuntime runtime)?
   _startVpn;
   final Future<NativeVpnCommandResult> Function()? _stopVpn;
+  final Future<void> Function() _stopEngines;
 
   ConnectionRuntimeHost({
     String? runDirectory,
@@ -61,7 +63,9 @@ class ConnectionRuntimeHost {
     Future<NativeVpnCommandResult> Function(ConnectionRuntime runtime)?
     startVpn,
     Future<NativeVpnCommandResult> Function()? stopVpn,
-  }) : _runDirectory = runDirectory,
+    Future<void> Function()? stopEngines,
+  }) : _stopEngines = stopEngines ?? MinewireRuntime.instance.stopAll,
+       _runDirectory = runDirectory,
        _readStatus = readStatus,
        _startVpn = startVpn,
        _stopVpn = stopVpn,
@@ -269,6 +273,8 @@ class ConnectionRuntimeHost {
     if (result.status != VpnStatus.disconnected) {
       throw ConnectionHostException('stopNotConfirmed', cause: result.message);
     }
+    // In-App engines serve only the runtime that has just stopped.
+    await _stopEngines();
     return HostConnection(result.status!, permission: result.permission);
   }
 }

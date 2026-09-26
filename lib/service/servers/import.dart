@@ -251,10 +251,13 @@ class ServerImportService {
         );
       }
     }
-    final name = link.name.trim().isEmpty
-        ? Uri.parse(link.url).host
-        : link.name.trim();
-    if (!(await SubscriptionValidator.validate(name, link.url)).item1) {
+    // An unnamed link takes the provider's Profile-Title, then the host.
+    final name = link.name.trim();
+    if (!(await SubscriptionValidator.validate(
+      name,
+      link.url,
+      allowEmptyName: true,
+    )).item1) {
       return const SubscriptionInsertResult(
         status: SubscriptionUpdateResult.invalidContent,
       );

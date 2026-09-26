@@ -809,5 +809,7 @@
   "systemProxyPortTitle": "درگاه پراکسی سیستم",
   "systemProxyPortDescription": "درگاه محلی SOCKS و HTTP که پراکسی سیستم به آن اشاره می‌کند. فقط روی 127.0.0.1 گوش می‌دهد.",
   "systemProxyPortInvalid": "درگاهی بین ۱ تا ۶۵۵۳۵ وارد کنید.",
-  "systemProxyPortBusy": "درگاه پراکسی سیستم توسط برنامهٔ دیگری استفاده می‌شود. در تنظیمات تونل درگاه دیگری انتخاب کنید."
+  "systemProxyPortBusy": "درگاه پراکسی سیستم توسط برنامهٔ دیگری استفاده می‌شود. در تنظیمات تونل درگاه دیگری انتخاب کنید.",
+  "minewireUnavailable": "دسترسی به سرور minewire ممکن نشد",
+  "minewireInvalid": "تنظیمات سرور minewire نامعتبر است"
 }

@@ -29,12 +29,33 @@ final class SubscriptionLoadResult {
     this.rows = const [],
     this.error,
     this.userInfo,
+    this.title,
   });
 
   final SubscriptionUpdateResult status;
   final List<CoreConfigCompanion> rows;
   final Object? error;
   final SubscriptionUserInfo? userInfo;
+
+  /// The provider's name for the subscription (`Profile-Title` header).
+  final String? title;
+
+  /// `Profile-Title` is plain text or `base64:<UTF-8 in base64>`.
+  static String? parseTitle(String? header) {
+    var value = header?.trim() ?? '';
+    if (value.toLowerCase().startsWith('base64:')) {
+      try {
+        value = utf8.decode(
+          base64.decode(base64.normalize(value.substring(7))),
+        );
+      } on FormatException {
+        return null;
+      }
+    }
+    value = value.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+    if (value.isEmpty) return null;
+    return value.length > 64 ? value.substring(0, 64) : value;
+  }
 
   bool get hasUsableRows =>
       status == SubscriptionUpdateResult.success &&
@@ -181,9 +202,13 @@ class SubscriptionService {
       }
       final rows = loaded.rows;
       final db = _database;
+      // Left empty, the name comes from the provider, then from the host.
+      final name = input.name.trim().isNotEmpty
+          ? input.name.trim()
+          : loaded.title ?? Uri.parse(input.url).host;
       return await db.transaction(() async {
         final row = SubscriptionCompanion.insert(
-          name: input.name,
+          name: name,
           url: input.url,
           ageSecretKey: Value(input.normalizedAgeSecretKey),
           agePublicKey: Value(input.normalizedAgePublicKey),
@@ -516,6 +541,7 @@ class SubscriptionService {
 
     final String text;
     final SubscriptionUserInfo? userInfo;
+    final String? title;
     try {
       final response = await _client.getTextResponse(
         input.url,
@@ -531,6 +557,9 @@ class SubscriptionService {
       userInfo = SubscriptionUserInfo.parse(
         response.headers['subscription-userinfo']?.join(';'),
         updatedAt: DateTime.now(),
+      );
+      title = SubscriptionLoadResult.parseTitle(
+        response.headers['profile-title']?.firstOrNull,
       );
     } catch (error) {
       if (error is DioException) {
@@ -553,6 +582,7 @@ class SubscriptionService {
             : SubscriptionUpdateResult.success,
         rows: rows,
         userInfo: userInfo,
+        title: title,
       );
     } on LibXrayInvokeException catch (error) {
       return SubscriptionLoadResult(

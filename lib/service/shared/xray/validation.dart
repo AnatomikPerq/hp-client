@@ -1,6 +1,7 @@
 import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/tools/json.dart';
+import 'package:onexray/service/minewire/link.dart';
 
 /// Projects App configurations for libXray instance construction, not startup.
 /// Only disposable copies are changed; persisted and runtime JSON stay intact.
@@ -111,6 +112,16 @@ abstract final class XrayValidation {
   }
 
   static Map<String, dynamic> _outbound(Map<String, dynamic> source) {
+    // Xray does not know minewire; the runtime turns a valid one into a
+    // socks outbound to its in-App engine, so it is checked as that shape.
+    // An invalid one stays as it is and libXray reports the protocol.
+    if (MinewireLink.fromOutbound(source) != null) {
+      return {
+        if (source['tag'] != null) 'tag': source['tag'],
+        'protocol': 'socks',
+        'settings': {'address': '127.0.0.1', 'port': 1},
+      };
+    }
     final outbound = JsonTool.copyMap(source);
     final stream = outbound['streamSettings'];
     if (stream is Map) {

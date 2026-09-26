@@ -6,12 +6,14 @@ import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/pigeon/flutter_api.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
+import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:onexray/service/connect/preparation.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
+import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 import 'package:onexray/service/shared/app_lifecycle.dart';
@@ -85,6 +87,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
   _inspectObserved;
   late final Future<ConnectionTraffic> Function(ConnectionRuntime) _readTraffic;
   late final Future<ConnectionRuntime?> Function() _readRuntime;
+  late final Future<void> Function(ConnectionRuntime) _resumeRuntime;
   final Stream<VpnStatus> _statusEvents;
   final Future<void> Function() _observeStatus;
   final void Function() _disposeStatus;
@@ -124,6 +127,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     Stream<VpnStatus>? statusEvents,
     Future<void> Function()? observeStatus,
     void Function()? disposeStatus,
+    Future<void> Function(ConnectionRuntime)? resumeRuntime,
   }) : db = database ?? AppDatabase(),
        _statusEvents =
            statusEvents ?? AppFlutterApi().vpnStatusController.stream,
@@ -138,6 +142,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         ((runtimes, status) => host.inspect(runtimes, observedStatus: status));
     _readTraffic = readTraffic ?? host.query;
     _readRuntime = readRuntime ?? host.readRuntime;
+    _resumeRuntime = resumeRuntime ?? _resumeMinewire;
     _prepare =
         prepare ??
         ((configuration, cancelled) => ConnectionPreparation(db: db).prepare(
@@ -145,6 +150,17 @@ class ConnectionCoordinator with WidgetsBindingObserver {
           cancelled: cancelled,
           onResolved: reportResolvedNodes,
         ));
+  }
+
+  /// A Core that survived an App restart still points at in-App engines.
+  Future<void> _resumeMinewire(ConnectionRuntime runtime) async {
+    if (runtime.minewirePorts.isEmpty) return;
+    await MinewireRuntime.instance.resume(runtime.minewirePorts, (id) async {
+      final row = await db.coreConfigDao.searchRow(id);
+      return row == null || row.type != 'outbound'
+          ? null
+          : ResolvedServer.fromRow(row);
+    });
   }
 
   Future<ConnectionConfiguration> get configuration async =>
@@ -179,6 +195,8 @@ class ConnectionCoordinator with WidgetsBindingObserver {
             await _observeStatus();
           }
           var current = await _inspect(await _known());
+          final running = current.connected ? current.runtime : null;
+          if (running != null) await _resumeRuntime(running);
           // Only normal startup supplies this action; passive refreshes never
           // request permission or repeat a dismissed prompt.
           if (requestPermission != null &&

@@ -162,6 +162,110 @@ TestXrayRequest _$TestXrayRequestFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$TestXrayRequestToJson(TestXrayRequest instance) =>
     <String, dynamic>{'xrayJson': ?instance.xrayJson};
 
+StartMinewireRequest _$StartMinewireRequestFromJson(
+  Map<String, dynamic> json,
+) => StartMinewireRequest(
+  json['serverAddress'] as String?,
+  json['password'] as String?,
+  mode: json['mode'] as String?,
+  localPort: (json['localPort'] as num?)?.toInt(),
+);
+
+Map<String, dynamic> _$StartMinewireRequestToJson(
+  StartMinewireRequest instance,
+) => <String, dynamic>{
+  'serverAddress': ?instance.serverAddress,
+  'password': ?instance.password,
+  'mode': ?instance.mode,
+  'localPort': ?instance.localPort,
+};
+
+StartMinewireResponse _$StartMinewireResponseFromJson(
+  Map<String, dynamic> json,
+) => StartMinewireResponse((json['localPort'] as num?)?.toInt());
+
+Map<String, dynamic> _$StartMinewireResponseToJson(
+  StartMinewireResponse instance,
+) => <String, dynamic>{'localPort': ?instance.localPort};
+
+StopMinewireRequest _$StopMinewireRequestFromJson(Map<String, dynamic> json) =>
+    StopMinewireRequest(localPort: (json['localPort'] as num?)?.toInt());
+
+Map<String, dynamic> _$StopMinewireRequestToJson(
+  StopMinewireRequest instance,
+) => <String, dynamic>{'localPort': ?instance.localPort};
+
+MinewireEngineState _$MinewireEngineStateFromJson(Map<String, dynamic> json) =>
+    MinewireEngineState(
+      (json['localPort'] as num?)?.toInt(),
+      json['running'] as bool?,
+      json['connected'] as bool?,
+      json['lastError'] as String?,
+    );
+
+Map<String, dynamic> _$MinewireEngineStateToJson(
+  MinewireEngineState instance,
+) => <String, dynamic>{
+  'localPort': ?instance.localPort,
+  'running': ?instance.running,
+  'connected': ?instance.connected,
+  'lastError': ?instance.lastError,
+};
+
+MinewireStateResponse _$MinewireStateResponseFromJson(
+  Map<String, dynamic> json,
+) => MinewireStateResponse(
+  (json['engines'] as List<dynamic>?)
+      ?.map((e) => MinewireEngineState.fromJson(e as Map<String, dynamic>))
+      .toList(),
+);
+
+Map<String, dynamic> _$MinewireStateResponseToJson(
+  MinewireStateResponse instance,
+) => <String, dynamic>{
+  'engines': ?instance.engines?.map((e) => e.toJson()).toList(),
+};
+
+ControlXrayOperation _$ControlXrayOperationFromJson(
+  Map<String, dynamic> json,
+) => ControlXrayOperation(
+  json['op'] as String,
+  tag: json['tag'] as String?,
+  outbound: json['outbound'] as Map<String, dynamic>?,
+  routing: json['routing'] as Map<String, dynamic>?,
+  append: json['append'] as bool?,
+);
+
+Map<String, dynamic> _$ControlXrayOperationToJson(
+  ControlXrayOperation instance,
+) => <String, dynamic>{
+  'op': instance.op,
+  'tag': ?instance.tag,
+  'outbound': ?instance.outbound,
+  'routing': ?instance.routing,
+  'append': ?instance.append,
+};
+
+ControlXrayRequest _$ControlXrayRequestFromJson(Map<String, dynamic> json) =>
+    ControlXrayRequest(
+      json['server'] as String,
+      json['username'] as String,
+      json['password'] as String,
+      (json['operations'] as List<dynamic>)
+          .map((e) => ControlXrayOperation.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      timeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+    );
+
+Map<String, dynamic> _$ControlXrayRequestToJson(ControlXrayRequest instance) =>
+    <String, dynamic>{
+      'server': instance.server,
+      'username': instance.username,
+      'password': instance.password,
+      'timeoutSeconds': ?instance.timeoutSeconds,
+      'operations': instance.operations.map((e) => e.toJson()).toList(),
+    };
+
 LibXrayInvokeRequest _$LibXrayInvokeRequestFromJson(
   Map<String, dynamic> json,
 ) => LibXrayInvokeRequest(
@@ -188,6 +292,10 @@ const _$LibXrayMethodEnumMap = {
   LibXrayMethod.runXray: 'runXray',
   LibXrayMethod.stopXray: 'stopXray',
   LibXrayMethod.xrayVersion: 'xrayVersion',
+  LibXrayMethod.startMinewire: 'startMinewire',
+  LibXrayMethod.stopMinewire: 'stopMinewire',
+  LibXrayMethod.minewireState: 'minewireState',
+  LibXrayMethod.controlXray: 'controlXray',
 };
 
 GetFreePortsRequest _$GetFreePortsRequestFromJson(Map<String, dynamic> json) =>

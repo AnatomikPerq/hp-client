@@ -67,6 +67,11 @@ class ConnectionRuntime {
   final String? notice;
   final DateTime startedAt;
 
+  /// Local ports of the in-App minewire engines, by server id. A Core that
+  /// outlives an App restart is compiled against them, so the next App
+  /// session brings its engines back on the same ports.
+  final Map<int, int> minewirePorts;
+
   ConnectionRuntime._({
     required this.configuration,
     required this.platform,
@@ -76,6 +81,7 @@ class ConnectionRuntime {
     required this.finalExit,
     required this.startedAt,
     this.notice,
+    this.minewirePorts = const {},
   });
 
   factory ConnectionRuntime.create({
@@ -85,6 +91,7 @@ class ConnectionRuntime {
     required StartVpnRequest request,
     String? notice,
     DateTime? startedAt,
+    Map<int, int> minewirePorts = const {},
   }) {
     startedAt ??= DateTime.now();
     final entries = [
@@ -100,6 +107,11 @@ class ConnectionRuntime {
       'configuration': configuration.toJson(),
       'entries': [for (final entry in entries) entry.toJson()],
       'finalExit': finalExit?.toJson(),
+      if (minewirePorts.isNotEmpty)
+        'minewire': {
+          for (final entry in minewirePorts.entries)
+            '${entry.key}': entry.value,
+        },
     });
     final storedRequest = StartVpnRequest(
       request.tun,
@@ -118,6 +130,7 @@ class ConnectionRuntime {
       finalExit: finalExit,
       notice: notice,
       startedAt: startedAt,
+      minewirePorts: Map.unmodifiable(minewirePorts),
     );
   }
 
@@ -167,7 +180,23 @@ class ConnectionRuntime {
       finalExit: metadata['finalExit'] == null
           ? null
           : RuntimeNode.fromJson(metadata['finalExit'] as Map<String, dynamic>),
+      minewirePorts: _minewirePorts(metadata['minewire']),
     );
+  }
+
+  static Map<int, int> _minewirePorts(Object? value) {
+    if (value == null) return const {};
+    if (value is! Map) throw const FormatException('Invalid minewire ports');
+    final ports = <int, int>{};
+    for (final entry in value.entries) {
+      final id = int.tryParse('${entry.key}');
+      final port = entry.value;
+      if (id == null || id <= 0 || port is! int || port < 1 || port > 65535) {
+        throw const FormatException('Invalid minewire ports');
+      }
+      ports[id] = port;
+    }
+    return Map.unmodifiable(ports);
   }
 
   String get identity =>

@@ -6,6 +6,8 @@ import 'package:onexray/core/errors/failure.dart';
 import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:onexray/core/tools/logger.dart';
+import 'package:onexray/service/minewire/link.dart';
+import 'package:onexray/service/minewire/ping.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -193,17 +195,29 @@ class PingService {
       if (_pingQueue.isPaused || (isCancelled?.call() ?? false)) break;
       final batchRows = <CoreConfigData>[];
       final sources = <PingBatchSource>[];
+      final minewireRows = <CoreConfigData>[];
+      final minewireLinks = <MinewireLink>[];
       for (final row in rowSlice) {
+        final link = _minewireLink(row);
+        if (link != null) {
+          minewireRows.add(row);
+          minewireLinks.add(link);
+          continue;
+        }
         final source = _makePingSource(row);
         if (source != null) {
           batchRows.add(row);
           sources.add(source);
         }
       }
-      final results = await (_batchOverride ?? PingBatchRunner.run)(
-        sources,
-        pingState,
-      );
+      final results = [
+        ...await (_batchOverride ?? PingBatchRunner.run)(sources, pingState),
+        ...await Future.wait([
+          for (final link in minewireLinks)
+            minewireTcpPing(link, pingState.timeout.toInt()),
+        ]),
+      ];
+      batchRows.addAll(minewireRows);
       await db.transaction(() async {
         for (var index = 0; index < results.length; index++) {
           final result = results[index];
@@ -219,6 +233,18 @@ class PingService {
         for (var index = 0; index < results.length; index++)
           batchRows[index].id: results[index],
       });
+    }
+  }
+
+  MinewireLink? _minewireLink(CoreConfigData row) {
+    if (CoreConfigType.fromString(row.type) != CoreConfigType.outbound ||
+        !EmptyTool.checkString(row.data)) {
+      return null;
+    }
+    try {
+      return MinewireLink.fromOutbound(readOutboundFromDbData(row));
+    } catch (_) {
+      return null;
     }
   }
 

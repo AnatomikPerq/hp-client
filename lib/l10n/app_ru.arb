@@ -809,5 +809,7 @@
   "systemProxyPortTitle": "Порт системного прокси",
   "systemProxyPortDescription": "Локальный порт SOCKS и HTTP, на который указывает системный прокси. Слушает только 127.0.0.1.",
   "systemProxyPortInvalid": "Укажите порт от 1 до 65535.",
-  "systemProxyPortBusy": "Порт системного прокси занят другой программой. Выберите другой порт в настройках туннеля."
+  "systemProxyPortBusy": "Порт системного прокси занят другой программой. Выберите другой порт в настройках туннеля.",
+  "minewireUnavailable": "Сервер minewire недоступен",
+  "minewireInvalid": "Настройки сервера minewire неверны"
 }

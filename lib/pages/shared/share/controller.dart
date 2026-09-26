@@ -2,6 +2,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/service/minewire/link.dart';
 import 'package:onexray/service/shared/failure.dart';
 import 'package:image/image.dart' as img;
 import 'package:onexray/core/db/database/constants.dart';
@@ -127,9 +128,12 @@ class ShareController extends PageCubit<SharePageState> {
       ),
     );
     final outbound = readOutboundFromDbData(config);
-    final url = await AppHostApi().convertXrayJsonToShareLinks({
-      'outbounds': [outbound],
-    });
+    // libXray has no minewire link format; the node carries its own.
+    final url =
+        MinewireLink.fromOutbound(outbound)?.toShareLink() ??
+        await AppHostApi().convertXrayJsonToShareLinks({
+          'outbounds': [outbound],
+        });
     if (url.trim().isEmpty) {
       _finishLinkError();
       return;

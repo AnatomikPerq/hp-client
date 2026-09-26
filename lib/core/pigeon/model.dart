@@ -221,6 +221,141 @@ enum LibXrayMethod {
   stopXray,
   @JsonValue("xrayVersion")
   xrayVersion,
+  @JsonValue("startMinewire")
+  startMinewire,
+  @JsonValue("stopMinewire")
+  stopMinewire,
+  @JsonValue("minewireState")
+  minewireState,
+  @JsonValue("controlXray")
+  controlXray,
+}
+
+/// Starts one embedded minewire engine (HYPER CLIENT libXray fork). The server
+/// address is already resolved: once the tunnel is up, DNS may depend on it.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartMinewireRequest {
+  String? serverAddress;
+  String? password;
+  String? mode;
+  int? localPort;
+
+  StartMinewireRequest(
+    this.serverAddress,
+    this.password, {
+    this.mode,
+    this.localPort,
+  });
+
+  factory StartMinewireRequest.fromJson(Map<String, dynamic> json) =>
+      _$StartMinewireRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartMinewireRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartMinewireResponse {
+  int? localPort;
+
+  StartMinewireResponse(this.localPort);
+
+  factory StartMinewireResponse.fromJson(Map<String, dynamic> json) =>
+      _$StartMinewireResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartMinewireResponseToJson(this);
+}
+
+/// Stops the engine on [localPort], or every engine when it is omitted.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StopMinewireRequest {
+  int? localPort;
+
+  StopMinewireRequest({this.localPort});
+
+  factory StopMinewireRequest.fromJson(Map<String, dynamic> json) =>
+      _$StopMinewireRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StopMinewireRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class MinewireEngineState {
+  int? localPort;
+  bool? running;
+  bool? connected;
+  String? lastError;
+
+  MinewireEngineState(
+    this.localPort,
+    this.running,
+    this.connected,
+    this.lastError,
+  );
+
+  factory MinewireEngineState.fromJson(Map<String, dynamic> json) =>
+      _$MinewireEngineStateFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MinewireEngineStateToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class MinewireStateResponse {
+  List<MinewireEngineState>? engines;
+
+  MinewireStateResponse(this.engines);
+
+  factory MinewireStateResponse.fromJson(Map<String, dynamic> json) =>
+      _$MinewireStateResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MinewireStateResponseToJson(this);
+}
+
+/// One call on a running Core's API, applied in order by `controlXray`.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class ControlXrayOperation {
+  /// `removeOutbound`, `addOutbound`, `removeRule` or `addRules`.
+  String op;
+  String? tag;
+  Map<String, dynamic>? outbound;
+  Map<String, dynamic>? routing;
+  bool? append;
+
+  ControlXrayOperation(
+    this.op, {
+    this.tag,
+    this.outbound,
+    this.routing,
+    this.append,
+  });
+
+  factory ControlXrayOperation.fromJson(Map<String, dynamic> json) =>
+      _$ControlXrayOperationFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ControlXrayOperationToJson(this);
+}
+
+/// The Core's API is reachable only through its password-protected loopback
+/// SOCKS inbound; see `controlXray` in the libXray fork.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class ControlXrayRequest {
+  String server;
+  String username;
+  String password;
+  int? timeoutSeconds;
+  List<ControlXrayOperation> operations;
+
+  ControlXrayRequest(
+    this.server,
+    this.username,
+    this.password,
+    this.operations, {
+    this.timeoutSeconds,
+  });
+
+  factory ControlXrayRequest.fromJson(Map<String, dynamic> json) =>
+      _$ControlXrayRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ControlXrayRequestToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
