@@ -288,10 +288,11 @@ class ProvenanceTest(unittest.TestCase):
         regions.parent.mkdir(parents=True)
         regions.write_text('{}')
         (root / "pubspec.lock").write_text("fixture lock")
-        package = output / "OneXray-linux-x86_64.zip"
+        package = output / "HyperClient-linux-x86_64.zip"
         package.write_bytes(b"fixture package")
-        (output / "OneXray-windows-amd64.msix").write_bytes(b"other target")
+        (output / "HyperClient-windows-amd64.msix").write_bytes(b"other target")
         builder = SimpleNamespace(
+            project="HyperClient",
             root_dir=str(root), output_dir=str(output), workspace_dir=str(self.artifacts),
             project_dir=str(root / "linux"), system="linux", build_number=401,
             builder=SimpleNamespace(package_suffix="linux-x86_64"),
@@ -326,8 +327,9 @@ class ProvenanceTest(unittest.TestCase):
         compiler = inno_directory / "ISCC.exe"
         compiler.write_bytes(b"compiler fixture")
         for extension in ("msix", "exe", "zip"):
-            (output / f"OneXray-windows-amd64.{extension}").write_bytes(extension.encode())
+            (output / f"HyperClient-windows-amd64.{extension}").write_bytes(extension.encode())
         builder = SimpleNamespace(
+            project="HyperClient",
             root_dir=str(root), output_dir=str(output), workspace_dir=str(self.artifacts),
             project_dir=str(root / "windows"), system="windows", build_number=401,
             builder=SimpleNamespace(package_suffix="windows-amd64", target_architecture="x64",
@@ -349,8 +351,12 @@ class ProvenanceTest(unittest.TestCase):
                 destination = finish_build(builder, receipt)
             self.assertEqual(receipt["windowsMode"], mode)
             self.assertEqual(destination.name, f"provenance-windows-x64-{mode}.json")
-            self.assertEqual(set(receipt["packages"]), {f"OneXray-windows-amd64.{ext}" for ext in extensions})
+            self.assertEqual(set(receipt["packages"]), {f"HyperClient-windows-amd64.{ext}" for ext in extensions})
             self.assertEqual("msixVersion" in receipt, mode == "msix")
+            # The EXE build has no VCore checkout to record.
+            self.assertEqual("VCore" in receipt["sources"], mode == "msix")
+            self.assertEqual("VCore" in receipt["sourceDirty"], mode == "msix")
+            self.assertEqual("vcoreArtifacts" in receipt, mode == "msix")
             self.assertEqual("fastforge" in receipt["tools"], mode == "exe")
             self.assertEqual("innoSetup" in receipt["tools"], mode == "exe")
             if mode == "exe":

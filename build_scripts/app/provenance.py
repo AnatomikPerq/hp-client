@@ -70,7 +70,8 @@ def begin_build(builder, target: str) -> dict:
         "app": root,
         "libXray": workspace / builder.project_config["core.dir"],
     }
-    if target == "windows":
+    # VCore only backs the MSIX runtime; the EXE build does not need a checkout.
+    if target == "windows" and builder.builder.mode == "msix":
         source_paths["VCore"] = Path(builder.builder._vcore_dir())
         sources["VCore"] = source_revision(
             source_paths["VCore"], os.environ.get("ONEXRAY_VCORE_SHA"),
@@ -156,7 +157,8 @@ def finish_build(builder, receipt: dict) -> Path:
         "android/gradle/wrapper/gradle-wrapper.properties",
     )]
     lock_files.extend(root.glob("*/Podfile.lock"))
-    if target == "windows":
+    msix = target == "windows" and receipt["windowsMode"] == "msix"
+    if msix:
         vcore = Path(builder.builder._vcore_dir())
         lock_files.extend((vcore / "Cargo.lock", vcore / "scripts/uv.lock"))
     files = {}
@@ -178,17 +180,18 @@ def finish_build(builder, receipt: dict) -> Path:
             if file.is_file():
                 files[f"OneXray/{file.resolve().relative_to(root.resolve()).as_posix()}"] = sha256(file)
 
+    project = builder.project
     patterns = {
-        "ios": ("OneXray-ios*.ipa",),
+        "ios": (f"{project}-ios*.ipa",),
         "macos": ("*.pkg",),
-        "macos_se": ("OneXray-macos-universal*.zip",),
-        "android": ("OneXray-android-universal*.apk", "app-release.aab"),
-        "linux": (f"OneXray-{builder.builder.package_suffix}.zip",
-                  f"OneXray-{builder.builder.package_suffix}.deb"),
+        "macos_se": (f"{project}-macos-universal*.zip",),
+        "android": (f"{project}-android-universal*.apk", "app-release.aab"),
+        "linux": (f"{project}-{builder.builder.package_suffix}.zip",
+                  f"{project}-{builder.builder.package_suffix}.deb"),
     }
     if target == "windows":
         extensions = ("msix",) if receipt["windowsMode"] == "msix" else ("exe", "zip")
-        patterns["windows"] = tuple(f"OneXray-{builder.builder.package_suffix}.{ext}"
+        patterns["windows"] = tuple(f"{project}-{builder.builder.package_suffix}.{ext}"
                                     for ext in extensions)
         if not all((output / name).is_file() for name in patterns["windows"]):
             raise ValueError("Missing Windows packages for build provenance")
@@ -212,9 +215,8 @@ def finish_build(builder, receipt: dict) -> Path:
     ndk = os.environ.get("ANDROID_NDK_HOME") or os.environ.get("ANDROID_NDK_ROOT")
     if ndk and (Path(ndk) / "source.properties").is_file():
         receipt["androidNdk"] = (Path(ndk) / "source.properties").read_text()
-    if target == "windows":
-        if receipt["windowsMode"] == "msix":
-            receipt["msixVersion"] = builder.builder.msix_version()
+    if msix:
+        receipt["msixVersion"] = builder.builder.msix_version()
         receipt["vcoreArtifacts"] = json.loads((vcore / "dist/windows" /
             receipt["architecture"] / "vcore-windows-artifacts.json").read_text())
     mode_suffix = f"-{receipt['windowsMode']}" if target == "windows" else ""
@@ -270,13 +272,14 @@ def verify_release(artifacts: Path, run: dict, *, tag: str | None = None,
                 or sources.get("libXray") != expected["libXray"]):
             raise ValueError(f"Invalid build provenance: {manifest.name}")
         target = receipt.get("target")
-        required_sources = ("app", "libXray", "VCore") if target == "windows" else ("app", "libXray")
+        msix = target == "windows" and receipt.get("windowsMode") == "msix"
+        required_sources = ("app", "libXray", "VCore") if msix else ("app", "libXray")
         dirty = receipt.get("sourceDirty")
         if not isinstance(dirty, dict) or any(dirty.get(name) is not False for name in required_sources):
             raise ValueError("Release sources must be recorded and clean before building")
         mode = None
         if target == "windows":
-            if sources.get("VCore") != expected["VCore"]:
+            if msix and sources.get("VCore") != expected["VCore"]:
                 raise ValueError("VCore checkout does not match build metadata")
             mode = receipt.get("windowsMode")
             if mode not in {"exe", "msix"}:
