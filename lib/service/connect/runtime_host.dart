@@ -19,6 +19,7 @@ import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/traffic.dart';
 import 'package:onexray/service/minewire/runtime.dart';
+import 'package:onexray/service/connect/live_control.dart';
 import 'package:onexray/service/shared/xray/metrics/model.dart';
 import 'package:path/path.dart' as p;
 
@@ -55,6 +56,7 @@ class ConnectionRuntimeHost {
   _startVpn;
   final Future<NativeVpnCommandResult> Function()? _stopVpn;
   final Future<void> Function() _stopEngines;
+  final Future<void> Function(ControlXrayRequest) _control;
 
   ConnectionRuntimeHost({
     String? runDirectory,
@@ -64,7 +66,9 @@ class ConnectionRuntimeHost {
     startVpn,
     Future<NativeVpnCommandResult> Function()? stopVpn,
     Future<void> Function()? stopEngines,
+    Future<void> Function(ControlXrayRequest)? control,
   }) : _stopEngines = stopEngines ?? MinewireRuntime.instance.stopAll,
+       _control = control ?? AppHostApi().controlXray,
        _runDirectory = runDirectory,
        _readStatus = readStatus,
        _startVpn = startVpn,
@@ -263,6 +267,30 @@ class ConnectionRuntimeHost {
       runtime: runtime,
       permission: result.permission,
     );
+  }
+
+  /// Moves the running Core to [next] through its API, without a restart.
+  /// Throws on any failure; the caller then restarts the Core, because a
+  /// half-applied change is worse than another UAC prompt.
+  Future<HostConnection> swap(
+    ConnectionRuntime running,
+    ConnectionRuntime next,
+    List<ControlXrayOperation> operations,
+  ) async {
+    final control = running.control;
+    if (control == null) throw const ConnectionHostException('swapUnavailable');
+    await _control(
+      ControlXrayRequest(
+        control.server,
+        LiveControl.username,
+        control.password,
+        operations,
+        timeoutSeconds: 5,
+      ),
+    );
+    if (_startVpn == null) await next.request.writeToStartFile();
+    await MinewireRuntime.instance.keepOnly(next.minewirePorts.values.toSet());
+    return HostConnection(VpnStatus.connected, runtime: next);
   }
 
   Future<HostConnection> stop() async {

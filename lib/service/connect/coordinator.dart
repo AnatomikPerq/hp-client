@@ -6,6 +6,7 @@ import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/pigeon/flutter_api.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
+import 'package:onexray/core/pigeon/model.dart' show ControlXrayOperation;
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:onexray/service/connect/preparation.dart';
@@ -14,6 +15,8 @@ import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/minewire/runtime.dart';
+import 'package:onexray/service/connect/live_control.dart';
+import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 import 'package:onexray/service/shared/app_lifecycle.dart';
@@ -88,6 +91,18 @@ class ConnectionCoordinator with WidgetsBindingObserver {
   late final Future<ConnectionTraffic> Function(ConnectionRuntime) _readTraffic;
   late final Future<ConnectionRuntime?> Function() _readRuntime;
   late final Future<void> Function(ConnectionRuntime) _resumeRuntime;
+  late final Future<ConnectionRuntime> Function(
+    ConnectionConfiguration,
+    Future<void>,
+    ConnectionRuntime,
+  )
+  _prepareSwap;
+  late final Future<HostConnection> Function(
+    ConnectionRuntime,
+    ConnectionRuntime,
+    List<ControlXrayOperation>,
+  )
+  _swap;
   final Stream<VpnStatus> _statusEvents;
   final Future<void> Function() _observeStatus;
   final void Function() _disposeStatus;
@@ -128,6 +143,18 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     Future<void> Function()? observeStatus,
     void Function()? disposeStatus,
     Future<void> Function(ConnectionRuntime)? resumeRuntime,
+    Future<ConnectionRuntime> Function(
+      ConnectionConfiguration,
+      Future<void>,
+      ConnectionRuntime,
+    )?
+    prepareSwap,
+    Future<HostConnection> Function(
+      ConnectionRuntime,
+      ConnectionRuntime,
+      List<ControlXrayOperation>,
+    )?
+    swap,
   }) : db = database ?? AppDatabase(),
        _statusEvents =
            statusEvents ?? AppFlutterApi().vpnStatusController.stream,
@@ -143,6 +170,16 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     _readTraffic = readTraffic ?? host.query;
     _readRuntime = readRuntime ?? host.readRuntime;
     _resumeRuntime = resumeRuntime ?? _resumeMinewire;
+    _swap = swap ?? host.swap;
+    _prepareSwap =
+        prepareSwap ??
+        ((configuration, cancelled, running) =>
+            ConnectionPreparation(db: db).prepare(
+              configuration,
+              cancelled: cancelled,
+              onResolved: reportResolvedNodes,
+              reuse: running,
+            ));
     _prepare =
         prepare ??
         ((configuration, cancelled) => ConnectionPreparation(db: db).prepare(
@@ -544,6 +581,31 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         throw const ConnectionHostException('runtimeMetadataUnavailable');
       }
       bool touchedHost = false;
+      if (shouldStart &&
+          old != null &&
+          prepare == null &&
+          writeAssets == null &&
+          validateAssets == null &&
+          imported == null) {
+        final swapped = await _trySwap(old, next, cancellation);
+        if (swapped != null) {
+          try {
+            await db.connectionConfigDao.commit(
+              configurationJson: swapped.configuration.encode(),
+              writeAssets: write,
+            );
+          } finally {
+            _pendingRuntime = null;
+            _preparingNodeIds = {};
+            _cancel = null;
+          }
+          _publish(
+            HostConnection(VpnStatus.connected, runtime: swapped),
+            issue: swapped.notice,
+          );
+          return;
+        }
+      }
       try {
         _preparingNodeIds = {...?old?.nodeIds};
         _checkCancelled(cancellation);
@@ -653,6 +715,59 @@ class ConnectionCoordinator with WidgetsBindingObserver {
       () => imported?.save(save) ?? save(() async {}),
     );
   });
+
+  /// Switches nodes on the live Core when only its outbounds and routing
+  /// change. Returns null whenever that is not possible or anything fails:
+  /// the caller then restarts the Core as usual.
+  Future<ConnectionRuntime?> _trySwap(
+    ConnectionRuntime running,
+    ConnectionConfiguration next,
+    Completer<void> cancellation,
+  ) async {
+    if (running.control == null ||
+        jsonEncode(running.configuration.policy.toJson()) !=
+            jsonEncode(next.policy.toJson()) ||
+        running.configuration.connection.expert ||
+        next.connection.expert) {
+      return null;
+    }
+    ConnectionRuntime? prepared;
+    var applied = false;
+    try {
+      _preparingNodeIds = {...running.nodeIds};
+      prepared = await _prepareSwap(next, cancellation.future, running);
+      _checkCancelled(cancellation);
+      final before = jsonDecode(running.xrayJson) as Map<String, dynamic>;
+      final after = jsonDecode(prepared.xrayJson) as Map<String, dynamic>;
+      if (!LiveControl.swappable(before, after)) return null;
+      _pendingRuntime = prepared;
+      state.value = ConnectionView(
+        phase: ConnectionPhase.connecting,
+        runtime: running,
+        traffic: state.value.traffic,
+      );
+      applied = true;
+      final result = await _swap(
+        running,
+        prepared,
+        LiveControl.operations(before, after),
+      );
+      return result.runtime;
+    } catch (error) {
+      // A half-configured tunnel is worse than an extra UAC prompt.
+      ygLogger('live node switch failed, restarting instead: $error');
+      return null;
+    } finally {
+      final unused = prepared;
+      if (unused != null && !(applied && _pendingRuntime == unused)) {
+        await MinewireRuntime.instance.stopPorts(
+          unused.minewirePorts.values.where(
+            (port) => !running.minewirePorts.values.contains(port),
+          ),
+        );
+      }
+    }
+  }
 
   void cancel() {
     if (_cancel?.isCompleted == false) _cancel!.complete();

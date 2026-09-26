@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/service/connect/compiler.dart';
+import 'package:onexray/service/connect/live_control.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/settings.dart';
 
@@ -72,6 +73,10 @@ class ConnectionRuntime {
   /// session brings its engines back on the same ports.
   final Map<int, int> minewirePorts;
 
+  /// The running Core's authenticated API access; null where node switches
+  /// restart the Core instead.
+  final LiveControl? control;
+
   ConnectionRuntime._({
     required this.configuration,
     required this.platform,
@@ -82,6 +87,7 @@ class ConnectionRuntime {
     required this.startedAt,
     this.notice,
     this.minewirePorts = const {},
+    this.control,
   });
 
   factory ConnectionRuntime.create({
@@ -92,6 +98,7 @@ class ConnectionRuntime {
     String? notice,
     DateTime? startedAt,
     Map<int, int> minewirePorts = const {},
+    LiveControl? control,
   }) {
     startedAt ??= DateTime.now();
     final entries = [
@@ -112,6 +119,7 @@ class ConnectionRuntime {
           for (final entry in minewirePorts.entries)
             '${entry.key}': entry.value,
         },
+      if (control != null) 'control': control.toJson(),
     });
     final storedRequest = StartVpnRequest(
       request.tun,
@@ -131,6 +139,7 @@ class ConnectionRuntime {
       notice: notice,
       startedAt: startedAt,
       minewirePorts: Map.unmodifiable(minewirePorts),
+      control: control,
     );
   }
 
@@ -181,6 +190,9 @@ class ConnectionRuntime {
           ? null
           : RuntimeNode.fromJson(metadata['finalExit'] as Map<String, dynamic>),
       minewirePorts: _minewirePorts(metadata['minewire']),
+      control: metadata['control'] is Map<String, dynamic>
+          ? LiveControl.fromJson(metadata['control'] as Map<String, dynamic>)
+          : null,
     );
   }
 

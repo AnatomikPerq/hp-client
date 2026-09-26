@@ -15,6 +15,7 @@ import 'package:onexray/service/connect/platform_requirements.dart';
 import 'package:onexray/service/connect/resolver.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
+import 'package:onexray/service/connect/live_control.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
@@ -83,6 +84,7 @@ class ConnectionPreparation {
     RoutingConfiguration? customDraft,
     Map<int, ResolvedServer> serverDrafts = const {},
     void Function(Set<int>)? onResolved,
+    ConnectionRuntime? reuse,
   }) async {
     var configuration = input;
     var settings = input.connection;
@@ -183,12 +185,36 @@ class ConnectionPreparation {
       throw const FormatException('inbounds must be an object array');
     }
     final proxyPort = systemProxy ? policy.systemProxyPort : null;
-    if (proxyPort != null) await ensureSystemProxyPortFree(proxyPort);
+    // A live switch keeps the running Core's ports: its inbounds, metrics and
+    // control access must stay exactly as they are.
+    if (proxyPort != null && reuse == null) {
+      await ensureSystemProxyPortFree(proxyPort);
+    }
     final allocated = await allocateRuntimePorts(
       userInbounds.cast<Map<String, dynamic>>(),
       reserved: {?proxyPort},
     );
-    final ports = [proxyPort ?? allocated[0], allocated[1]];
+    final ports = reuse == null
+        ? [proxyPort ?? allocated[0], allocated[1]]
+        : [
+            int.tryParse(reuse.request.socksPort ?? '') ?? allocated[0],
+            int.parse(reuse.request.metricsPort!),
+          ];
+    // Desktop Cores outlive UAC prompts; switching nodes on them goes through
+    // their API instead of a restart. Raw keeps its own API setup, if any.
+    LiveControl? control;
+    if (!settings.expert &&
+        (platform == ConnectionPlatform.windows ||
+            platform == ConnectionPlatform.linux)) {
+      control =
+          reuse?.control ??
+          LiveControl.create(
+            (await allocateRuntimePorts(
+              userInbounds.cast<Map<String, dynamic>>(),
+              reserved: {...ports},
+            ))[0],
+          );
+    }
     // minewire engines run in the App and are reached through loopback SOCKS;
     // the servers handed to the compiler point at them.
     final minewire = await MinewireRuntime.instance.materialize([
@@ -212,6 +238,8 @@ class ConnectionPreparation {
         regions: regions,
         serverDrafts: serverDrafts,
         notice: notice,
+        control: control,
+        startedAt: reuse?.startedAt,
       );
     } catch (_) {
       await MinewireRuntime.instance.stopPorts(minewire.ports.values);
@@ -235,6 +263,8 @@ class ConnectionPreparation {
     required RegionCatalog regions,
     required Map<int, ResolvedServer> serverDrafts,
     required String? notice,
+    required LiveControl? control,
+    required DateTime? startedAt,
   }) async {
     final runtimeServers = minewire.servers;
     var compiled = ConnectionCompiler.compile(
@@ -260,9 +290,11 @@ class ConnectionPreparation {
         maskAddress: policy.maskAddress,
       ),
     );
-    if (minewire.endpoints.isNotEmpty) {
+    if (minewire.endpoints.isNotEmpty || control != null) {
       final config = compiled.config;
       MinewireRuntime.applyBypass(config, minewire.bypassRules);
+      // Last: the control rule has to stay first, ahead of the bypass.
+      control?.apply(config);
       compiled = CompiledConnection(
         xrayJson: jsonEncode(config),
         entries: compiled.entries,
@@ -309,6 +341,8 @@ class ConnectionPreparation {
       request: request,
       notice: notice,
       minewirePorts: minewire.ports,
+      control: control,
+      startedAt: startedAt,
     );
   }
 }
