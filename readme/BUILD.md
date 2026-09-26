@@ -114,6 +114,16 @@ python build_scripts/main.py HyperClient windows --windows-mode exe
 этой защиты не даёт (её можно распаковать куда угодно) — для TUN только
 установщик.
 
+## Сборка в CI
+
+`.github/workflows/build.yml` собирает то же самое на `windows-2025`: на
+теге `v*` (тег появляется при создании релиза) и вручную через
+`workflow_dispatch`, где можно указать ветку или коммит libXray. Номер
+сборки берётся из `pubspec.yaml`, тег обязан совпадать с версией оттуда.
+Результат — артефакты запуска `windows-x64` (установщик и ZIP) и
+`provenance-windows-x64-exe`; в релиз workflow ничего не выкладывает.
+Секреты не нужны.
+
 ## Грабли
 
 - **Прерванная сборка оставляет `pubspec.yaml` и `make_config.yaml`

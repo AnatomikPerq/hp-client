@@ -1,5 +1,12 @@
 # OneXray build scripts
 
+> **HYPER CLIENT fork.** Only the Windows x64 EXE build is shipped. CI runs it in
+> `.github/workflows/build.yml` (project `HyperClient`, libXray from
+> `AnatomikPerq/libXray`, no VCore) and only uploads workflow artifacts. The
+> `publish.yml`, `publish-microsoft-store.yml` and WinGet workflows described below
+> were removed; releases are created by hand (see `CLAUDE.md`). `verify_release`
+> stays as upstream code with its tests. The rest of this file describes upstream.
+
 [English](#english) · [简体中文](#简体中文) · [Русский](#русский)
 
 ## Release provenance / 发布溯源
