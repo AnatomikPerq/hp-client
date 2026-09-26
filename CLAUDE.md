@@ -105,6 +105,8 @@ Two GitHub quirks cost real time here:
 - An **em dash in a commit subject** makes `git push` fail with `remote rejected ... (Internal Server Error)`. Body text is fine. Keep subjects plain.
 - `gh release create` fails with a false `workflow scope may be required`. Create via `gh api -X POST repos/<owner>/<repo>/releases --input <json>`, then upload the asset with `curl -X POST -H "Authorization: Bearer $(gh auth token)" --data-binary "@file" "https://uploads.github.com/repos/<owner>/<repo>/releases/<id>/assets?name=<name>"`.
 
+Publish releases as regular releases, not pre-releases: the in-app update check asks `/releases/latest`, which GitHub never answers with a pre-release (until beta.4 it returned 404, so no update was ever offered). Tag the exact commit the binaries were built from; the provenance file in `output/` records it. The upstream workflows came along with the merge: a `v*` tag starts upstream's `build.yml` for every platform, which fails harmlessly here, and `update-winget.yml` is disabled in the fork's Actions settings because it targets upstream's winget package.
+
 Multi-line commit messages must be passed with `git commit -F <file>`; double quotes inside a PowerShell here-string break native argument passing.
 
 ## Fork boundaries

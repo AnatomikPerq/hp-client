@@ -28,7 +28,8 @@
 | llvm-mingw | `C:\Users\BADAB\toolchains\llvm-mingw-*-ucrt-x86_64` | `gcc` для c-shared `libXray.dll`. **gcc из w64devkit не годится**: он по умолчанию пишет объектники big-obj, которые cgo не читает («cannot parse gcc output … as ELF, Mach-O, PE») |
 | LLVM | `C:\Program Files\LLVM` | `dart run ffigen` ищет `bin\libclang.dll` строго там |
 | Visual Studio Build Tools | 2026 с MSVC 14.50 | `flutter build windows`; нужен workload C++ |
-| Inno Setup 6 | путь в `INNO_SETUP_PATH` | установщик (через Fastforge) |
+| Inno Setup 6.7.3 | `C:\Users\BADAB\toolchains\inno-setup` (поставлен с `/CURRENTUSER`, без прав администратора); путь в `INNO_SETUP_PATH` | установщик (через Fastforge) |
+| Fastforge | `%LOCALAPPDATA%\Pub\Cache\bin` (`dart pub global activate fastforge`) | упаковка EXE и ZIP; каталог должен быть в `PATH` |
 
 ## Путь с кириллицей
 
@@ -91,10 +92,20 @@ flutter build windows --release
 ## Релизная сборка
 
 ```powershell
-$env:BUILD_NUMBER = "1"
-$env:INNO_SETUP_PATH = "C:\Program Files (x86)\Inno Setup 6"
-uv run --project build_scripts python build_scripts/main.py HyperClient windows
+$env:Path = "C:\Users\BADAB\flutter\stable\bin;C:\Program Files\Go\bin;C:\Users\BADAB\toolchains\llvm-mingw-20260922-ucrt-x86_64\bin;$env:LOCALAPPDATA\Pub\Cache\bin;" + $env:Path
+$env:GOTOOLCHAIN = "auto"
+$env:BUILD_NUMBER = "4"          # версия станет <marketing>+404: база 400 из config.py
+$env:INNO_SETUP_PATH = "C:\Users\BADAB\toolchains\inno-setup"
+$env:PYTHONUTF8 = "1"
+Set-Location C:\Users\BADAB\dev\hp-client
+python build_scripts/main.py HyperClient windows --windows-mode exe
 ```
+
+Скрипт сам пересобирает `libXray.dll` и ядро из соседнего `libXray`,
+обновляет GeoData и берёт wintun (SHA-256 закреплён). Результат лежит в
+`..\output`: `HyperClient-windows-amd64.exe` (установщик), `.zip` и
+`provenance-windows-x64-exe.json` с ревизиями и хешами. Оба дерева должны
+быть закоммичены: протокол записывает, были ли они чистыми.
 
 Собирается только режим EXE: MSIX/VCore апстрима не поставляется.
 Установщик ставит программу **в Program Files для всех пользователей** и
