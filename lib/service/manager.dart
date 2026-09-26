@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/network/client.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/tools/logger.dart';
@@ -13,6 +14,7 @@ import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/advanced/local_api/service.dart';
 import 'package:onexray/service/launch/storage_preparation.dart';
+import 'package:onexray/service/minewire/legacy_rows.dart';
 import 'package:onexray/service/shared/menu/short_cut/service.dart';
 import 'package:onexray/service/shared/menu/tray/service.dart';
 import 'package:onexray/service/shared/menu/window/service.dart';
@@ -59,6 +61,11 @@ abstract final class ServiceManager {
 
   static Future<void> _serviceInit(BuildContext context) async {
     final databaseWasMissing = await StoragePreparation.ensureReady();
+    // Before connection recovery, which may reconnect to such a node.
+    await _runInit(
+      "LegacyMinewireRows",
+      () => upgradeLegacyMinewireRows(AppDatabase()),
+    );
     await _runInit("NetClient", () => NetClient().asyncInit());
     await GeoDataService().ensureInstalled(
       resetOrphanedFiles: databaseWasMissing,

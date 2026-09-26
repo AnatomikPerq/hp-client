@@ -83,6 +83,23 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
         0;
   }
 
+  /// Rows stored under a type this version no longer reads; only for one-time
+  /// upgrades, since every other query filters them out.
+  Future<List<CoreConfigData>> rowsOfLegacyType(String type) =>
+      (select(coreConfig)..where((tbl) => tbl.type.equals(type))).get();
+
+  /// Rewrites a legacy row in place; the id, name, and subscription stay.
+  Future<bool> upgradeLegacyRow(
+    int id,
+    String legacyType,
+    CoreConfigCompanion replacement,
+  ) async =>
+      await (update(coreConfig)..where(
+            (table) => table.id.equals(id) & table.type.equals(legacyType),
+          ))
+          .write(replacement) >
+      0;
+
   /// Internal/complete-restore insertion. Does not enforce asset types or limits.
   /// Ordinary additions and imports must use [insertAssetRow]/[insertAssetRows].
   Future<int> insertRow(CoreConfigCompanion entry) async {
