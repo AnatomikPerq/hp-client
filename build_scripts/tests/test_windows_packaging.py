@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.windows import (
+    _EXE_RUNTIME_FILES,
     WindowsBuilder,
     _copy_vcore_artifacts,
     _VCORE_ARTIFACTS,
@@ -223,9 +224,10 @@ class WindowsPackagingTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         installer = (root / "windows/packaging/exe/inno_setup.iss").read_text()
         config = (root / "windows/packaging/exe/make_config.yaml").read_text()
-        self.assertIn("app_id: 835d7bbd-85bb-4c73-97f8-ce0740f151a7", config)
-        self.assertIn("executable_name: OneXray.exe", config)
-        self.assertIn("privileges_required: lowest", config)
+        self.assertIn("app_id: 346eafc3-85a2-4bbe-9f2b-5ee624666817", config)
+        self.assertIn("executable_name: HyperClient.exe", config)
+        # The elevated TUN Core runs from the install folder: per machine only.
+        self.assertIn("privileges_required: admin", config)
         self.assertIn("AppId={{APP_ID}}", installer)
         self.assertIn("PrivilegesRequired={{PRIVILEGES_REQUIRED}}", installer)
         self.assertIn("AppVersion={{APP_VERSION}}", installer)
@@ -234,7 +236,7 @@ class WindowsPackagingTest(unittest.TestCase):
         self.assertNotIn("uninsdeletekey", installer)
         self.assertNotIn("LicenseFile", installer)
         cmake = (root / "windows/app.cmake").read_text()
-        for name in _RUNTIME_FILES:
+        for name in _EXE_RUNTIME_FILES:
             self.assertIn(name, cmake)
         self.assertNotIn("if(EXISTS", cmake)
 

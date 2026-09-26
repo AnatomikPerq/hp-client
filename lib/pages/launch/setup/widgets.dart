@@ -142,8 +142,12 @@ class SetupFooter extends StatelessWidget {
                     ? Row(
                         children: [
                           const Spacer(),
-                          SizedBox(
-                            width: AppLayout.setupFooterButtonWidth,
+                          // A lone button grows with its label instead of
+                          // wrapping it.
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: AppLayout.setupFooterButtonWidth,
+                            ),
                             child: children.single,
                           ),
                         ],

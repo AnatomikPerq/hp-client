@@ -70,14 +70,7 @@ class SettingsPageState {
   );
 }
 
-enum SettingsLink {
-  documentation,
-  review,
-  feedback,
-  source,
-  credits,
-  privacy,
-}
+enum SettingsLink { documentation, review, feedback, source, credits, privacy }
 
 class SettingsController extends PageCubit<SettingsPageState> {
   SettingsController() : super(const SettingsPageState()) {
@@ -253,7 +246,9 @@ class SettingsController extends PageCubit<SettingsPageState> {
         'https://github.com/AnatomikPerq/hp-client/issues/new',
       ),
       // GPL-3.0: the source of THIS version, not of the upstream.
-      SettingsLink.source => Uri.parse('https://github.com/AnatomikPerq/hp-client'),
+      SettingsLink.source => Uri.parse(
+        'https://github.com/AnatomikPerq/hp-client',
+      ),
       SettingsLink.credits => DocURLHelper.creditsUri(),
       SettingsLink.privacy => DocURLHelper.privacyUri(),
     };

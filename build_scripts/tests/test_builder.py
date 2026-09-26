@@ -39,11 +39,11 @@ class BuilderTest(unittest.TestCase):
 
     def test_windows_cli_defaults_to_exe_and_selects_msix_explicitly(self):
         for options, mode in (([], "exe"), (["--windows-mode", "msix"], "msix")):
-            with mock.patch.object(sys, "argv", ["build", "OneXray", "windows", *options]), mock.patch("main.FlutterBuilder") as builder:
+            with mock.patch.object(sys, "argv", ["build", "HyperClient", "windows", *options]), mock.patch("main.FlutterBuilder") as builder:
                 main()
                 self.assertEqual(builder.call_args.kwargs["windows_mode"], mode)
                 builder.return_value.build.assert_called_once()
-        with mock.patch.object(sys, "argv", ["build", "OneXray", "linux", "--windows-mode", "exe"]), mock.patch("main.FlutterBuilder") as builder, mock.patch("sys.stderr"):
+        with mock.patch.object(sys, "argv", ["build", "HyperClient", "linux", "--windows-mode", "exe"]), mock.patch("main.FlutterBuilder") as builder, mock.patch("sys.stderr"):
             with self.assertRaises(SystemExit):
                 main()
             builder.assert_not_called()
@@ -51,7 +51,7 @@ class BuilderTest(unittest.TestCase):
     def test_flutter_windows_build_and_packager_share_one_mode(self):
         for mode in ("exe", "msix"):
             with mock.patch.dict("os.environ", {"BUILD_NUMBER": "1", "ONEXRAY_WINDOWS_ARCH": "x64"}):
-                builder = FlutterBuilder("OneXray", "windows", str(self.root_dir / "build_scripts"), windows_mode=mode)
+                builder = FlutterBuilder("HyperClient", "windows", str(self.root_dir / "build_scripts"), windows_mode=mode)
             self.assertEqual(builder.builder.mode, mode)
             with mock.patch("app.flutter.flutter_command", return_value="flutter"), mock.patch("app.flutter.run_command") as run, mock.patch.object(builder.builder, "build_app") as package:
                 builder.build_app()

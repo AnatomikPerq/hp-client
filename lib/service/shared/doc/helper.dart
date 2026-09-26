@@ -15,5 +15,6 @@ class DocURLHelper {
   static Uri creditsUri() =>
       _log(Uri.parse('$_repository/blob/main/LICENSE-THIRD-PARTY.md'));
 
-  static Uri privacyUri() => _log(Uri.parse('$_repository/blob/main/PRIVACY.md'));
+  static Uri privacyUri() =>
+      _log(Uri.parse('$_repository/blob/main/PRIVACY.md'));
 }

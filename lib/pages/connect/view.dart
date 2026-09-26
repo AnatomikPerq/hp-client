@@ -688,22 +688,21 @@ class ConnectView extends StatelessWidget {
         )
       else
         button,
-      if (runMode != null && onRunMode != null) ...[
-        SizedBox(height: desktop ? 18 : 14),
-        Align(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: RunModeSwitch(
-              value: runMode!,
-              proxyPort: proxyPort,
-              enabled: !_busy && pendingChange == null,
-              pending: pendingChange == 'runMode',
-              onChanged: onRunMode!,
-            ),
-          ),
-        ),
-      ],
     ];
+    final runModeSwitch = runMode == null || onRunMode == null
+        ? null
+        : Align(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: RunModeSwitch(
+                value: runMode!,
+                proxyPort: proxyPort,
+                enabled: !_busy && pendingChange == null,
+                pending: pendingChange == 'runMode',
+                onChanged: onRunMode!,
+              ),
+            ),
+          );
     final content = ConstrainedBox(
       constraints: BoxConstraints(
         minHeight: desktop
@@ -717,17 +716,29 @@ class ConnectView extends StatelessWidget {
         // Desktop panels share their height with the traffic panel, so the
         // orb sits beside the status instead of stacking above it.
         child: desktop
-            ? Row(
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  hero,
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: status,
-                    ),
+                  Row(
+                    children: [
+                      hero,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: status,
+                        ),
+                      ),
+                    ],
                   ),
+                  // Full width: the column beside the orb is too narrow for
+                  // both mode names.
+                  if (runModeSwitch != null) ...[
+                    const SizedBox(height: 18),
+                    runModeSwitch,
+                  ],
                 ],
               )
             : Column(
@@ -737,6 +748,10 @@ class ConnectView extends StatelessWidget {
                   Center(child: hero),
                   const SizedBox(height: 10),
                   ...status,
+                  if (runModeSwitch != null) ...[
+                    const SizedBox(height: 14),
+                    runModeSwitch,
+                  ],
                 ],
               ),
       ),

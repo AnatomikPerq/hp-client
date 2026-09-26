@@ -240,10 +240,17 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
                             ? AppSpacing.macOSSidebarBrandBottom
                             : AppSpacing.sidebarBrandBottom,
                       ),
-                      child: Text(
-                        'HYPER CLIENT',
-                        style: AppTypography.desktopBrand.copyWith(
-                          color: palette.brand,
+                      // One line at any sidebar width; the name is longer
+                      // than the upstream brand the sidebar was sized for.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          'HYPER CLIENT',
+                          maxLines: 1,
+                          style: AppTypography.desktopBrand.copyWith(
+                            color: palette.brand,
+                          ),
                         ),
                       ),
                     ),

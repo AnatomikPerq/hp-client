@@ -190,7 +190,8 @@ final class WindowsExeLaunchAtLoginAdapter extends LaunchAtLoginAdapter {
   }
 
   static bool _isMissingAppExecutable(String executable) {
-    return path.windows.basename(executable).toLowerCase() == 'hyperclient.exe' &&
+    return path.windows.basename(executable).toLowerCase() ==
+            'hyperclient.exe' &&
         !File(executable).existsSync();
   }
 }

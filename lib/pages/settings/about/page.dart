@@ -64,7 +64,10 @@ class AboutOneXrayPage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 9),
-                          Text('HYPER CLIENT', style: AppTypography.aboutBrandTitle),
+                          Text(
+                            'HYPER CLIENT',
+                            style: AppTypography.aboutBrandTitle,
+                          ),
                           const SizedBox(height: 9),
                           Text(
                             l10n.prototypeCrossPlatformXrayClient,
