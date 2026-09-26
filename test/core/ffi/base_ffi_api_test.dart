@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/ffi/base_ffi_api.dart';
 import 'package:onexray/core/ffi/linux_ffi_api.dart';
+import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:path/path.dart' as p;
@@ -51,6 +53,62 @@ void main() {
         '-config',
         '/runtime-input/xray.json',
       ],
+    );
+  });
+
+  test('system proxy mode passes neither DNS pinning nor an interface', () {
+    expect(
+      desktopCoreRunArguments(
+        configPath: r'C:\run\xray.json',
+        configSha256: 'ab' * 32,
+        errorFile: r'C:\run\xray.json.error',
+        stopFile: r'C:\run\core.stop',
+      ),
+      <String>[
+        'run',
+        '-config',
+        r'C:\run\xray.json',
+        '-config-sha256',
+        'ab' * 32,
+        '-error-file',
+        r'C:\run\xray.json.error',
+        '-stop-file',
+        r'C:\run\core.stop',
+      ],
+    );
+    expect(
+      () => desktopCoreRunArguments(dns: '8.8.8.8', configPath: 'xray.json'),
+      throwsFormatException,
+    );
+  });
+
+  test('a desktop request without TUN settings is the proxy mode', () {
+    StartVpnRequest request(TunJson? tun, String? socks) =>
+        StartVpnRequest(tun, socks, '18186', '{}');
+    expect(desktopSystemProxyPort(request(null, '10820')), 10820);
+    expect(
+      desktopSystemProxyPort(
+        request(TunJson.fromJson({'tunDnsIPv4': '8.8.8.8'}), '10820'),
+      ),
+      isNull,
+    );
+    for (final socks in [null, '', '0', '70000', 'x']) {
+      expect(
+        () => desktopSystemProxyPort(request(null, socks)),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test('the config hash covers exactly the bytes written', () async {
+    final directory = await Directory.systemTemp.createTemp('config-hash-');
+    addTearDown(() => directory.delete(recursive: true));
+    const xrayJson = '{"log":{"loglevel":"none"},"remarks":"узел ✓"}';
+    final file = File(p.join(directory.path, 'xray.json'));
+    await file.writeAsString(xrayJson, flush: true);
+    expect(
+      desktopCoreConfigSha256(xrayJson),
+      sha256.convert(await file.readAsBytes()).toString(),
     );
   });
 

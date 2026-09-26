@@ -47,6 +47,7 @@ String connectionFailureMessage(
     },
     'interfaceRequired' ||
     'interfaceUnavailable' => l.prototypeChooseInterfaceNotice,
+    'systemProxyPortBusy' => l.systemProxyPortBusy,
     'readFailed' ||
     'runtimeUnavailable' ||
     'nativeStatusFailed' => l.prototypeTemporarilyUnavailable,

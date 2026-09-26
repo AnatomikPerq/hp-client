@@ -9,6 +9,8 @@ import 'package:onexray/pages/theme/theme.dart';
 import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
+import 'package:onexray/pages/connect/run_mode.dart';
+import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -39,6 +41,9 @@ class ConnectView extends StatelessWidget {
     required this.onRawAdd,
     required this.onRawSelect,
     required this.onRawActions,
+    this.runMode,
+    this.proxyPort = 0,
+    this.onRunMode,
   });
   final ConnectionView view;
   final Widget Function(bool desktop)? trafficBuilder;
@@ -60,6 +65,11 @@ class ConnectView extends StatelessWidget {
       onRawAdd;
   final ValueChanged<bool> onExpert;
   final ValueChanged<CoreConfigData> onRawSelect, onRawActions;
+
+  /// Desktop only: null hides the TUN / system proxy switch.
+  final DesktopRunMode? runMode;
+  final int proxyPort;
+  final ValueChanged<DesktopRunMode>? onRunMode;
 
   bool get _connectionPending => pendingChange == 'connection';
   bool get _busy => view.busy || _connectionPending;
@@ -699,6 +709,21 @@ class ConnectView extends StatelessWidget {
               )
             else
               button,
+            if (runMode != null && onRunMode != null) ...[
+              SizedBox(height: desktop ? 20 : 14),
+              Align(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: RunModeSwitch(
+                    value: runMode!,
+                    proxyPort: proxyPort,
+                    enabled: !_busy && pendingChange == null,
+                    pending: pendingChange == 'runMode',
+                    onChanged: onRunMode!,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

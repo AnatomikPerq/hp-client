@@ -2980,5 +2980,15 @@
         "type": "String"
       }
     }
-  }
+  },
+  "runModeLabel": "Connection mode",
+  "runModeTun": "TUN",
+  "runModeSystemProxy": "System proxy",
+  "runModeTunHint": "All apps. Needs administrator rights.",
+  "runModeSystemProxyHint": "Apps that use the system proxy, via 127.0.0.1:{port}. No administrator rights.",
+  "@runModeSystemProxyHint": {"placeholders": {"port": {"type": "int"}}},
+  "systemProxyPortTitle": "System proxy port",
+  "systemProxyPortDescription": "Local SOCKS and HTTP port that the system proxy points to. It listens on 127.0.0.1 only.",
+  "systemProxyPortInvalid": "Enter a port from 1 to 65535.",
+  "systemProxyPortBusy": "The system proxy port is used by another program. Choose another port in the tunnel settings."
 }

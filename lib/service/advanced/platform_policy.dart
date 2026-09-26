@@ -15,6 +15,22 @@ ConnectionPlatform get connectionPlatform => switch (Platform.operatingSystem) {
   _ => throw UnsupportedError('Unsupported platform'),
 };
 
+/// How a desktop connection reaches applications.
+enum DesktopRunMode {
+  /// A system-wide TUN adapter; needs administrator rights on Windows.
+  tun,
+
+  /// A local SOCKS/HTTP proxy set as the system proxy; no elevation. Apps that
+  /// ignore the system proxy are not covered.
+  systemProxy;
+
+  static DesktopRunMode fromName(String value) => switch (value) {
+    'tun' => DesktopRunMode.tun,
+    'systemProxy' => DesktopRunMode.systemProxy,
+    _ => throw FormatException('Invalid desktop run mode: $value'),
+  };
+}
+
 /// User policy is a value snapshot, not the mutable native TunJson or old prefs.
 final class PlatformPolicy {
   final String _json;
@@ -62,6 +78,13 @@ final class PlatformPolicy {
     if (!{'error', 'warning', 'info', 'debug'}.contains(log['level'])) {
       throw const FormatException('Invalid Xray log level');
     }
+
+    final desktop = policy['desktop'] as Map<String, dynamic>;
+    DesktopRunMode.fromName(desktop['runMode'] as String);
+    final port = desktop['proxyPort'] as int;
+    if (port < 1 || port > 65535) {
+      throw FormatException('Invalid system proxy port: $port');
+    }
     return PlatformPolicy._(policy);
   }
 
@@ -74,6 +97,28 @@ final class PlatformPolicy {
   String get logLevel => toJson()['log']['level'] as String;
   bool get recordDns => toJson()['log']['recordDns'] as bool;
   String get maskAddress => toJson()['log']['maskIp'] == true ? 'full' : '';
+
+  DesktopRunMode get desktopRunMode =>
+      DesktopRunMode.fromName(toJson()['desktop']['runMode'] as String);
+  int get systemProxyPort => toJson()['desktop']['proxyPort'] as int;
+
+  /// Proxy mode exists only where the App starts the Core itself.
+  bool usesSystemProxy(ConnectionPlatform platform) =>
+      supportsDesktopRunMode(platform) &&
+      desktopRunMode == DesktopRunMode.systemProxy;
+
+  static bool supportsDesktopRunMode(ConnectionPlatform platform) =>
+      platform == ConnectionPlatform.windows ||
+      platform == ConnectionPlatform.linux;
+
+  PlatformPolicy withDesktopRunMode(DesktopRunMode mode) =>
+      _withDesktop('runMode', mode.name);
+
+  PlatformPolicy _withDesktop(String key, Object value) {
+    final json = toJson();
+    json['desktop'] = {...json['desktop'] as Map<String, dynamic>, key: value};
+    return PlatformPolicy.fromJson(json);
+  }
 
   static const tunIpv4Address = '198.18.0.1';
   static const tunIpv6Address = 'fc00::1';
@@ -252,6 +297,9 @@ const _defaults = <String, dynamic>{
     'recordDns': true,
     'maskIp': true,
   },
+  // 10808/10809 are the defaults of the most common other client and are
+  // often taken on machines that run it; 10820 avoids that collision.
+  'desktop': {'runMode': 'tun', 'proxyPort': 10820},
 };
 
 Map<String, dynamic> _readPolicyObject(
@@ -270,7 +318,8 @@ Map<String, dynamic> _readPolicyObject(
       return MapEntry(key, List<String>.from(item));
     }
     if (fallback is bool && item is bool ||
-        fallback is String && item is String) {
+        fallback is String && item is String ||
+        fallback is int && item is int) {
       return MapEntry(key, item);
     }
     throw FormatException('Invalid platform policy field: $key');

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart' show protected;
 import 'package:isolate_manager/isolate_manager.dart';
@@ -12,27 +14,54 @@ import 'package:path_provider/path_provider.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:path/path.dart' as p;
 
+/// TUN mode passes [dns] and [interfaceName] so the Core's own DNS stays on
+/// the physical interface. System proxy mode has no tunnel and passes neither.
+///
+/// [configSha256] lets an elevated Core refuse a config swapped after launch:
+/// the file lives in a directory every process of the user can write.
+/// [stopFile] lets the App end the Core without terminating it, which for an
+/// elevated Core would cost another UAC prompt.
 List<String> desktopCoreRunArguments({
-  required String dns,
-  required String interfaceName,
+  String dns = '',
+  String interfaceName = '',
   required String configPath,
   String? errorFile,
+  String? configSha256,
+  String? stopFile,
 }) {
-  if (dns.isEmpty || interfaceName.isEmpty || configPath.isEmpty) {
+  if (configPath.isEmpty || dns.isEmpty != interfaceName.isEmpty) {
     throw const FormatException(
       'Desktop Core DNS, interface, or config path is missing',
     );
   }
   return <String>[
     'run',
-    '-dns',
-    '$dns:53',
-    '-interface',
-    interfaceName,
+    if (dns.isNotEmpty) ...['-dns', '$dns:53', '-interface', interfaceName],
     '-config',
     configPath,
+    if (configSha256 != null) ...['-config-sha256', configSha256],
     if (errorFile != null) ...['-error-file', errorFile],
+    if (stopFile != null) ...['-stop-file', stopFile],
   ];
+}
+
+/// SHA-256 of exactly the bytes [BaseFfiApi.materializeRunXrayConfig] writes.
+String desktopCoreConfigSha256(String xrayJson) =>
+    sha256.convert(utf8.encode(xrayJson)).toString();
+
+/// The Core stops gracefully once this file appears.
+File desktopCoreStopFile(String runDirectory) =>
+    File(p.join(runDirectory, 'core.stop'));
+
+/// Desktop requests without TUN settings run the system proxy mode; the
+/// SOCKS port is then the user-facing mixed inbound on 127.0.0.1.
+int? desktopSystemProxyPort(StartVpnRequest request) {
+  if (request.tun != null) return null;
+  final port = int.tryParse(request.socksPort ?? '');
+  if (port == null || port < 1 || port > 65535) {
+    throw const FormatException('System proxy port is missing');
+  }
+  return port;
 }
 
 File desktopCoreErrorFile(String configPath) => File('$configPath.error');

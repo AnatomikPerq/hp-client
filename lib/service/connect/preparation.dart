@@ -13,6 +13,7 @@ import 'package:onexray/service/shared/share/configuration_transfer.dart';
 import 'package:onexray/service/connect/platform_requirements.dart';
 import 'package:onexray/service/connect/resolver.dart';
 import 'package:onexray/service/connect/runtime.dart';
+import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
@@ -22,6 +23,7 @@ import 'package:path/path.dart' as p;
 Future<List<int>> allocateRuntimePorts(
   List<dynamic> rawInbounds, {
   Future<List<int>> Function(int count)? getFreePorts,
+  Set<int> reserved = const {},
 }) async {
   final allocate = getFreePorts ?? AppHostApi().getFreePorts;
   for (var attempt = 0; attempt < 5; attempt++) {
@@ -29,6 +31,7 @@ Future<List<int>> allocateRuntimePorts(
     if (candidates.length == 2 &&
         candidates.toSet().length == 2 &&
         candidates.every((port) => port > 0 && port <= 65535) &&
+        !candidates.any(reserved.contains) &&
         !rawInbounds.any(
           (entry) =>
               entry is Map &&
@@ -40,6 +43,17 @@ Future<List<int>> allocateRuntimePorts(
     }
   }
   throw const FormatException('Runtime ports are unavailable');
+}
+
+/// The user-facing proxy port is fixed, so a busy one is reported up front
+/// instead of as a bind error from inside the Core.
+Future<void> ensureSystemProxyPortFree(int port) async {
+  try {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
+    await socket.close();
+  } on SocketException catch (error) {
+    throw ConnectionHostException('systemProxyPortBusy', cause: error);
+  }
 }
 
 /// Resolves and compiles without publishing settings or starting a VPN.
@@ -72,9 +86,13 @@ class ConnectionPreparation {
     var settings = input.connection;
     final policy = input.policy;
     final platform = connectionPlatform;
-    await ConnectionPlatformRequirements(platform: platform)
-        .ensureOutboundInterface(policy.xrayOutboundInterfaceName);
-    final tun = policy.toTun(platform);
+    final systemProxy = policy.usesSystemProxy(platform);
+    // Proxy mode has no tunnel: no adapter settings, no interface binding.
+    if (!systemProxy) {
+      await ConnectionPlatformRequirements(platform: platform)
+          .ensureOutboundInterface(policy.xrayOutboundInterfaceName);
+    }
+    final tun = systemProxy ? null : policy.toTun(platform);
     String? raw = rawDraft;
     RoutingConfiguration? custom = customDraft;
     if (settings.expert && raw == null) {
@@ -162,9 +180,13 @@ class ConnectionPreparation {
         userInbounds.any((entry) => entry is! Map<String, dynamic>)) {
       throw const FormatException('inbounds must be an object array');
     }
-    final ports = await allocateRuntimePorts(
+    final proxyPort = systemProxy ? policy.systemProxyPort : null;
+    if (proxyPort != null) await ensureSystemProxyPortFree(proxyPort);
+    final allocated = await allocateRuntimePorts(
       userInbounds.cast<Map<String, dynamic>>(),
+      reserved: {?proxyPort},
     );
+    final ports = [proxyPort ?? allocated[0], allocated[1]];
     final compiled = ConnectionCompiler.compile(
       settings: settings,
       entries: entries,
@@ -181,6 +203,7 @@ class ConnectionPreparation {
         tunDnsIpv4Address: policy.dnsIpv4Address,
         tunDnsIpv6Address: policy.dnsIpv6Address,
         interfaceName: policy.xrayOutboundInterfaceName,
+        systemProxy: systemProxy,
         logEnabled: policy.logEnabled,
         logLevel: policy.logLevel,
         dnsLog: policy.recordDns,
@@ -202,9 +225,12 @@ class ConnectionPreparation {
         );
       }
     }
+    // Without TUN settings a desktop request means system proxy mode, and the
+    // SOCKS port is the user-facing inbound the system proxy points at.
     final request = StartVpnRequest(
       tun,
-      platform == ConnectionPlatform.windows ||
+      systemProxy ||
+              platform == ConnectionPlatform.windows ||
               platform == ConnectionPlatform.ios
           ? '${ports[0]}'
           : null,

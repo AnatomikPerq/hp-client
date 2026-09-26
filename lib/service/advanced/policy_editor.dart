@@ -152,6 +152,11 @@ class PolicyEditorService {
         result['apple'] = tun;
       } else {
         result['interface'] = policy.xrayOutboundInterfaceName;
+        result['desktop'] = {
+          'runMode': policy.desktopRunMode.name,
+          if (policy.usesSystemProxy(platform))
+            'proxyPort': policy.systemProxyPort,
+        };
         if (platform == ConnectionPlatform.windows &&
             (windowsMode ?? windowsBuildMode) == WindowsMode.msix) {
           result['windows'] = json['windows'];

@@ -68,6 +68,10 @@ class RuntimeOptions {
   final bool dnsLog;
   final String maskAddress;
 
+  /// Desktop system proxy mode: `tunIn` is a loopback SOCKS/HTTP inbound on
+  /// [socksPort] and outbounds follow normal OS routing.
+  final bool systemProxy;
+
   RuntimeOptions({
     required this.platform,
     WindowsMode? windowsMode,
@@ -83,19 +87,34 @@ class RuntimeOptions {
     this.logLevel = 'warning',
     this.dnsLog = true,
     this.maskAddress = '',
+    this.systemProxy = false,
   }) : windowsMode = windowsMode ?? windowsBuildMode {
     if (metricsPort == socksPort) {
       throw const FormatException('Runtime ports are invalid');
     }
-    if ((platform == ConnectionPlatform.windows ||
-            platform == ConnectionPlatform.linux) &&
-        interfaceName.isEmpty) {
+    if (systemProxy && !desktop) {
+      throw const FormatException('System proxy mode is desktop-only');
+    }
+    if (requiresInterface && interfaceName.isEmpty) {
       throw const FormatException('Network interface is required');
     }
   }
 
+  bool get desktop =>
+      platform == ConnectionPlatform.windows ||
+      platform == ConnectionPlatform.linux;
+
+  /// A desktop TUN binds every outbound to the physical interface so the
+  /// Core's own traffic cannot loop back into the tunnel. Without a tunnel
+  /// there is nothing to escape, and the OS routing (including another VPN
+  /// the user runs) stays in charge.
+  bool get requiresInterface => desktop && !systemProxy;
+
   bool get usesWindowsSystemVpn =>
       platform == ConnectionPlatform.windows && windowsMode == WindowsMode.msix;
+
+  /// `tunIn` is a private or user-facing SOCKS inbound instead of a TUN.
+  bool get usesLoopbackInbound => usesWindowsSystemVpn || systemProxy;
 }
 
 class CompiledConnection {
@@ -288,9 +307,7 @@ class ConnectionCompiler {
       outbounds.addAll([
         createFreedomOutbound(
           tag: 'direct',
-          interfaceName:
-              options.platform == ConnectionPlatform.windows ||
-                  options.platform == ConnectionPlatform.linux
+          interfaceName: options.requiresInterface
               ? options.interfaceName
               : null,
         ).toJson(),
@@ -417,7 +434,7 @@ class ConnectionCompiler {
     RuntimeOptions options, {
     bool fakeDns = false,
   }) {
-    if (options.usesWindowsSystemVpn) {
+    if (options.usesLoopbackInbound) {
       return createSocksInbound('${options.socksPort}', fakeDns: fakeDns);
     }
     final nativeTun =
@@ -466,9 +483,7 @@ class ConnectionCompiler {
     final config = JsonTool.copyMap(source);
     validateLocalDnsNetworkPolicy(
       config,
-      requiresInterface:
-          options.platform == ConnectionPlatform.windows ||
-          options.platform == ConnectionPlatform.linux,
+      requiresInterface: options.requiresInterface,
     );
     final outbounds = _objects(config, 'outbounds');
     final inbounds = _objects(config, 'inbounds');
@@ -479,7 +494,7 @@ class ConnectionCompiler {
         throw const FormatException('Use the App-managed tunIn tunnel');
       }
       if (portIncludes(inbound['port'], options.metricsPort) ||
-          (options.usesWindowsSystemVpn &&
+          (options.usesLoopbackInbound &&
               portIncludes(inbound['port'], options.socksPort))) {
         throw const FormatException(
           'Raw inbound conflicts with an App-managed port',
@@ -498,7 +513,7 @@ class ConnectionCompiler {
       inbounds.insert(0, generated);
     } else {
       final inbound = managed.single;
-      if (options.usesWindowsSystemVpn) {
+      if (options.usesLoopbackInbound) {
         final settings = inbound['protocol'] == 'socks'
             ? _object(inbound, 'settings')
             : <String, dynamic>{};
@@ -606,8 +621,7 @@ class ConnectionCompiler {
     Map<String, dynamic> sockopt,
     RuntimeOptions options,
   ) {
-    if (options.platform == ConnectionPlatform.windows ||
-        options.platform == ConnectionPlatform.linux) {
+    if (options.requiresInterface) {
       sockopt['interface'] = options.interfaceName;
     } else {
       sockopt.remove('interface');

@@ -172,6 +172,16 @@ class PolicyEditorController extends PageCubit<PolicyEditorPageState> {
     emit(state.copyWith(draft: next, error: null));
   }
 
+  int get systemProxyPort => group('desktop')['proxyPort'] as int;
+
+  void updateSystemProxyPort(int port) =>
+      update('proxyPort', port, section: 'desktop');
+
+  bool get systemProxyPortInvalid =>
+      draft != null &&
+      service.requiresInterface &&
+      (systemProxyPort < 1 || systemProxyPort > 65535);
+
   bool get emptyIncluded =>
       draft != null &&
       platform == ConnectionPlatform.android &&
@@ -205,6 +215,9 @@ class PolicyEditorController extends PageCubit<PolicyEditorPageState> {
     if (service.requiresInterface &&
         (value['xrayOutboundInterfaceName'] as String).trim().isEmpty) {
       return l.prototypeChooseInterfaceBeforeSaving;
+    }
+    if (systemProxyPortInvalid) {
+      return l.systemProxyPortInvalid;
     }
     return null;
   }

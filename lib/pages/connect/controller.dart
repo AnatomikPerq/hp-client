@@ -16,6 +16,7 @@ import 'package:onexray/pages/connect/dialogs.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/theme.dart';
+import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/raw/editor.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/runtime.dart';
@@ -361,6 +362,38 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
           await coordinator.connect();
         });
       }
+    } finally {
+      pendingChange = null;
+    }
+  }
+
+  bool get supportsRunMode =>
+      PlatformPolicy.supportsDesktopRunMode(connectionPlatform);
+  DesktopRunMode get runMode => configuration.policy.desktopRunMode;
+  int get systemProxyPort => configuration.policy.systemProxyPort;
+
+  /// The switch itself is the confirmation: a running connection restarts in
+  /// the chosen mode without another dialog.
+  Future<void> setRunMode(BuildContext context, DesktopRunMode mode) async {
+    if (connectionView.busy || pendingChange != null || mode == runMode) {
+      return;
+    }
+    pendingChange = 'runMode';
+    try {
+      final current = await coordinator.configuration;
+      final next = ConnectionConfiguration(
+        connection: current.connection,
+        policy: current.policy.withDesktopRunMode(mode),
+      );
+      if (!context.mounted) return;
+      await runConnectionAction(context, coordinator, () async {
+        await coordinator.apply(
+          next,
+          expectedConfiguration: current.encode(),
+          allowReconnect: true,
+        );
+      });
+      configuration = await coordinator.configuration;
     } finally {
       pendingChange = null;
     }

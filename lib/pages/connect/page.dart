@@ -99,6 +99,9 @@ class _ConnectPageState extends State<ConnectPage> {
                 onRawAdd: () => controller.editRaw(context),
                 onRawSelect: (row) => controller.selectRaw(context, row.id),
                 onRawActions: (row) => controller.showRawActions(context, row),
+                runMode: controller.supportsRunMode ? controller.runMode : null,
+                proxyPort: controller.systemProxyPort,
+                onRunMode: (mode) => controller.setRunMode(context, mode),
               );
             },
           ),

@@ -13,6 +13,9 @@ import 'package:onexray/core/ffi/windows/native_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/model/tun_json.dart';
+import 'package:onexray/core/ffi/base_ffi_api.dart';
+import 'package:onexray/core/system_proxy/manager.dart';
+import 'package:onexray/core/system_proxy/model.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -44,6 +47,8 @@ void main() {
             ),
         notify: (status) async => events.add(status),
         notifyError: (error) => errors.add(error),
+        // Upstream lifecycle tests model Cores that only a terminate stops.
+        gracefulStop: Duration.zero,
       );
 
   setUp(() async {
@@ -193,9 +198,18 @@ void main() {
         await File(process.arguments![6]).readAsString(),
         '{"inbounds":[]}',
       );
-      expect(process.arguments![7], '-error-file');
-      expect(process.arguments!.last, '${process.arguments![6]}.error');
-      expect(await File(process.arguments!.last).readAsString(), isEmpty);
+      // The elevated Core refuses a config swapped after UAC.
+      expect(process.arguments!.sublist(7, 9), [
+        '-config-sha256',
+        desktopCoreConfigSha256('{"inbounds":[]}'),
+      ]);
+      expect(process.arguments![9], '-error-file');
+      expect(process.arguments![10], '${process.arguments![6]}.error');
+      expect(await File(process.arguments![10]).readAsString(), isEmpty);
+      expect(process.arguments!.sublist(11), [
+        '-stop-file',
+        p.join(directory.path, 'run', 'core.stop'),
+      ]);
       expect(
         await File(p.join(directory.path, 'run', 'core-process.json')).exists(),
         isFalse,
@@ -462,6 +476,119 @@ void main() {
     expect(events, isEmpty);
   });
 
+  group('system proxy mode', () {
+    const userProxy = SystemProxySettings(
+      enabled: true,
+      server: '127.0.0.1:10808',
+      bypass: '99.66.6.1;*.ind.local;<local>',
+    );
+    late _ProxyBackend backend;
+
+    WindowsExeFfiApi createProxy() => WindowsExeFfiApi(
+      filesDirectory: directory.path,
+      executable: p.join(directory.path, 'HyperClientCore.exe'),
+      process: process,
+      readRequest: () async => StartVpnRequest(
+        null,
+        '10820',
+        '18186',
+        jsonEncode(
+          LibXrayInvokeRequest(
+            method: LibXrayMethod.runXray,
+            payload: RunXrayRequest('{"inbounds":[]}').toJson(),
+          ).toJson(),
+        ),
+      ),
+      notify: (status) async => events.add(status),
+      notifyError: (error) => errors.add(error),
+      gracefulStop: const Duration(seconds: 2),
+      systemProxy: (run) async => SystemProxyManager(
+        backend: backend,
+        stateFile: File(p.join(run, 'system-proxy.json')),
+      ),
+    );
+
+    setUp(() {
+      backend = _ProxyBackend(userProxy);
+      process
+        ..stopFile = File(p.join(directory.path, 'run', 'core.stop'))
+        ..ignoreStopFile = false;
+    });
+
+    test('starts without UAC, then hands the system proxy back', () async {
+      final api = createProxy();
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(process.elevatedStarts, 0);
+      expect(process.arguments, isNot(contains('-dns')));
+      expect(process.arguments, isNot(contains('-interface')));
+      expect(
+        process.arguments,
+        containsAllInOrder(['-config-sha256', '-stop-file']),
+      );
+      expect(backend.current.enabled, isTrue);
+      expect(backend.current.server, '127.0.0.1:10820');
+
+      expect((await api.stopVpn()).status, VpnStatus.disconnected);
+      expect(backend.current, userProxy);
+      // The graceful path, not a kill: no UAC for an elevated Core.
+      expect(process.stops, 0);
+    });
+
+    test('a Core that dies on its own gives the proxy back', () async {
+      final api = createProxy();
+      await api.observeVpnStatus();
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(backend.current.server, '127.0.0.1:10820');
+
+      process.exitPid(42);
+      await _eventually(() => backend.current == userProxy);
+      await _eventually(() => events.last == VpnStatus.disconnected);
+    });
+
+    test(
+      'the next App start recovers the proxy of a crashed session',
+      () async {
+        final api = createProxy();
+        expect((await api.startVpn()).status, VpnStatus.connected);
+        // The App and the Core die without a stop.
+        process.pids.clear();
+
+        final reopened = createProxy();
+        await reopened.observeVpnStatus();
+        expect(backend.current, userProxy);
+      },
+    );
+
+    test('a proxy changed by other software is left alone', () async {
+      final api = createProxy();
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      const foreign = SystemProxySettings(
+        enabled: true,
+        server: '10.0.0.1:3128',
+      );
+      backend.current = foreign;
+      expect((await api.stopVpn()).status, VpnStatus.disconnected);
+      expect(backend.current, foreign);
+    });
+  });
+
+  test('a Core that ignores the stop file is still terminated', () async {
+    process
+      ..pids.add(42)
+      ..stopFile = File(p.join(directory.path, 'run', 'core.stop'))
+      ..ignoreStopFile = true;
+    final api = WindowsExeFfiApi(
+      filesDirectory: directory.path,
+      executable: p.join(directory.path, 'HyperClientCore.exe'),
+      process: process,
+      notify: (status) async => events.add(status),
+      notifyError: (error) => errors.add(error),
+      gracefulStop: const Duration(milliseconds: 300),
+    );
+    expect((await api.stopVpn()).status, VpnStatus.disconnected);
+    expect(process.stops, 1);
+  });
+
   test('Windows arguments preserve spaces, quotes and trailing slashes', () {
     expect(quoteWindowsArgument('Ethernet 2'), '"Ethernet 2"');
     expect(quoteWindowsArgument(''), '""');
@@ -481,6 +608,9 @@ class _Process extends WindowsCoreProcess {
   bool failStop = false;
   int? stopBeforeFailure;
   int stops = 0;
+  int elevatedStarts = 0;
+  File? stopFile;
+  bool ignoreStopFile = false;
   List<String>? arguments;
   final launched = Completer<void>();
   final exits = <int, Completer<bool>>{};
@@ -499,6 +629,12 @@ class _Process extends WindowsCoreProcess {
   @override
   Future<Set<int>> findPids() async {
     if (queryError != null) throw queryError!;
+    // A current Core exits once its stop file appears.
+    if (!ignoreStopFile && stopFile != null && stopFile!.existsSync()) {
+      for (final pid in pids.toList()) {
+        exitPid(pid);
+      }
+    }
     final pending = nextQuery;
     nextQuery = null;
     return pending == null ? {...pids} : await pending;
@@ -527,9 +663,41 @@ class _Process extends WindowsCoreProcess {
   @override
   Future<int> start(String executable, List<String> arguments) async {
     if (failStart) throw StateError('UAC cancelled');
+    elevatedStarts++;
     this.arguments = arguments;
     running = true;
     launched.complete();
     return 42;
   }
+
+  @override
+  Future<int> startUnelevated(String executable, List<String> arguments) async {
+    this.arguments = arguments;
+    running = true;
+    if (!launched.isCompleted) launched.complete();
+    return 42;
+  }
+}
+
+/// File IO completes outside the test's microtask queue.
+Future<void> _eventually(bool Function() condition) async {
+  final waiting = Stopwatch()..start();
+  while (!condition()) {
+    if (waiting.elapsed > const Duration(seconds: 5)) {
+      fail('condition not reached');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+class _ProxyBackend implements SystemProxyBackend {
+  SystemProxySettings current;
+
+  _ProxyBackend(this.current);
+
+  @override
+  Future<SystemProxySettings> read() async => current;
+
+  @override
+  Future<void> write(SystemProxySettings settings) async => current = settings;
 }

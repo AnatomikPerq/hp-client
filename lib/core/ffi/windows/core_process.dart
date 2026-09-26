@@ -38,6 +38,19 @@ class WindowsCoreProcess {
     });
   }
 
+  /// Starts a Core that needs no administrator rights (system proxy mode).
+  /// Detached like the elevated Core: it outlives the App, gets no console
+  /// window, and is found again by name.
+  Future<int> startUnelevated(String executable, List<String> arguments) async {
+    final process = await Process.start(
+      executable,
+      arguments,
+      workingDirectory: p.windows.dirname(executable),
+      mode: ProcessStartMode.detached,
+    );
+    return process.pid;
+  }
+
   Future<int> start(String executable, List<String> arguments) =>
       Isolate.run(() {
         final handle = _launchElevated(executable, arguments);

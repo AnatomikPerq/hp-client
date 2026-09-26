@@ -6,6 +6,7 @@ import 'package:onexray/pages/advanced/tunnel/controller.dart';
 import 'package:onexray/pages/advanced/tunnel/widgets.dart';
 import 'package:onexray/pages/shared/alert.dart';
 import 'package:onexray/pages/shared/widgets/dns_text_field.dart';
+import 'package:onexray/pages/shared/widgets/port_text_field.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
@@ -187,6 +188,26 @@ class VpnTunnelPane extends StatelessWidget {
                             context,
                             controller,
                             TunnelDestination.interface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (controller.service.requiresInterface)
+                    _section(
+                      icon: LucideIcons.globe,
+                      title: l.systemProxyPortTitle,
+                      description: l.systemProxyPortDescription,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: PortTextField(
+                            label: l.systemProxyPortTitle,
+                            value: controller.systemProxyPort,
+                            enabled: !controller.blocked,
+                            hint: controller.systemProxyPortInvalid
+                                ? l.systemProxyPortInvalid
+                                : null,
+                            onChanged: controller.updateSystemProxyPort,
                           ),
                         ),
                       ],

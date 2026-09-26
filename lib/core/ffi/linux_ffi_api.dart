@@ -12,6 +12,8 @@ import 'package:onexray/core/pigeon/flutter_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/pigeon/model_reader.dart';
+import 'package:onexray/core/system_proxy/manager.dart';
+import 'package:onexray/core/system_proxy/platform.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -28,7 +30,8 @@ class LinuxFfiApi extends BaseFfiApi {
       _readRequest = StartVpnRequestReader.readFromStartFile,
       _watchExit = watchLinuxCoreExit,
       _notify = AppFlutterApi().vpnStatusChanged,
-      _notifyError = AppFlutterApi().vpnStatusController.addError;
+      _notifyError = AppFlutterApi().vpnStatusController.addError,
+      _createSystemProxy = createSystemProxyManager;
 
   @visibleForTesting
   LinuxFfiApi.forTesting({
@@ -40,7 +43,9 @@ class LinuxFfiApi extends BaseFfiApi {
     Future<StartVpnRequest> Function()? readRequest,
     Future<void> Function(VpnStatus)? notify,
     void Function(Object)? notifyError,
-  }) : _startProcess = startProcess ?? Process.start,
+    Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
+  }) : _createSystemProxy = systemProxy ?? ((_) async => null),
+       _startProcess = startProcess ?? Process.start,
        _readRequest = readRequest ?? StartVpnRequestReader.readFromStartFile,
        _notify = notify ?? AppFlutterApi().vpnStatusChanged,
        _notifyError =
@@ -55,6 +60,9 @@ class LinuxFfiApi extends BaseFfiApi {
   final DesktopCoreExitWatch Function(int) _watchExit;
   final Future<void> Function(VpnStatus) _notify;
   final void Function(Object) _notifyError;
+  final Future<SystemProxyManager?> Function(String runDirectory)
+  _createSystemProxy;
+  Future<SystemProxyManager?>? _systemProxy;
   final _exitWatches = <int, DesktopCoreExitWatch>{};
   int _watchGeneration = 0;
   int _queryGeneration = 0;
@@ -83,10 +91,20 @@ class LinuxFfiApi extends BaseFfiApi {
     try {
       await _notify(VpnStatus.connecting);
       final request = await _readRequest();
+      final proxyPort = desktopSystemProxyPort(request);
       if (!await startCore(readRunXrayRequest(request), request.tun)) {
         final error = _lastCoreError;
         await stopVpn();
         return commandFailed(error);
+      }
+      if (proxyPort != null) {
+        try {
+          final proxy = await _proxyManager();
+          await proxy?.apply(host: '127.0.0.1', port: proxyPort);
+        } catch (error) {
+          await stopVpn();
+          return commandFailed(failureDetails(error));
+        }
       }
       await _notify(VpnStatus.connected);
       return commandSuccess(status: VpnStatus.connected);
@@ -122,7 +140,8 @@ class LinuxFfiApi extends BaseFfiApi {
     final query = _findCorePids();
     final generation = _queryGeneration;
     try {
-      await query;
+      // Recover the user's proxy after a proxy-mode Core died unobserved.
+      if ((await query).isEmpty) await _restoreSystemProxy();
     } catch (_) {
       if (generation == _queryGeneration) disposeVpnStatus();
       rethrow;
@@ -133,6 +152,18 @@ class LinuxFfiApi extends BaseFfiApi {
   void disposeVpnStatus() {
     _observing = false;
     _clearExitWatches();
+  }
+
+  Future<SystemProxyManager?> _proxyManager() => _systemProxy ??=
+      getTunFilesDir().then((dir) => _createSystemProxy(p.join(dir, 'run')));
+
+  /// Never fails the caller; the saved state stays for the next attempt.
+  Future<void> _restoreSystemProxy() async {
+    try {
+      await (await _proxyManager())?.restore();
+    } catch (error) {
+      ygLogger('restore system proxy failed: $error');
+    }
   }
 
   void _clearExitWatches() {
@@ -174,6 +205,7 @@ class LinuxFfiApi extends BaseFfiApi {
               final query = _findCorePids();
               queryGeneration = _queryGeneration;
               final pids = await query;
+              if (pids.isEmpty) await _restoreSystemProxy();
               if (!_observing ||
                   _stopping ||
                   _transition != null ||
@@ -219,6 +251,7 @@ class LinuxFfiApi extends BaseFfiApi {
       await errorFile.writeAsString('', flush: true);
       final process = await _startProcess(
         corePath,
+        // No TUN settings: system proxy mode, which needs no DNS pinning.
         desktopCoreRunArguments(
           dns: tun?.tunDnsIPv4 ?? '',
           interfaceName: tun?.autoOutboundsInterface ?? '',
@@ -254,6 +287,8 @@ class LinuxFfiApi extends BaseFfiApi {
   Future<bool> _stopCoreProcess() async {
     _stopping = true;
     _clearExitWatches();
+    // Hand the proxy back first, so apps never see a closed local port.
+    await _restoreSystemProxy();
     try {
       var pids = await _findCorePids();
       for (final (signal, timeout) in const [
