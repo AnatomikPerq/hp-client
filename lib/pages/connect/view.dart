@@ -9,6 +9,7 @@ import 'package:onexray/pages/theme/theme.dart';
 import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
+import 'package:onexray/pages/connect/runtime_observatory.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -30,6 +31,7 @@ class ConnectView extends StatelessWidget {
     this.locationHealth,
     required this.method,
     this.methodDetail,
+    this.methodEnabled = true,
     required this.onConnection,
     required this.onAddServers,
     required this.onExpert,
@@ -52,6 +54,7 @@ class ConnectView extends StatelessWidget {
   final String? runningPath;
   final String? locationDetail, locationHealth, methodDetail;
   final String method;
+  final bool methodEnabled;
   final VoidCallback onConnection,
       onAddServers,
       onServer,
@@ -135,6 +138,7 @@ class ConnectView extends StatelessWidget {
                                   method,
                                   onMethod,
                                   detail: methodDetail,
+                                  enabled: methodEnabled,
                                   busy: pendingChange == 'method',
                                   minHeight: 113,
                                 ),
@@ -225,6 +229,7 @@ class ConnectView extends StatelessWidget {
                     method,
                     onMethod,
                     detail: methodDetail,
+                    enabled: methodEnabled,
                     busy: pendingChange == 'method',
                   ),
                   const SizedBox(height: 25),
@@ -319,6 +324,7 @@ class ConnectView extends StatelessWidget {
     String? detail,
     String? meta,
     bool busy = false,
+    bool enabled = true,
   }) {
     final palette = ColorManager.palette(context);
     return Column(
@@ -342,7 +348,7 @@ class ConnectView extends StatelessWidget {
             side: BorderSide(color: palette.border),
           ),
           child: InkWell(
-            onTap: _busy ? null : onTap,
+            onTap: _busy || !enabled ? null : onTap,
             borderRadius: BorderRadius.circular(AppRadii.small),
             child: ConstrainedBox(
               constraints: const BoxConstraints(
@@ -400,7 +406,8 @@ class ConnectView extends StatelessWidget {
                       ),
                       const SizedBox(width: 13),
                     ],
-                    const Icon(LucideIcons.chevronRightDir, size: 19),
+                    if (enabled)
+                      const Icon(LucideIcons.chevronRightDir, size: 19),
                     if (meta == null) const SizedBox(width: 13),
                   ],
                 ),
@@ -721,6 +728,7 @@ class ConnectView extends StatelessWidget {
     String? detail,
     String? meta,
     bool busy = false,
+    bool enabled = true,
     double minHeight = 0,
   }) {
     final palette = ColorManager.palette(context);
@@ -742,7 +750,7 @@ class ConnectView extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           InkWell(
-            onTap: onTap,
+            onTap: _busy || !enabled ? null : onTap,
             child: Opacity(
               opacity: 1,
               child: ConstrainedBox(
@@ -798,7 +806,8 @@ class ConnectView extends StatelessWidget {
                         ),
                         const SizedBox(width: 13),
                       ],
-                      const Icon(LucideIcons.chevronRightDir, size: 19),
+                      if (enabled)
+                        const Icon(LucideIcons.chevronRightDir, size: 19),
                       if (meta == null) const SizedBox(width: 13),
                     ],
                   ),
@@ -1099,6 +1108,7 @@ class TrafficReadout extends StatelessWidget {
           formatTraffic(traffic?.uplink ?? 0, connection: true),
           divider: false,
         ),
+        RuntimeObservatoryReadout(view: view, desktop: desktop),
       ],
     );
   }

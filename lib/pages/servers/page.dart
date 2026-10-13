@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/service/shared/failure.dart';
+import 'package:onexray/service/connect/settings.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:onexray/pages/shared/widgets/app_activity.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
@@ -75,22 +76,6 @@ class _ServersPageState extends State<ServersPage> {
                   icon: const Icon(LucideIcons.plus),
                 ),
             ],
-            bottom: mobileRoot || empty
-                ? null
-                : TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.page,
-                    ),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    tabs: [
-                      Tab(text: l.prototypeBySubscription),
-                      Tab(text: l.prototypeByNodeLocation),
-                    ],
-                    onTap: (index) =>
-                        controller.groupBy(ServerGrouping.values[index]),
-                  ),
           ),
           body: SafeArea(
             child: ServerLoadState(
@@ -105,13 +90,7 @@ class _ServersPageState extends State<ServersPage> {
             ),
           ),
         );
-        return mobileRoot
-            ? page
-            : DefaultTabController(
-                length: 2,
-                initialIndex: controller.grouping.index,
-                child: page,
-              );
+        return page;
       },
     ),
   );
@@ -129,10 +108,29 @@ class ServerGroupPage extends StatelessWidget {
       child: BlocBuilder<ServersController, ServersPageState>(
         builder: (context, _) {
           final l = AppLocalizations.of(context)!;
-          final group = controller
+          var group = controller
               .groups(l)
               .where((row) => row.id == params.groupId)
               .firstOrNull;
+          if (group == null) {
+            final source = controller.sources
+                .where(
+                  (source) =>
+                      params.groupId == 'subscription:${source.id}' &&
+                      controller.sourceCount(source.id) == 0,
+                )
+                .firstOrNull;
+            if (source != null) {
+              group = ServerGroup(
+                id: params.groupId,
+                name: source.name,
+                source: source,
+                selection: ServerSelection.source(source.id),
+                rows: const [],
+                visibleRows: const [],
+              );
+            }
+          }
           return Scaffold(
             appBar: PageAppBar(
               title: Text(group?.name ?? l.prototypeServers),

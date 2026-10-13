@@ -23,13 +23,11 @@ const _unchanged = Object();
 
 class ServerExitPickerState {
   final ServerCatalog catalog;
-  final ServerGrouping grouping;
   final String query;
   final int? selectedId;
   final bool ready, failed, busy;
   ServerExitPickerState({
     ServerCatalog? catalog,
-    this.grouping = ServerGrouping.subscription,
     this.query = '',
     this.selectedId,
     this.ready = false,
@@ -39,7 +37,6 @@ class ServerExitPickerState {
 
   ServerExitPickerState copyWith({
     ServerCatalog? catalog,
-    ServerGrouping? grouping,
     String? query,
     Object? selectedId = _unchanged,
     bool? ready,
@@ -47,7 +44,6 @@ class ServerExitPickerState {
     bool? busy,
   }) => ServerExitPickerState(
     catalog: catalog ?? this.catalog,
-    grouping: grouping ?? this.grouping,
     query: query ?? this.query,
     selectedId: identical(selectedId, _unchanged)
         ? this.selectedId
@@ -80,7 +76,8 @@ class ServerExitPickerController extends PageCubit<ServerExitPickerState>
   @override
   ServerCatalog get catalog => state.catalog;
   @override
-  ServerGrouping get grouping => state.grouping;
+  List<CoreConfigData> get servers =>
+      catalog.servers.where(catalog.outboundEligible).toList();
   @override
   String get query => state.query;
   int? get selectedId => state.selectedId;
@@ -107,12 +104,12 @@ class ServerExitPickerController extends PageCubit<ServerExitPickerState>
     if (query != value) emit(state.copyWith(query: value));
   }
 
-  void groupBy(ServerGrouping value) => emit(state.copyWith(grouping: value));
-
   List<ServerGroup> selectionGroups(AppLocalizations l) =>
       groups(l).where((group) => group.visibleRows.isNotEmpty).toList();
   bool canSelect(CoreConfigData row) =>
-      catalog.selectable(row) && !params.excludedIds.contains(row.id);
+      catalog.outboundEligible(row) &&
+      catalog.selectable(row) &&
+      !params.excludedIds.contains(row.id);
   void selectDraft(CoreConfigData? row) {
     if (busy || !ready || (row != null && !canSelect(row))) return;
     emit(state.copyWith(selectedId: row?.id));
@@ -121,10 +118,7 @@ class ServerExitPickerController extends PageCubit<ServerExitPickerState>
   String exitRowDetail(AppLocalizations l, CoreConfigData row) {
     if (params.excludedIds.contains(row.id)) return l.prototypeEntryServer;
     if (!canSelect(row)) return l.prototypeTemporarilyUnavailable;
-    final context = grouping == ServerGrouping.location
-        ? sourceName(l, row)
-        : countryName(l, row.countryCode);
-    return '$context · ${health(l, row)}';
+    return health(l, row);
   }
 
   bool get canFinish =>

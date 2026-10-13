@@ -1,3 +1,5 @@
+import 'package:onexray/core/db/database/enum.dart';
+
 final class SubscriptionInput {
   const SubscriptionInput({
     required this.name,
@@ -6,6 +8,8 @@ final class SubscriptionInput {
     this.agePublicKey,
     this.hwidEnabled = false,
     this.hwid,
+    this.panel = SubscriptionPanel.generic,
+    this.mode,
   });
 
   final String name;
@@ -14,6 +18,11 @@ final class SubscriptionInput {
   final String? agePublicKey;
   final bool hwidEnabled;
   final String? hwid;
+  final SubscriptionPanel panel;
+
+  /// Null lets a new source choose its mode after the response is classified.
+  /// Editing an existing source without a mode retains its stored mode.
+  final SubscriptionMode? mode;
 
   SubscriptionInput withHwid(String value) => SubscriptionInput(
     name: name,
@@ -22,6 +31,8 @@ final class SubscriptionInput {
     agePublicKey: agePublicKey,
     hwidEnabled: hwidEnabled,
     hwid: value,
+    panel: panel,
+    mode: mode,
   );
 
   String? get normalizedAgeSecretKey {
@@ -106,6 +117,17 @@ final class SubscriptionRefreshResult {
 
   bool get success =>
       !superseded && status == SubscriptionUpdateResult.success && count > 0;
+}
+
+/// Warnings after a local mode edit; an unavailable cache never undoes it.
+final class SubscriptionModeAvailability {
+  const SubscriptionModeAvailability({
+    required this.count,
+    required this.selectedCompatible,
+  });
+  final int count;
+  final bool selectedCompatible;
+  bool get hasActiveCache => count > 0;
 }
 
 enum SubscriptionUpdateResult {

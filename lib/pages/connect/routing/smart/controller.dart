@@ -92,7 +92,7 @@ class SmartRoutingEditorController extends PageCubit<SmartRoutingEditorState> {
   }
 
   void update(String key, Object? value) {
-    if (state.original == null) return;
+    if (state.original == null || state.busy) return;
     emit(
       state.copyWith(
         draft: SmartRoutingSettings.fromJson({
@@ -149,8 +149,6 @@ class SmartRoutingEditorController extends PageCubit<SmartRoutingEditorState> {
       SelectionKind.automatic => l.prototypeAutomaticEntries(
         effectiveEntryCount,
       ),
-      SelectionKind.region =>
-        '${setupRegionLabel(l, selection.region!)} · ${l.prototypeAutomaticEntries(effectiveEntryCount)}',
       SelectionKind.source =>
         '${state.original!.selectionName ?? l.prototypeTemporarilyUnavailable} · ${l.prototypeUseEntryServers(effectiveEntryCount)}',
       SelectionKind.server =>

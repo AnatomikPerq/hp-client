@@ -1,8 +1,8 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:onexray/pages/shared/widgets/app_activity.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/advanced/xray/ping/controller.dart';
 import 'package:onexray/pages/shared/widgets/page_app_bar.dart';
@@ -231,7 +231,14 @@ class PingPage extends StatelessWidget {
                                 ),
                             ],
                           ),
-                          SizedBox(height: mobile ? 35 : 38),
+                          SizedBox(height: mobile ? 25 : 28),
+                          Text(
+                            l.pingVpnAccuracyHint,
+                            style: AppTypography.settingsDetailNote.copyWith(
+                              color: palette.mutedForeground,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             l.prototypeSpeedTestSavedNotice,
                             style: AppTypography.settingsDetailNote.copyWith(

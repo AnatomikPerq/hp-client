@@ -381,12 +381,20 @@ void main() {
       controller.setFakeDns(true);
       controller.setDirectDnsAddress('1.1.1.1');
       expect(controller.profileState.directDnsAddress, '1.1.1.1');
-      expect(jsonDecode(controller.previewState!.encode())['dns'], {
-        'servers': [
-          {'tag': 'app-dns-direct', 'address': '1.1.1.1'},
-          {'tag': 'app-dns-fake', 'address': 'fakedns'},
-        ],
-      });
+      final storedDns = jsonDecode(controller.previewState!.encode())['dns'];
+      expect(storedDns['servers'], [
+        {'tag': 'app-dns-proxy', 'address': '8.8.8.8'},
+        {'tag': 'app-dns-direct', 'address': '1.1.1.1'},
+        {'tag': 'app-dns-fake', 'address': 'fakedns'},
+      ]);
+      expect(storedDns['disableCache'], false);
+      for (final removed in [
+        'enableParallelQuery',
+        'serveStale',
+        'serveExpiredTTL',
+      ]) {
+        expect(storedDns, isNot(contains(removed)));
+      }
       controller.reorder(1, 0);
       expect(controller.state.rules.map((rule) => rule.ruleTag), [
         'B',

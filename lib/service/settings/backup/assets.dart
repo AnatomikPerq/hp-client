@@ -5,12 +5,14 @@ import 'package:onexray/core/backup/codec.dart';
 import 'package:onexray/core/backup/model.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/constants.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/db/dao/routing_profile.dart';
 import 'package:onexray/core/model/geo_data_type.dart';
 import 'package:onexray/service/advanced/xray/geodata/model.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/connect/routing/custom/document.dart';
 import 'package:onexray/service/shared/share/configuration_transfer.dart';
 
 /// Only connection assets cross this boundary. Runtime choices, device policy,
@@ -54,6 +56,8 @@ class BackupAssets {
             _optional(row.agePublicKey),
             row.hwidEnabled,
             _optional(row.hwid),
+            panel: row.panel,
+            mode: row.mode,
           ),
       ],
       routingProfiles: [
@@ -67,7 +71,9 @@ class BackupAssets {
         directApple: settings.directApple,
         directWindows: settings.directWindows,
         directDns: settings.directDns,
-        directDnsAddress: settings.directDnsAddress,
+        dns: settings.dns.toJson(),
+        sniffing: settings.sniffing.toJson(),
+        selection: settings.selection.toJson(),
         fakeDns: settings.fakeDns,
         fragment: settings.fragment,
         blockAds: settings.blockAds,
@@ -117,6 +123,8 @@ class BackupAssets {
                 SubscriptionCompanion.insert(
                   name: row.name,
                   url: row.url,
+                  panel: Value(row.panel),
+                  mode: Value(row.mode),
                   ageSecretKey: Value(_optional(row.ageSecretKey)),
                   agePublicKey: Value(_optional(row.agePublicKey)),
                   hwidEnabled: Value(row.hwidEnabled),
@@ -165,6 +173,10 @@ void validateBackupAssets(BackupDocument document) {
   for (final row in document.subscriptions) {
     _name(row.name);
     GeoDataInput.httpsUri(row.url);
+    if (SubscriptionPanel.fromString(row.panel) == null ||
+        SubscriptionMode.fromString(row.mode) == null) {
+      throw const FormatException('Unsupported subscription panel or mode');
+    }
     if (!urls.add(row.url)) {
       throw const FormatException('Duplicate subscription URL');
     }
@@ -190,16 +202,24 @@ void validateBackupAssets(BackupDocument document) {
         'Custom routing names must be unique and contain 1–32 characters',
       );
     }
-    ConfigurationTransferService.routingDocumentFromJson(
-      decodeBackupConfiguration(row.data),
-      row.advanced
-          ? ConfigurationKind.customAdvanced
-          : ConfigurationKind.custom,
-      name: row.name,
-      allowMetadata: false,
-    );
+    final json = decodeBackupConfiguration(row.data);
+    if (row.advanced) {
+      ConfigurationTransferService.routingDocumentFromJson(
+        json,
+        ConfigurationKind.customAdvanced,
+        name: row.name,
+        allowMetadata: false,
+      );
+    } else {
+      RoutingProfileDocument.fromJson(
+        json,
+        name: row.name,
+        allowMetadata: false,
+        ignoreRetiredFields: true,
+      );
+    }
   }
-  SmartRoutingSettings.fromJson(document.smartRouting.toJson());
+  SmartRoutingSettings.fromJson(document.smartRouting.toJson()).validate();
   final files = <String>{};
   for (final row in document.geoData) {
     final name = GeoDataInput.referenceFileName('${row.name}.dat');

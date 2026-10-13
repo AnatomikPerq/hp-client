@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,6 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/service/settings/language/locale.dart';
 import 'package:onexray/l10n/localizations/app_localizations_en.dart';
 import 'package:onexray/pages/connect/routing/widgets.dart';
-import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/connect/routing/smart/exit_picker_controller.dart';
 import 'package:onexray/pages/connect/routing/smart/exit_picker.dart';
 import 'package:onexray/pages/theme/theme.dart';
@@ -35,7 +35,6 @@ CoreConfigData _server(int id, {int delay = 20}) => CoreConfigData(
   ),
   delay: delay,
   subId: 0,
-  countryCode: 'SG',
   favorite: false,
 );
 
@@ -79,7 +78,7 @@ void main() {
   });
 
   test(
-    'draft keeps exclusions, real health and search across grouping',
+    'draft keeps exclusions, real health and search within subscriptions',
     () async {
       final before = (await coordinator.configuration).encode();
       controller.selectDraft(
@@ -109,7 +108,6 @@ void main() {
       );
       expect(controller.selectedId, 3);
       controller.search.text = 'Server 3';
-      controller.groupBy(ServerGrouping.subscription);
       expect(controller.search.text, 'Server 3');
       expect(controller.selectionGroups(l).single.visibleRows.single.id, 3);
       expect(
@@ -117,7 +115,7 @@ void main() {
           l,
           controller.servers.singleWhere((row) => row.id == 3),
         ),
-        '${l.countryRegionName('SG')} · ${l.prototypeFastLatency(20)}',
+        l.prototypeFastLatency(20),
       );
       expect((await coordinator.configuration).encode(), before);
     },
@@ -175,8 +173,8 @@ void main() {
     expect(find.text(l.prototypeManageSources), findsNothing);
     expect(find.text(l.prototypeFavorites), findsNothing);
     expect(find.text('VLESS | XHTTP | TLS'), findsNWidgets(4));
-    await tester.tap(find.text(l.prototypeBySubscription));
-    await tester.pumpAndSettle();
+    expect(find.text('outbound'), findsNWidgets(4));
+    expect(find.text(l.countryRegionName('SG')), findsNothing);
     await tester.tap(find.text('Server 3'));
     await tester.pumpAndSettle();
     expect(controller.selectedId, 3);
@@ -205,13 +203,7 @@ void main() {
       tester.widget<PageActionBar>(find.byType(PageActionBar)).maxWidth,
       AppLayout.routingEditorMaxWidth,
     );
-    expect(
-      find.descendant(of: card, matching: find.byType(IntrinsicWidth)),
-      findsOneWidget,
-    );
-    await tester.tap(find.text(l.prototypeBySubscription));
-    await tester.pumpAndSettle();
-    expect(controller.grouping, ServerGrouping.subscription);
+    expect(find.byType(TabBar), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -241,4 +233,82 @@ void main() {
     expect(results.last!.id, isNull);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'provider profiles stay outside the picker and explicit IDs cannot be selected',
+    (tester) async {
+      late CoreConfigData profile;
+      await tester.runAsync(() async {
+        final sourceId = await db.subscriptionDao.insertRow(
+          SubscriptionCompanion.insert(
+            name: 'Provider',
+            url: 'https://example.test/provider',
+            mode: const Value('providerManaged'),
+            timestamp: DateTime(2026),
+          ),
+        );
+        final profileId = await db.coreConfigDao.insertAssetRow(
+          CoreConfigCompanion.insert(
+            name: 'Complete profile',
+            type: 'Remnawave',
+            tags: '',
+            subId: sourceId,
+            delay: PingDelayConstants.unknown,
+            data: Value(
+              base64Encode(
+                utf8.encode('{"outbounds":[{"protocol":"freedom"}]}'),
+              ),
+            ),
+          ),
+        );
+        if (!controller.state.catalog.servers.any(
+          (row) => row.id == profileId,
+        )) {
+          await controller.stream
+              .firstWhere(
+                (state) =>
+                    state.catalog.servers.any((row) => row.id == profileId),
+              )
+              .timeout(const Duration(seconds: 5));
+        }
+        profile = (await db.coreConfigDao.searchRow(profileId))!;
+      });
+      final profileId = profile.id;
+      expect(controller.catalog.selectable(profile), isTrue);
+      expect(controller.canSelect(profile), isFalse);
+      controller.selectDraft(profile);
+      expect(controller.selectedId, 2);
+      expect(
+        controller
+            .selectionGroups(l)
+            .expand((group) => group.rows)
+            .map((row) => row.id),
+        isNot(contains(profileId)),
+      );
+      await open(tester, <ServerExitChoice?>[]);
+      expect(find.text('Complete profile'), findsNothing);
+      expect(find.text('Provider'), findsNothing);
+      final explicit = ServerExitPickerController(
+        ServerExitPickerParams(selectedId: profileId),
+        database: db,
+        coordinator: coordinator,
+      );
+      addTearDown(explicit.close);
+      await tester.runAsync(() async {
+        await explicit.initialize();
+        if (!explicit.state.catalog.servers.any((row) => row.id == profileId)) {
+          await explicit.stream
+              .firstWhere(
+                (state) =>
+                    state.catalog.servers.any((row) => row.id == profileId),
+              )
+              .timeout(const Duration(seconds: 5));
+        }
+      });
+      expect(explicit.canFinish, isFalse);
+      explicit.selectDraft(null);
+      expect(explicit.canFinish, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

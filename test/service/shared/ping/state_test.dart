@@ -7,9 +7,19 @@ import 'package:shared_preferences_platform_interface/in_memory_shared_preferenc
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
+    await PreferencesKey().clearUserDataPreferences();
+  });
+
+  test('ping settings use defaults without preferences', () async {
+    final state = PingState();
+
+    await state.readFromPreferences();
+
+    expect(state.timeout, PingTimeout.defaultValue);
+    expect(state.url, PingUrl.cloudflare);
   });
 
   test('custom ping URL is selectable and resolved', () {
@@ -45,22 +55,36 @@ void main() {
     expect(restored.realUrl, 'https://example.com/ping');
   });
 
-  test(
-    'legacy custom URL is restored without an automatic ping field',
-    () async {
-      await PreferencesKey().savePingState({
-        'timeout': 5,
-        'url': 'Custom',
-        'customUrl': 'https://legacy.example.com/ping',
-      });
+  test('legacy preferences retain the custom URL', () async {
+    await PreferencesKey().savePingState({
+      'timeout': 5,
+      'url': 'Custom',
+      'customUrl': 'https://legacy.example.com/ping',
+    });
 
-      final restored = PingState();
-      await restored.readFromPreferences();
+    final restored = PingState();
+    await restored.readFromPreferences();
 
-      expect(restored.url, PingUrl.custom);
-      expect(restored.customUrl, 'https://legacy.example.com/ping');
-    },
-  );
+    expect(restored.url, PingUrl.custom);
+    expect(restored.customUrl, 'https://legacy.example.com/ping');
+  });
+
+  test('unknown preferences are ignored and omitted when saving', () async {
+    await PreferencesKey().savePingState({
+      'timeout': 8,
+      'url': 'Google',
+      'locationEnabled': true,
+    });
+    final restored = PingState();
+    await restored.readFromPreferences();
+    expect(restored.timeout, 8);
+    expect(restored.url, PingUrl.google);
+    await restored.saveToPreferences();
+    expect(
+      (await PreferencesKey().readPingState())!.keys,
+      unorderedEquals(['timeout', 'url', 'customUrl']),
+    );
+  });
 
   test('invalid legacy custom URLs are retained but not activated', () async {
     for (final customUrl in [

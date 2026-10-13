@@ -99,7 +99,7 @@ class PingService {
       final db = _database;
       final rows = <CoreConfigData>[];
       for (final id in targetIds) {
-        final row = await db.coreConfigDao.searchRow(id);
+        final row = await db.coreConfigDao.searchActiveOutboundRow(id);
         if (row != null &&
             _isPingableConfig(row) &&
             (force || isUnmeasured(row))) {
@@ -180,7 +180,7 @@ class PingService {
     final pingState = PingState();
     await pingState.readFromPreferences();
 
-    // Location/manual selections may span subscriptions too. Never mix them
+    // Manual selections may span subscriptions too. Never mix them
     // within a native batch; finish one subscription before starting the next.
     final batches = rows
         .groupListsBy((row) => row.subId)
@@ -193,12 +193,19 @@ class PingService {
       final batchRows = <CoreConfigData>[];
       final sources = <PingBatchSource>[];
       for (final row in rowSlice) {
+        final current = await db.coreConfigDao.searchActiveOutboundRow(row.id);
+        if (current == null ||
+            current.data != row.data ||
+            current.subId != row.subId) {
+          continue;
+        }
         final source = _makePingSource(row);
         if (source != null) {
           batchRows.add(row);
           sources.add(source);
         }
       }
+      if (sources.isEmpty) continue;
       final results = await (_batchOverride ?? PingBatchRunner.run)(
         sources,
         pingState,
@@ -211,7 +218,7 @@ class PingService {
               : result.delay == PingDelayConstants.timeout
               ? PingDelayConstants.timeout
               : PingDelayConstants.error;
-          await _updateRow(db, batchRows[index], delay, result.countryCode);
+          await _updateRow(db, batchRows[index], delay);
         }
       });
       AppEventBus.instance.updatePingResults({
@@ -234,17 +241,8 @@ class PingService {
     }
   }
 
-  Future<void> _updateRow(
-    AppDatabase db,
-    CoreConfigData row,
-    int delay,
-    String? countryCode,
-  ) async {
+  Future<void> _updateRow(AppDatabase db, CoreConfigData row, int delay) async {
     if (delay == PingDelayConstants.unknown || row.data == null) return;
-    final country =
-        countryCode != null && RegExp(r'^[A-Z]{2}$').hasMatch(countryCode)
-        ? countryCode
-        : null;
     // A slow result must not overwrite an edit, favorite, or restored asset.
     await (db.update(db.coreConfig)..where(
           (table) =>
@@ -253,8 +251,6 @@ class PingService {
               table.type.equals(row.type) &
               table.data.equals(row.data!),
         ))
-        .write(
-          CoreConfigCompanion(delay: Value(delay), countryCode: Value(country)),
-        );
+        .write(CoreConfigCompanion(delay: Value(delay)));
   }
 }

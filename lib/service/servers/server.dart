@@ -6,19 +6,24 @@ import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/asset_edit.dart';
 import 'package:onexray/service/connect/preparation.dart';
 import 'package:onexray/service/connect/resolver.dart';
+import 'package:onexray/service/connect/raw/editor.dart';
+import 'package:onexray/service/connect/raw/validator.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/shared/ping/service.dart';
 import 'package:onexray/service/shared/xray/validation.dart';
+import 'package:onexray/service/shared/xray/remnawave.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 import 'package:onexray/service/servers/outbound/map.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
+import 'package:onexray/service/servers/catalog.dart';
 
 class ServerEditDraft {
   final CoreConfigData original;
@@ -50,6 +55,7 @@ class ServerAssetService {
   final ConnectionCoordinator coordinator;
   final Future<String> Function(String) _validate;
   final void Function(List<int>) _schedule;
+  final SubscriptionService _subscriptions;
   final Future<ConnectionRuntime> Function(
     ConnectionConfiguration,
     Future<void>,
@@ -63,25 +69,37 @@ class ServerAssetService {
     ConnectionCoordinator? coordinator,
     Future<String> Function(String)? validate,
     void Function(List<int>)? schedule,
+    SubscriptionService? subscriptions,
     this.prepare,
   }) : db = database ?? AppDatabase(),
        coordinator = coordinator ?? ConnectionCoordinator.instance,
        _validate = validate ?? AppHostApi().testXray,
+       _subscriptions = subscriptions ?? SubscriptionService(),
        _schedule = schedule ?? PingService().schedulePingConfigIds;
 
-  Stream<List<CoreConfigData>> watch() => db.coreConfigDao.watchOutbounds();
+  Stream<List<CoreConfigData>> watch() => db.coreConfigDao.watchServers();
 
-  Future<List<CoreConfigData>> rows() => (db.select(
-    db.coreConfig,
-  )..where((row) => row.type.equals('outbound'))).get();
+  Future<List<CoreConfigData>> rows() =>
+      (db.select(db.coreConfig)..where(
+            (row) => row.type.isIn([
+              CoreConfigType.outbound.name,
+              CoreConfigType.Remnawave.name,
+            ]),
+          ))
+          .get();
 
   static bool measured(CoreConfigData row) =>
+      row.type == CoreConfigType.outbound.name &&
       row.delay != PingDelayConstants.unknown;
 
   static bool healthy(CoreConfigData row) =>
+      row.type == CoreConfigType.outbound.name &&
       PingDelayConstants.isSuccessful(row.delay);
 
   static bool selectable(CoreConfigData row) {
+    if (row.type == CoreConfigType.Remnawave.name) {
+      return ServerDisplay.fromRow(row).readable;
+    }
     if (measured(row) && !healthy(row)) return false;
     try {
       ResolvedServer.fromRow(row);
@@ -92,6 +110,7 @@ class ServerAssetService {
   }
 
   static String protocolLabel(CoreConfigData row) {
+    if (row.type != CoreConfigType.outbound.name) return '';
     try {
       return outboundProtocolLabel(readOutboundFromDbData(row));
     } on FormatException {
@@ -114,10 +133,73 @@ class ServerAssetService {
     return ServerEditDraft(row, text);
   }
 
+  /// A UI snapshot cannot select a cache after its source mode has changed.
+  Future<void> validateSelection(ServerSelection selection) async {
+    if (selection.kind == SelectionKind.automatic) return;
+    if (selection.kind == SelectionKind.source) {
+      if (selection.id == DBConstants.defaultId) return;
+      final source = await db.subscriptionDao.searchRow(selection.id!);
+      if (source == null || source.mode != SubscriptionMode.appManaged.name) {
+        throw const FormatException(
+          'Choose an individual provider configuration',
+        );
+      }
+      return;
+    }
+    final row = await db.coreConfigDao.searchActiveServerRow(selection.id!);
+    if (row == null || !ServerDisplay.fromRow(row).readable) {
+      throw const FormatException(
+        'The selected configuration is unavailable in the subscription mode',
+      );
+    }
+  }
+
+  /// Provider JSON is viewed as stored; it is never projected to one outbound.
+  Future<ServerEditDraft> loadComplete(int id) async {
+    final row = await db.coreConfigDao.searchRow(id);
+    if (row == null ||
+        row.type != CoreConfigType.Remnawave.name ||
+        await db.subscriptionDao.searchRow(row.subId) == null) {
+      throw const FormatException('Provider configuration no longer exists');
+    }
+    ResolvedProfile.fromRow(row);
+    return ServerEditDraft(row, utf8.decode(base64Decode(row.data!)));
+  }
+
+  /// A personal Raw is a separate asset, validated and limited by its editor.
+  Future<int> copyAsRaw(int id, {String? name}) async {
+    final draft = await loadComplete(id);
+    final config = RemnawaveAdapter.adapt(
+      jsonDecode(draft.text) as Map<String, dynamic>,
+    );
+    final saved =
+        await RawEditorService(
+          database: db,
+          coordinator: coordinator,
+          validate: (text) async {
+            await XrayRawValidator.validateParsed(
+              XrayRawValidator.normalize(text),
+              testXray: _validate,
+            );
+          },
+        ).save(
+          RawEditorDraft(
+            name: name ?? draft.original.name,
+            text: jsonEncode(config),
+          ),
+          confirmReconnect: () async => false,
+        );
+    if (saved == null) throw const RawEditorException('changed');
+    return saved;
+  }
+
   Future<bool> save(
     ServerEditDraft draft, {
     required Future<bool> Function() confirmReconnect,
   }) async {
+    if (draft.original.type != CoreConfigType.outbound.name) {
+      throw const FormatException('A provider configuration is read-only');
+    }
     if (utf8.encode(draft.text).length > 16 * 1024 * 1024) {
       throw const FormatException('Server configuration is too large');
     }
@@ -181,9 +263,6 @@ class ServerAssetService {
             tags: companion.tags.value,
             data: companion.data,
             delay: semanticChange ? PingDelayConstants.unknown : current.delay,
-            countryCode: semanticChange
-                ? const Value(null)
-                : const Value.absent(),
           ),
         );
       },
@@ -193,8 +272,14 @@ class ServerAssetService {
   }
 
   Future<void> favorite(int id, bool value) async {
-    await (db.update(db.coreConfig)
-          ..where((row) => row.id.equals(id) & row.type.equals('outbound')))
+    await (db.update(db.coreConfig)..where(
+          (row) =>
+              row.id.equals(id) &
+              row.type.isIn([
+                CoreConfigType.outbound.name,
+                CoreConfigType.Remnawave.name,
+              ]),
+        ))
         .write(CoreConfigCompanion(favorite: Value(value)));
   }
 
@@ -207,10 +292,7 @@ class ServerAssetService {
       final outbound = readOutboundFromDbData(current);
       outbound['tag'] = '${outboundDisplayName(outbound)} · $suffix';
       return db.coreConfigDao.insertAssetRow(
-        outboundCompanion(outbound).copyWith(
-          countryCode: Value(current.countryCode),
-          favorite: const Value(false),
-        ),
+        outboundCompanion(outbound).copyWith(favorite: const Value(false)),
       );
     });
     _schedule([id]);
@@ -230,17 +312,27 @@ class ServerAssetService {
               .map((row) => row.id)
               .toSet();
     final remaining = all.where((row) => !removed.contains(row.id)).toList();
+    final activeOrdinaryIds = (await db.coreConfigDao.allActiveServerRows())
+        .where((row) => row.type == CoreConfigType.outbound.name)
+        .map((row) => row.id)
+        .toSet();
     final selection = current.connection.selection;
     final invalidSelection = switch (selection.kind) {
       SelectionKind.automatic => false,
       SelectionKind.server => removed.contains(selection.id),
       SelectionKind.source =>
         selection.id == sourceId ||
-            !remaining.any((row) => row.subId == selection.id),
-      SelectionKind.region => !remaining.any(
-        (row) =>
-            row.countryCode?.toUpperCase() == selection.region?.toUpperCase(),
-      ),
+            (all.any(
+                  (row) =>
+                      row.subId == selection.id &&
+                      activeOrdinaryIds.contains(row.id) &&
+                      removed.contains(row.id),
+                ) &&
+                !remaining.any(
+                  (row) =>
+                      row.subId == selection.id &&
+                      activeOrdinaryIds.contains(row.id),
+                )),
     };
     final next = ConnectionConfiguration(
       policy: current.policy,
@@ -267,7 +359,10 @@ class ServerAssetService {
       disconnect:
           active &&
           !remaining.any(
-            (row) => selectable(row) && row.id != next.connection.finalExitId,
+            (row) =>
+                activeOrdinaryIds.contains(row.id) &&
+                selectable(row) &&
+                row.id != next.connection.finalExitId,
           ),
     );
   }
@@ -312,13 +407,18 @@ class ServerAssetService {
           if (!const SetEquality<int>().equals(currentIds, preview.ids)) {
             throw const FormatException('Subscription changed before deletion');
           }
-          await SubscriptionService().deleteSubscription(
+          await _subscriptions.deleteSubscription(
             id,
             prepareDeletion: (_) async => true,
           );
         } else {
           await (db.delete(db.coreConfig)..where(
-                (row) => row.id.isIn(preview.ids) & row.type.equals('outbound'),
+                (row) =>
+                    row.id.isIn(preview.ids) &
+                    row.type.isIn([
+                      CoreConfigType.outbound.name,
+                      CoreConfigType.Remnawave.name,
+                    ]),
               ))
               .go();
         }

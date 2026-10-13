@@ -9,6 +9,7 @@ import 'package:onexray/service/shared/share/app_link_parser.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/outbound/map.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
+import 'package:onexray/service/shared/xray/remnawave.dart';
 
 enum _SubscriptionAgeMode { none, x25519, hybrid, invalid }
 
@@ -32,7 +33,8 @@ abstract final class OneXrayAppLinkGenerator {
     final type = switch (CoreConfigType.fromString(config.type)) {
       CoreConfigType.outbound => OneXrayConfigLinkType.outbound,
       CoreConfigType.raw => OneXrayConfigLinkType.raw,
-      null => null,
+      CoreConfigType.Remnawave => OneXrayConfigLinkType.raw,
+      _ => null,
     };
     var data = config.data?.trim();
     if (type == null || data == null || data.isEmpty) {
@@ -42,6 +44,17 @@ abstract final class OneXrayAppLinkGenerator {
       try {
         data = base64Encode(
           utf8.encode(encodeSingleOutbound(readOutboundFromDbData(config))),
+        );
+      } catch (_) {
+        return null;
+      }
+    } else if (config.type == CoreConfigType.Remnawave.name) {
+      try {
+        final decoded =
+            jsonDecode(utf8.decode(base64Decode(data))) as Map<String, dynamic>;
+        final adapted = RemnawaveAdapter.adapt(decoded);
+        data = base64Encode(
+          utf8.encode(jsonEncode({...adapted, 'name': config.name})),
         );
       } catch (_) {
         return null;
@@ -76,7 +89,12 @@ abstract final class OneXrayAppLinkGenerator {
         scheme: OneXrayAppLinkParser.scheme,
         host: OneXrayAppLinkParser.host,
         path: OneXrayAppLinkParser.subscriptionPath,
-        queryParameters: {'url': url, 'age': ?ageType},
+        queryParameters: {
+          'url': url,
+          'age': ?ageType,
+          'panel': subscription.panel,
+          'mode': subscription.mode,
+        },
         fragment: subscription.name,
       ),
     );
@@ -114,6 +132,19 @@ abstract final class OneXrayAppLinkGenerator {
       final names = <String>{};
       _collectRoutingGeoDataNames(decoded, names);
       _collectDnsGeoDataNames(decoded, names);
+      final inbounds = decoded['inbounds'];
+      if (inbounds is List) {
+        for (final inbound in inbounds.whereType<Map>()) {
+          final sniffing = inbound['sniffing'];
+          if (sniffing is! Map) continue;
+          _collectGeoDataNames(_strings(sniffing['domainsExcluded']), names);
+          _collectGeoDataNames(
+            _strings(sniffing['ipsExcluded']),
+            names,
+            ip: true,
+          );
+        }
+      }
       return names;
     } catch (_) {
       return const <String>{};
@@ -144,9 +175,14 @@ abstract final class OneXrayAppLinkGenerator {
     return OneXrayAppLinkParser.parse(uri) == null ? null : uri;
   }
 
-  static void _collectGeoDataNames(Iterable<String>? rules, Set<String> names) {
+  static void _collectGeoDataNames(
+    Iterable<String>? rules,
+    Set<String> names, {
+    bool ip = false,
+  }) {
     for (final rule in rules ?? const <String>[]) {
-      final match = RegExp(r'^ext:([^:]+\.dat):.+$').firstMatch(rule);
+      final reference = ip && rule.startsWith('!') ? rule.substring(1) : rule;
+      final match = RegExp(r'^ext:([^:]+\.dat):.+$').firstMatch(reference);
       final fileName = match?.group(1);
       if (fileName == null || fileName.length <= 4) {
         continue;
@@ -172,7 +208,7 @@ abstract final class OneXrayAppLinkGenerator {
         continue;
       }
       _collectGeoDataNames(_strings(value['domain']), names);
-      _collectGeoDataNames(_strings(value['ip']), names);
+      _collectGeoDataNames(_strings(value['ip']), names, ip: true);
     }
   }
 
@@ -193,7 +229,9 @@ abstract final class OneXrayAppLinkGenerator {
         continue;
       }
       _collectGeoDataNames(_strings(value['domains']), names);
-      _collectGeoDataNames(_strings(value['expectedIPs']), names);
+      _collectGeoDataNames(_strings(value['expectedIPs']), names, ip: true);
+      _collectGeoDataNames(_strings(value['expectIPs']), names, ip: true);
+      _collectGeoDataNames(_strings(value['unexpectedIPs']), names, ip: true);
     }
   }
 

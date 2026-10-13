@@ -70,6 +70,39 @@ void main() {
     expect(document.smartRouting.toJson()['fragment'], false);
   });
 
+  test('previous subscriptions default to generic App management', () {
+    final json = sample().toJson();
+    final source =
+        (json['subscriptions'] as List).single as Map<String, dynamic>;
+    source.remove('panel');
+    source.remove('mode');
+    source['futureSourceField'] = {'preservedByFutureClient': true};
+    final document = decodeBackup(
+      Uint8List.fromList(utf8.encode(jsonEncode(json))),
+    );
+    expect(document.subscriptions.single.panel, 'generic');
+    expect(document.subscriptions.single.mode, 'appManaged');
+    expect(
+      document.subscriptions.single.toJson(),
+      isNot(contains('futureSourceField')),
+    );
+  });
+
+  test('source panel and mode round trip without changing backup version', () {
+    final json = sample().toJson();
+    final source =
+        (json['subscriptions'] as List).single as Map<String, dynamic>;
+    source['panel'] = 'remnawave';
+    source['mode'] = 'providerManaged';
+    final document = decodeBackup(
+      Uint8List.fromList(utf8.encode(jsonEncode(json))),
+    );
+    final result = decodeBackup(encodeBackup(document));
+    expect(result.version, 1);
+    expect(result.subscriptions.single.panel, 'remnawave');
+    expect(result.subscriptions.single.mode, 'providerManaged');
+  });
+
   test('fragment must be a boolean when present', () {
     final json = sample().toJson();
     (json['smartRouting'] as Map<String, dynamic>)['fragment'] = 'true';
@@ -79,24 +112,44 @@ void main() {
     );
   });
 
-  test(
-    'rejects missing partitions, unknown formats and forbidden metadata',
-    () {
-      for (final json in [
-        sample().toJson()..remove('subscriptions'),
-        sample().toJson()..remove('version'),
-        sample().toJson()..['version'] = 4,
-        sample().toJson()..['files'] = [],
-        sample().toJson()
-          ..['smartRouting'] = {...smart.toJson(), 'finalExitId': 7},
-      ]) {
-        expect(
-          () => decodeBackup(Uint8List.fromList(utf8.encode(jsonEncode(json)))),
-          throwsFormatException,
-        );
+  test('ignores unknown fields in every backup section', () {
+    final expected = sample().toJson();
+    expected['routingProfiles'] = [
+      const BackupRoutingProfile('Route', false, 'e30=').toJson(),
+    ];
+    final json = jsonDecode(jsonEncode(expected)) as Map<String, dynamic>;
+    json['files'] = [];
+    for (final key in [
+      'coreConfigs',
+      'subscriptions',
+      'routingProfiles',
+      'geoData',
+    ]) {
+      for (final row in json[key] as List) {
+        (row as Map<String, dynamic>)['futureField'] = {'enabled': true};
       }
-    },
-  );
+    }
+    (json['smartRouting'] as Map<String, dynamic>)['finalExitId'] = 7;
+
+    final document = decodeBackup(
+      Uint8List.fromList(utf8.encode(jsonEncode(json))),
+    );
+    expect(document.toJson(), expected);
+  });
+
+  test('rejects missing partitions and unsupported formats or versions', () {
+    for (final json in [
+      sample().toJson()..remove('subscriptions'),
+      sample().toJson()..remove('version'),
+      sample().toJson()..['format'] = 'future-backup',
+      sample().toJson()..['version'] = 4,
+    ]) {
+      expect(
+        () => decodeBackup(Uint8List.fromList(utf8.encode(jsonEncode(json)))),
+        throwsFormatException,
+      );
+    }
+  });
 
   test('diagnostics do not echo malformed credentials', () {
     expect(

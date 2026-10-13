@@ -22,16 +22,30 @@ Apple/Windows 使用替换写入；Android 固定 URI 覆盖、不先删旧文�
 UTF-8 JSON 的 `format=onexray-backup`、`version=1`、`createdAt` 为 Unix 毫秒；
 `coreConfigs/subscriptions/routingProfiles/smartRouting/geoData` 为必要分区，缺失列表不同于空列表。
 字段唯一来源是 [备份模型](../lib/core/backup/model.dart)，旧 ZIP v3/v4 不导入、不转换。
+根对象及各分区忽略未知字段，重新导出时只输出当前支持的字段；格式、版本、必要字段和已知字段类型仍需有效。
 
 - 保存本地（subId=0）outbound 与全部 Raw，包括超过新增三份上限的旧 Raw；
-  保存订阅来源、原 Age 密钥对及关闭发送时仍存在的 HWID，排除订阅节点缓存、本地修改、更新时间与套餐缓存。
+  保存订阅来源的 panel/mode、原 Age 密钥对及关闭发送时仍存在的 HWID，
+  排除订阅完整配置及普通派生缓存、本地修改、更新时间与套餐缓存。
+  旧备份缺 panel/mode 时恢复 generic/appManaged；显式未知值仍拒绝，未知字段容忍不放宽已知枚举。
 - 常规/高级路由保留类型、名称及原文，共用名称唯一和三份上限；
   包含 [Fragment 辅助出站及其参数](xray-configuration.md#fragment)。
-  Smart 显式保存连接设置（含 Fragment 开关）但排除最终出口选择，旧 v1 备份缺省 Fragment 为关闭。
+  Smart 显式保存连接设置（含 Fragment 开关、可选 dns/sniffing/selection maps），排除最终出口选择。
+  新增设置沿用协议 v1；旧备份缺这些 maps 时恢复旧默认：8.8.8.8、全局缓存开启、相同出口备用关闭，
+  嗅探开启/routeOnly=false/metadataOnly=false，选路轮询；缺省 Fragment 为关闭。
+  旧 directDnsAddress 回填主直连 resolver，新捕获只写 dns 规范字段，不维护两份可变地址。
+  Smart 的旧 DNS map 忽略单 resolver 超时/缓存覆盖、应答过滤、过期缓存和并发字段，
+  后续写出仅包含地址列表、全局缓存和同出口备用设置；其余 resolver 参数沿用 Core 默认值。
+  Smart 的旧 sniffing map 忽略 domainsExcluded/ipsExcluded，后续写出仅包含 enabled/routeOnly/metadataOnly。
+  常规路由将新参数保存在原 Base64 配置数据，高级/Raw 原文保留；不保存运行观测、探测结果或运行 tag。
+  旧常规备份的恢复校验与数据库内部读取兼容剔除废弃 DNS 字段及嗅探排除列表，恢复仍保留 Base64 原文，
+  下次编辑保存才写新规范；该兼容入口不放宽外部普通 JSON/分享导入的严格字段边界。
+  未知字段容忍不将额外设备选择变成连接参数，旧版本严格解析客户端不保证读取扩展 v1。
   最终出口若是本地节点，仍作为普通节点保存。
 - 自定义 Geodata 只保存名称/类型/HTTPS URL，包含待下载声明，省略默认组；不保存任何资源文件。
 - `data` 保留数据库 Base64 原字符串，不通过分享格式或普通模型裁剪 Raw/高级内容。
-  不保存数据库 ID、收藏、测速/位置缓存、首页选择、专家模式、平台策略、App 偏好、API 或 Android 自动化授权。
+  不保存数据库 ID、收藏、测速缓存、首页选择、专家模式、平台策略、App 偏好、API 或 Android 自动化授权。
+  订阅完整配置与派生行不因活动方式改变而纳入本地资产备份；复制出的个人 Raw 按普通 Raw 保存。
 
 接受上限 64 MiB；检查格式/版本/类型、名称、Base64/UTF-8/JSON 对象及现有资产边界，
 不重复实现 Xray 协议校验、不调用 `testXray`、不要求下载成功，也不证明恢复后能运行。
@@ -58,7 +72,8 @@ Dart isolate 不能消除插件元数据主线程风险，云占位文件和线�
 文件发布/恢复和缺库重建见 [数据管理](data-management.md#geodata-发布)。
 
 待下载不阻止首页初始化；依赖它的连接明确报告缺失，不删规则、不改直连、不联网兜底。
-用户可用其他配置连接后手动下载，或等待已有的已连接自动更新。订阅只恢复来源，节点通过正常更新获取；
+用户可用其他配置连接后手动下载，或等待已有的已连接自动更新。订阅只恢复来源与 panel/mode，
+完整配置及普通节点通过正常刷新获取，恢复后不承诺提供方缓存可以离线连接；
 证书等外部文件需另行准备。Android START 阻断及目标设备授权保留见 [外部接口](external-interfaces.md#设备授权与数据操作)。
 
 ## 自动备份

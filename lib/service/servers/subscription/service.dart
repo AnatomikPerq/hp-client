@@ -18,10 +18,11 @@ import 'package:onexray/service/shared/db/config_writer.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/in_flight_operations.dart';
 import 'package:onexray/service/shared/ping/service.dart';
-import 'package:onexray/service/shared/share/xray_share_reader.dart';
+import 'package:onexray/service/servers/subscription/reader.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/user_info.dart';
 import 'package:onexray/service/servers/subscription/validator.dart';
+import 'package:onexray/service/servers/catalog.dart';
 import 'package:uuid/uuid.dart';
 
 final class SubscriptionLoadResult {
@@ -30,19 +31,34 @@ final class SubscriptionLoadResult {
     this.rows = const [],
     this.error,
     this.userInfo,
+    this.mode = SubscriptionMode.appManaged,
   });
 
   final SubscriptionUpdateResult status;
   final List<CoreConfigCompanion> rows;
   final Object? error;
   final SubscriptionUserInfo? userInfo;
+  final SubscriptionMode mode;
+
+  int get count => rows
+      .where(
+        (row) =>
+            row.type.present &&
+            row.type.value ==
+                (mode == SubscriptionMode.appManaged
+                    ? CoreConfigType.outbound.name
+                    : CoreConfigType.Remnawave.name),
+      )
+      .length;
 
   bool get hasUsableRows =>
       status == SubscriptionUpdateResult.success &&
-      rows.isNotEmpty &&
+      count > 0 &&
       rows.every(
         (row) =>
-            row.type.present && row.type.value == CoreConfigType.outbound.name,
+            row.type.present &&
+            (row.type.value == CoreConfigType.outbound.name ||
+                row.type.value == CoreConfigType.Remnawave.name),
       );
 }
 
@@ -157,7 +173,9 @@ class SubscriptionService {
   ) async {
     final result = await _insertSubscription(input);
 
-    if (result.success) {
+    if (result.success &&
+        (await _database.subscriptionDao.searchRow(result.subId))?.mode ==
+            SubscriptionMode.appManaged.name) {
       _schedulePing(result.subId);
     }
 
@@ -179,7 +197,8 @@ class SubscriptionService {
         input = input.withHwid(createHwid());
       }
       final loaded = await _loadRows(input);
-      if (!loaded.hasUsableRows) {
+      if (!loaded.hasUsableRows ||
+          (input.mode != null && input.mode != loaded.mode)) {
         return SubscriptionInsertResult(
           error: loaded.error,
           status: loaded.status == SubscriptionUpdateResult.success
@@ -199,6 +218,8 @@ class SubscriptionService {
         final row = SubscriptionCompanion.insert(
           name: input.name,
           url: input.url,
+          panel: Value(input.panel.name),
+          mode: Value(loaded.mode.name),
           ageSecretKey: Value(input.normalizedAgeSecretKey),
           agePublicKey: Value(input.normalizedAgePublicKey),
           hwidEnabled: Value(input.hwidEnabled),
@@ -214,15 +235,11 @@ class SubscriptionService {
         if (nextSubId <= DBConstants.defaultId) {
           throw StateError('insert subscription failed');
         }
-        final count = await ConfigWriter.writeRowsBatchInTransaction(
-          db,
-          rows,
-          nextSubId,
-        );
+        await ConfigWriter.writeRowsBatchInTransaction(db, rows, nextSubId);
         return SubscriptionInsertResult(
           status: SubscriptionUpdateResult.success,
           subId: nextSubId,
-          count: count,
+          count: loaded.count,
         );
       });
     } catch (error, stackTrace) {
@@ -262,12 +279,14 @@ class SubscriptionService {
         var next = row.copyWith(
           name: input.name,
           url: input.url,
+          panel: input.panel.name,
+          mode: input.mode?.name ?? row.mode,
           ageSecretKey: Value(input.normalizedAgeSecretKey),
           agePublicKey: Value(input.normalizedAgePublicKey),
           hwidEnabled: input.hwidEnabled,
           hwid: Value(hwid),
         );
-        if (!_sameSource(next, row)) {
+        if (!_sameRequestSource(next, row)) {
           next = next.copyWith(
             uploadBytes: const Value(null),
             downloadBytes: const Value(null),
@@ -291,6 +310,40 @@ class SubscriptionService {
     } finally {
       _finishUpdate(id, generation);
     }
+  }
+
+  Future<SubscriptionModeAvailability> modeAvailability(int id) async {
+    final source = await _database.subscriptionDao.searchRow(id);
+    if (source == null) {
+      throw const FormatException('Subscription no longer exists');
+    }
+    final rows = (await _database.coreConfigDao.allActiveServerRows())
+        .where((row) => row.subId == id && ServerDisplay.fromRow(row).readable)
+        .toList();
+    final value = jsonDecode(
+      (await _database.connectionConfigDao.read()).configurationJson,
+    ) as Map<String, dynamic>;
+    final settings = ConnectionSettings.fromJson(
+      value['connection'] as Map<String, dynamic>? ?? {},
+    );
+    var selectedCompatible = true;
+    if (settings.selection.kind == SelectionKind.server) {
+      final selected = await _database.coreConfigDao.searchRow(
+        settings.selection.id!,
+      );
+      if (selected == null) {
+        selectedCompatible = false;
+      } else if (selected.subId == id) {
+        selectedCompatible = rows.any((row) => row.id == selected.id);
+      }
+    } else if (settings.selection.kind == SelectionKind.source &&
+        settings.selection.id == id) {
+      selectedCompatible = source.mode == SubscriptionMode.appManaged.name;
+    }
+    return SubscriptionModeAvailability(
+      count: rows.length,
+      selectedCompatible: selectedCompatible,
+    );
   }
 
   /// The connection layer must confirm deletion and resolve affected running or
@@ -399,10 +452,16 @@ class SubscriptionService {
           agePublicKey: subscription.agePublicKey,
           hwidEnabled: subscription.hwidEnabled,
           hwid: subscription.hwid,
+          panel:
+              SubscriptionPanel.fromString(subscription.panel) ??
+              (throw const FormatException('Unsupported subscription panel')),
+          mode:
+              SubscriptionMode.fromString(subscription.mode) ??
+              (throw const FormatException('Unsupported subscription mode')),
         ),
       );
       _ensureCurrent(id, generation);
-      if (!loaded.hasUsableRows) {
+      if (!loaded.hasUsableRows || loaded.mode.name != subscription.mode) {
         return SubscriptionRefreshResult(
           error: loaded.error,
           status: loaded.status == SubscriptionUpdateResult.success
@@ -415,7 +474,7 @@ class SubscriptionService {
         loaded,
         generation,
       );
-      if (result.success) {
+      if (result.success && loaded.mode == SubscriptionMode.appManaged) {
         _schedulePing(id);
       }
       return result;
@@ -458,7 +517,7 @@ class SubscriptionService {
         current.id,
         protectedIds: references.protectedIds,
       );
-      final count = await ConfigWriter.writeRowsBatchInTransaction(
+      await ConfigWriter.writeRowsBatchInTransaction(
         db,
         loaded.rows,
         current.id,
@@ -478,12 +537,20 @@ class SubscriptionService {
       _ensureCurrent(expected.id, generation);
       return SubscriptionRefreshResult(
         status: SubscriptionUpdateResult.success,
-        count: count,
+        count: loaded.count,
       );
     });
   }
 
   static bool _sameSource(
+    SubscriptionData current,
+    SubscriptionData expected,
+  ) =>
+      _sameRequestSource(current, expected) &&
+      current.panel == expected.panel &&
+      current.mode == expected.mode;
+
+  static bool _sameRequestSource(
     SubscriptionData current,
     SubscriptionData expected,
   ) =>
@@ -539,15 +606,13 @@ class SubscriptionService {
       );
     }
     try {
-      final rows = await XrayShareReader().parseShareText(
-        text,
-        ageSecretKey: ageContext?.secretKey,
-      );
+      final result = await SubscriptionConfigurationReader().read(text, input);
       return SubscriptionLoadResult(
-        status: rows.isEmpty
+        status: result.count == 0
             ? SubscriptionUpdateResult.invalidContent
             : SubscriptionUpdateResult.success,
-        rows: rows,
+        rows: result.rows,
+        mode: result.mode,
         userInfo: userInfo,
       );
     } on LibXrayInvokeException catch (error) {

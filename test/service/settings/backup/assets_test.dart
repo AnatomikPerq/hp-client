@@ -10,8 +10,10 @@ import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/connect/routing/options.dart';
 import 'package:onexray/service/connect/routing/custom/advanced.dart';
 import 'package:onexray/service/connect/routing/custom/state.dart';
+import 'package:onexray/service/connect/routing/custom/state_db.dart';
 import 'package:onexray/service/settings/backup/assets.dart';
 
 void main() {
@@ -32,7 +34,15 @@ void main() {
     );
     final assets = BackupAssets(db, geodata);
     final raw = base64Encode(
-      utf8.encode('{\n "outbounds":[], "unknown":true\n}'),
+      utf8.encode(
+        '{\n "outbounds":[], "unknown":true, "dns":'
+        '{"serveStale":true,"serveExpiredTTL":60,"enableParallelQuery":true,'
+        '"servers":[{"address":"1.1.1.1","expectedIPs":["1.1.1.0/24"],'
+        '"expectIPs":["9.9.9.0/24"],"unexpectedIPs":["192.0.2.0/24"],'
+        '"serveStale":true,"serveExpiredTTL":60}]},"inbounds":['
+        '{"tag":"tunIn","sniffing":{"enabled":true,'
+        '"domainsExcluded":["domain:example.com"],"ipsExcluded":["192.168.0.0/16"]}}]\n}',
+      ),
     );
     final fragmentOutbound = <String, dynamic>{
       'tag': 'fragment',
@@ -48,15 +58,25 @@ void main() {
     final advanced =
         jsonDecode(AdvancedRoutingProfile.defaultText) as Map<String, dynamic>;
     (advanced['outbounds'] as List).add(fragmentOutbound);
+    final advancedDns = advanced['dns'] as Map<String, dynamic>;
+    advancedDns.addAll(_retiredDnsRoot);
+    (advancedDns['servers'] as List).single.addAll(_retiredDnsResolver);
+    (advanced['inbounds'] as List).single['sniffing'].addAll(_retiredSniffing);
+    final ordinary = RoutingProfileState(
+      name: '普通路由',
+      fragmentOutbound: fragmentOutbound,
+    );
+    final legacyOrdinary = ordinary.toJson();
+    final ordinaryDns = legacyOrdinary['dns'] as Map<String, dynamic>;
+    ordinaryDns.addAll(_retiredDnsRoot);
+    for (final server in (ordinaryDns['servers'] as List)) {
+      server.addAll(_retiredDnsResolver);
+    }
+    (legacyOrdinary['inbounds'] as List).single['sniffing'].addAll(
+      _retiredSniffing,
+    );
     final routeData = [
-      base64Encode(
-        utf8.encode(
-          RoutingProfileState(
-            name: '普通路由',
-            fragmentOutbound: fragmentOutbound,
-          ).encode(),
-        ),
-      ),
+      base64Encode(utf8.encode(jsonEncode(legacyOrdinary))),
       base64Encode(utf8.encode(jsonEncode(advanced))),
     ];
     for (var i = 0; i < routeData.length; i++) {
@@ -78,7 +98,6 @@ void main() {
           delay: 100,
           subId: 0,
           favorite: const Value(true),
-          countryCode: const Value('CN'),
         ),
       );
     }
@@ -119,6 +138,8 @@ void main() {
       SubscriptionCompanion.insert(
         name: 'Source',
         url: 'https://example.com/sub',
+        panel: const Value('remnawave'),
+        mode: const Value('providerManaged'),
         ageSecretKey: const Value('secret-fixture'),
         agePublicKey: const Value('public-fixture'),
         hwid: const Value('keep'),
@@ -146,40 +167,84 @@ void main() {
       connection: ConnectionSettings(
         expert: true,
         rawId: 1,
-        smart: SmartRoutingSettings(finalExitId: 2, fragment: true),
+        smart: SmartRoutingSettings(
+          finalExitId: 2,
+          fragment: true,
+          entryCount: 2,
+          dns: const RoutingDnsSettings(
+            proxyResolvers: [
+              RoutingDnsResolver(address: '1.1.1.1'),
+              RoutingDnsResolver(address: '9.9.9.9'),
+            ],
+            sameExitOnly: true,
+          ),
+          sniffing: const RoutingSniffingSettings(metadataOnly: true),
+          selection: const RoutingSelectionSettings(
+            type: 'leastPing',
+            probeInterval: '30s',
+          ),
+        ),
       ),
       policy: PlatformPolicy.fromJson({'ipv6Enabled': false}),
     );
-    await db.connectionConfigDao.commit(configurationJson: original.encode());
+    final legacySettings = original.toJson();
+    final legacySmartDns = legacySettings['connection']['smart']['dns'] as Map;
+    legacySmartDns.addAll(_retiredDnsRoot);
+    (legacySmartDns['proxyResolvers'] as List).first.addAll(
+      _retiredDnsResolver,
+    );
+    legacySettings['connection']['smart']['sniffing'].addAll(_retiredSniffing);
+    await db.connectionConfigDao.commit(
+      configurationJson: jsonEncode(legacySettings),
+    );
     final document = await assets.capture();
     validateBackupAssets(document);
     expect(document.coreConfigs.length, 5);
     expect(document.coreConfigs.last.data, outbound);
     expect(document.routingProfiles.map((row) => row.data), routeData);
     expect(document.smartRouting.fragment, true);
+    expect(document.smartRouting.dns, original.connection.smart.dns.toJson());
+    expect(
+      document.smartRouting.sniffing,
+      original.connection.smart.sniffing.toJson(),
+    );
     expect(jsonEncode(document.toJson()), isNot(contains('finalExitId')));
     expect(document.subscriptions.single.toJson(), {
       'name': 'Source',
+      'panel': 'remnawave',
+      'mode': 'providerManaged',
       'url': 'https://example.com/sub',
       'ageSecretKey': 'secret-fixture',
       'agePublicKey': 'public-fixture',
       'hwidEnabled': false,
       'hwid': 'keep',
     });
+    for (final key in ['panel', 'mode']) {
+      final invalid = document.toJson();
+      ((invalid['subscriptions'] as List).single as Map<String, dynamic>)[key] =
+          'unsupported';
+      final decodedInvalid = decodeBackup(
+        Uint8List.fromList(utf8.encode(jsonEncode(invalid))),
+      );
+      expect(() => validateBackupAssets(decodedInvalid), throwsFormatException);
+    }
     expect(document.geoData.single.name, 'blocked');
-    final decoded = decodeBackup(encodeBackup(document));
+    final legacySnapshot =
+        jsonDecode(utf8.decode(encodeBackup(document))) as Map<String, dynamic>;
+    final backupDns = legacySnapshot['smartRouting']['dns'] as Map;
+    backupDns.addAll(_retiredDnsRoot);
+    (backupDns['proxyResolvers'] as List).first.addAll(_retiredDnsResolver);
+    legacySnapshot['smartRouting']['sniffing'].addAll(_retiredSniffing);
+    final decoded = decodeBackup(
+      Uint8List.fromList(utf8.encode(jsonEncode(legacySnapshot))),
+    );
+    validateBackupAssets(decoded);
     final preview = await geodata.previewRestore(backupSources(decoded));
     await assets.restore(decoded, preview);
     final restored = await db.coreConfigDao.allRawRowsWithData;
     expect(restored.length, 4);
     expect(
-      restored.every(
-        (row) =>
-            row.id > 6 &&
-            row.data == raw &&
-            row.countryCode == null &&
-            !row.favorite,
-      ),
+      restored.every((row) => row.id > 6 && row.data == raw && !row.favorite),
       true,
     );
     final connection = ConnectionConfiguration.fromJson(
@@ -189,6 +254,19 @@ void main() {
     expect(connection.connection.expert, false);
     expect(connection.connection.smart.finalExitId, null);
     expect(connection.connection.smart.fragment, true);
+    expect(
+      connection.connection.smart.dns.toJson(),
+      original.connection.smart.dns.toJson(),
+    );
+    expect(
+      connection.connection.smart.sniffing.toJson(),
+      original.connection.smart.sniffing.toJson(),
+    );
+    expect(
+      connection.connection.smart.selection.toJson(),
+      original.connection.smart.selection.toJson(),
+    );
+    expect(document.smartRouting.directDnsAddress, isNull);
     expect(connection.policy.toJson(), original.policy.toJson());
     final subscription = (await db.subscriptionDao.allRows).single;
     expect(subscription.hwid, 'keep');
@@ -202,8 +280,46 @@ void main() {
     final routes = await db.routingProfileDao.allRows;
     expect(routes.map((row) => row.data), routeData);
     expect(routes.map((row) => row.advanced), [false, true]);
+    expect(
+      RoutingProfileStateDb.read(routes.first).toJson(),
+      ordinary.toJson(),
+    );
+    expect(
+      RoutingProfileStateDb.readConfiguration(routes.last).toJson(),
+      advanced,
+    );
     expect(routes.every((row) => row.id > 2), true);
     expect((await db.geoDataDao.allRows).single.installed, false);
-    expect((await assets.capture()).geoData.single.name, 'blocked');
+    final restoredSource = (await db.subscriptionDao.allRows).single;
+    expect(restoredSource.panel, 'remnawave');
+    expect(restoredSource.mode, 'providerManaged');
+    final recaptured = await assets.capture();
+    expect(recaptured.geoData.single.name, 'blocked');
+    expect(recaptured.smartRouting.dns, original.connection.smart.dns.toJson());
+    expect(
+      recaptured.smartRouting.sniffing,
+      original.connection.smart.sniffing.toJson(),
+    );
+    expect(recaptured.routingProfiles.map((row) => row.data), routeData);
   });
 }
+
+const _retiredDnsRoot = {
+  'serveStale': true,
+  'serveExpiredTTL': 60,
+  'enableParallelQuery': true,
+};
+const _retiredDnsResolver = {
+  'timeoutMs': 4000,
+  'disableCache': false,
+  'expectedIPs': ['1.1.1.0/24'],
+  'expectIPs': ['9.9.9.0/24'],
+  'unexpectedIPs': ['192.0.2.0/24'],
+  'serveStale': true,
+  'serveExpiredTTL': 60,
+};
+
+const _retiredSniffing = {
+  'domainsExcluded': ['domain:example.com'],
+  'ipsExcluded': ['192.168.0.0/16'],
+};

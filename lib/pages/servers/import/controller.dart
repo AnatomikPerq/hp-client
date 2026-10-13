@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/core/errors/json_diagnostic.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/network/client.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/model.dart';
@@ -47,6 +48,8 @@ class ServerImportPageState {
     this.hasAgeKeys = false,
     this.scannerPickingImage = false,
     this.hwidEnabled = false,
+    this.panel = SubscriptionPanel.generic,
+    this.mode,
   }) : subscriptionImports = List.unmodifiable(subscriptionImports);
 
   final String inputText;
@@ -70,6 +73,8 @@ class ServerImportPageState {
   final bool hasAgeKeys;
   final bool scannerPickingImage;
   final bool hwidEnabled;
+  final SubscriptionPanel panel;
+  final SubscriptionMode? mode;
 
   bool get generatingAgeKey => generatingAgeKeyType != null;
   bool get submitting => busy && !loadingSubscription && openingAction == null;
@@ -104,6 +109,8 @@ class ServerImportPageState {
     bool? hasAgeKeys,
     bool? scannerPickingImage,
     bool? hwidEnabled,
+    SubscriptionPanel? panel,
+    Object? mode = _unset,
   }) => ServerImportPageState(
     inputText: inputText ?? this.inputText,
     jsonInput: jsonInput ?? this.jsonInput,
@@ -136,6 +143,8 @@ class ServerImportPageState {
     hasAgeKeys: hasAgeKeys ?? this.hasAgeKeys,
     scannerPickingImage: scannerPickingImage ?? this.scannerPickingImage,
     hwidEnabled: hwidEnabled ?? this.hwidEnabled,
+    panel: panel ?? this.panel,
+    mode: identical(mode, _unset) ? this.mode : mode as SubscriptionMode?,
   );
 }
 
@@ -147,6 +156,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   _saveSubscriptionInput;
   final Future<SubscriptionInsertResult> Function(SubscriptionInput)
   _insertSubscription;
+  final Future<SubscriptionModeAvailability> Function(int) _modeAvailability;
   ServerImportController({
     ServerImportService? service,
     this.subscriptionId,
@@ -155,6 +165,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
     saveSubscriptionInput,
     Future<SubscriptionInsertResult> Function(SubscriptionInput)?
     insertSubscription,
+    Future<SubscriptionModeAvailability> Function(int)? modeAvailability,
   }) : service = service ?? ServerImportService(),
        _loadSubscription =
            loadSubscription ?? AppDatabase().subscriptionDao.searchRow,
@@ -162,6 +173,8 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
            saveSubscriptionInput ?? SubscriptionService().saveSubscriptionInput,
        _insertSubscription =
            insertSubscription ?? SubscriptionService().insertSubscription,
+       _modeAvailability =
+           modeAvailability ?? SubscriptionService().modeAvailability,
        super(ServerImportPageState()) {
     jsonText.addListener(_changed);
     for (final field in [text, name, url, secretKey, publicKey]) {
@@ -194,6 +207,8 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
               url: SubscriptionUrl.normalize(state.url),
               ageSecretKey: state.secretKey,
               agePublicKey: state.publicKey,
+              panel: state.panel,
+              mode: state.mode,
             ),
           ) ==
           null;
@@ -286,8 +301,20 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
       }
       final sameOrigin = SubscriptionUrl.sameOrigin(row.url, url.text);
       _hwid = row.hwid;
+      final panel =
+          SubscriptionPanel.fromString(row.panel) ??
+          (throw const FormatException('Unsupported subscription panel'));
+      final mode =
+          SubscriptionMode.fromString(row.mode) ??
+          (throw const FormatException('Unsupported subscription mode'));
       _hwidUrl = sameOrigin ? row.url : null;
-      emit(state.copyWith(hwidEnabled: sameOrigin && row.hwidEnabled));
+      emit(
+        state.copyWith(
+          hwidEnabled: sameOrigin && row.hwidEnabled,
+          panel: panel,
+          mode: mode,
+        ),
+      );
     } catch (error) {
       if (context.mounted) {
         emit(
@@ -406,7 +433,14 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
       final link = detection.subscriptions.single;
       _hwid = null;
       _hwidUrl = null;
-      emit(state.copyWith(subscriptionImports: const [], hwidEnabled: false));
+      emit(
+        state.copyWith(
+          subscriptionImports: const [],
+          hwidEnabled: false,
+          panel: link.panel,
+          mode: link.mode,
+        ),
+      );
       name.text = link.name;
       url.text = link.url;
       secretKey.clear();
@@ -752,6 +786,8 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
         agePublicKey: state.publicKey,
         hwidEnabled: state.hwidEnabled,
         hwid: _hwid,
+        panel: state.panel,
+        mode: state.mode,
       );
       final problem = SubscriptionValidator.validate(input);
       if (!isPageActive || !context.mounted) return;
@@ -767,10 +803,27 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
         final status = await _saveSubscriptionInput(subscriptionId!, input);
         if (!context.mounted) return;
         if (status == SubscriptionUpdateResult.success) {
-          ContextAlert.showToast(
-            context,
-            AppLocalizations.of(context)!.prototypeSubscriptionSaved,
-          );
+          final l = AppLocalizations.of(context)!;
+          final messages = <String>[l.prototypeSubscriptionSaved];
+          try {
+            final availability = await _modeAvailability(subscriptionId!);
+            if (!availability.hasActiveCache) {
+              messages.add(l.subscriptionModeNeedsRefresh);
+            }
+            if (!availability.selectedCompatible) {
+              messages.add(l.subscriptionModeNeedsReselection);
+            }
+          } catch (error) {
+            messages.add(
+              appFailureMessage(
+                l,
+                error,
+                operation: l.prototypeCannotReadContent,
+              ),
+            );
+          }
+          if (!context.mounted || !isPageActive) return;
+          ContextAlert.showToast(context, messages.join('\n'));
           Navigator.of(context).pop(subscriptionId);
         } else {
           emit(
@@ -824,6 +877,17 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
     SubscriptionUpdateResult status, {
     Object? error,
   }) => subscriptionFailureMessage(l10n, status, error: error);
+
+  void setPanel(SubscriptionPanel panel) {
+    if (state.busy || state.loadFailed || state.generatingAgeKey) return;
+    emit(state.copyWith(panel: panel));
+  }
+
+  void setMode(SubscriptionMode? mode) {
+    if (state.busy || state.loadFailed || state.generatingAgeKey) return;
+    if (editingSubscription && mode == null) return;
+    emit(state.copyWith(mode: mode));
+  }
 
   void toggleSecret() {
     emit(state.copyWith(obscureSecret: !state.obscureSecret));

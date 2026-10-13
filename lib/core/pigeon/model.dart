@@ -105,16 +105,8 @@ class PingBatchItemResponse {
   bool? success;
   int? delay;
   String? error;
-  String? locationJson;
-  String? locationError;
 
-  PingBatchItemResponse(
-    this.success,
-    this.delay,
-    this.error, {
-    this.locationJson,
-    this.locationError,
-  });
+  PingBatchItemResponse(this.success, this.delay, this.error);
 
   factory PingBatchItemResponse.fromJson(Map<String, dynamic> json) =>
       _$PingBatchItemResponseFromJson(json);
@@ -153,9 +145,8 @@ class PingBatchRequest {
   List<PingBatchItemRequest>? configs;
   int? timeout;
   String? url;
-  String? locationUrl;
 
-  PingBatchRequest(this.configs, this.timeout, this.url, {this.locationUrl});
+  PingBatchRequest(this.configs, this.timeout, this.url);
 
   factory PingBatchRequest.fromJson(Map<String, dynamic> json) =>
       _$PingBatchRequestFromJson(json);
@@ -205,6 +196,8 @@ enum LibXrayMethod {
   getFreePorts,
   @JsonValue("convertShareLinksToXrayJson")
   convertShareLinksToXrayJson,
+  @JsonValue("decodeSubscriptionText")
+  decodeSubscriptionText,
   @JsonValue("convertXrayJsonToShareLinks")
   convertXrayJsonToShareLinks,
   @JsonValue("generateAgeKeyPair")
@@ -263,6 +256,31 @@ class ConvertShareLinksToXrayJsonRequest {
 
   Map<String, dynamic> toJson() =>
       _$ConvertShareLinksToXrayJsonRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class DecodeSubscriptionTextRequest {
+  final String text;
+  final AgeDecryptConfig? age;
+
+  const DecodeSubscriptionTextRequest(this.text, {this.age});
+
+  factory DecodeSubscriptionTextRequest.fromJson(Map<String, dynamic> json) =>
+      _$DecodeSubscriptionTextRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$DecodeSubscriptionTextRequestToJson(this);
+}
+
+@JsonSerializable()
+class DecodeSubscriptionTextResponse {
+  final String text;
+
+  const DecodeSubscriptionTextResponse(this.text);
+
+  factory DecodeSubscriptionTextResponse.fromJson(Map<String, dynamic> json) =>
+      _$DecodeSubscriptionTextResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$DecodeSubscriptionTextResponseToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)

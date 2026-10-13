@@ -36,6 +36,17 @@ class ServerBrowser extends StatelessWidget {
     final mobile =
         MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
     if (controller.servers.isEmpty) {
+      if (controller.sources.isNotEmpty) {
+        return PageEmptyState(
+          title: l.subscriptionModeNoCacheTitle,
+          description: l.subscriptionModeNeedsRefresh,
+          primaryLabel: l.prototypeUpdatesAndSources,
+          onPrimary: () => controller.openSources(context),
+          secondaryLabel: l.prototypeAddServer,
+          onSecondary: () => controller.addServers(context),
+          scrollController: scroll,
+        );
+      }
       return PageEmptyState(
         title: l.prototypeNoServersYet,
         description: l.prototypeAddProviderSubscriptionHint,
@@ -72,7 +83,7 @@ class ServerBrowser extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: scroll,
-                    child: _locationList(context, groups, favorites),
+                    child: _subscriptionList(context, groups, favorites),
                   ),
                 ),
                 if (active != null) ...[
@@ -108,29 +119,13 @@ class ServerBrowser extends StatelessWidget {
     List<ServerGroup> groups,
     List<CoreConfigData> favorites,
   ) {
-    final l = AppLocalizations.of(context)!;
-    final palette = ColorManager.palette(context);
     return ListView(
       controller: scroll,
       padding: const EdgeInsets.fromLTRB(15, 13, 15, 22),
       children: [
-        DefaultTabController(
-          length: ServerGrouping.values.length,
-          initialIndex: controller.grouping.index,
-          child: TabBar(
-            onTap: (index) => controller.groupBy(ServerGrouping.values[index]),
-            unselectedLabelColor: palette.mutedStrong,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-            tabs: [
-              Tab(text: l.prototypeBySubscription),
-              Tab(text: l.prototypeByNodeLocation),
-            ],
-          ),
-        ),
-        const SizedBox(height: 15),
         _search(context),
         const SizedBox(height: 12),
-        _locationList(context, groups, favorites),
+        _subscriptionList(context, groups, favorites),
       ],
     );
   }
@@ -178,7 +173,7 @@ class ServerBrowser extends StatelessWidget {
     );
   }
 
-  Widget _locationList(
+  Widget _subscriptionList(
     BuildContext context,
     List<ServerGroup> groups,
     List<CoreConfigData> favorites,
@@ -254,21 +249,14 @@ class ServerBrowser extends StatelessWidget {
             for (final row in favorites)
               ServerNodeRow(controller: controller, row: row),
           ],
-          _listHeading(
-            context,
-            controller.grouping == ServerGrouping.location
-                ? l.prototypeByNodeLocation
-                : l.prototypeBySubscription,
-          ),
+          _listHeading(context, l.prototypeBySubscription),
           for (final group in groups)
             _groupRow(context, group, active: group.id == activeGroup?.id),
           if (groups.isEmpty && controller.search.text.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
               child: Text(
-                controller.grouping == ServerGrouping.location
-                    ? l.prototypeNoMatchingLocations
-                    : l.prototypeNoMatchingSubscriptions,
+                l.prototypeNoMatchingSubscriptions,
                 textAlign: TextAlign.center,
                 style: AppTypography.settingsInput.copyWith(
                   color: palette.mutedForeground,
@@ -477,19 +465,11 @@ class ServerBrowser extends StatelessWidget {
                           color: palette.surfaceHover,
                           borderRadius: BorderRadius.circular(9),
                         ),
-                        child: group.country == null
-                            ? Icon(
-                                LucideIcons.layers,
-                                size: 17,
-                                color: palette.primary,
-                              )
-                            : Text(
-                                group.country!,
-                                textDirection: TextDirection.ltr,
-                                style: AppTypography.serverRegionCode.copyWith(
-                                  color: palette.mutedStrong,
-                                ),
-                              ),
+                        child: Icon(
+                          LucideIcons.layers,
+                          size: 17,
+                          color: palette.primary,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -655,13 +635,41 @@ class ServerGroupView extends StatelessWidget {
                   horizontal: 18,
                   vertical: 28,
                 ),
-                child: Text(
-                  l.prototypeNoServersYet,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.rowValue.copyWith(
-                    color: palette.mutedForeground,
-                  ),
-                ),
+                child: group.source != null && group.rows.isEmpty
+                    ? Column(
+                        children: [
+                          Text(
+                            controller.providerGroup(group)
+                                ? l.subscriptionModeProviderManaged
+                                : l.subscriptionModeAppManaged,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.rowTitle,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l.subscriptionModeNoCacheTitle,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.rowValue.copyWith(
+                              color: palette.mutedForeground,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l.subscriptionModeNeedsRefresh,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.serverDetail.copyWith(
+                              color: palette.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        l.prototypeNoServersYet,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.rowValue.copyWith(
+                          color: palette.mutedForeground,
+                        ),
+                      ),
               );
             }
             final rowIndex = index - headerCount;
@@ -670,9 +678,7 @@ class ServerGroupView extends StatelessWidget {
               key: ValueKey(row.id),
               controller: controller,
               row: row,
-              detail: group.country != null
-                  ? controller.sourceName(l, row)
-                  : controller.countryName(l, row.countryCode),
+              detail: controller.sourceName(l, row),
               showDivider: rowIndex != group.visibleRows.length - 1,
             );
           },
@@ -705,6 +711,15 @@ class ServerGroupView extends StatelessWidget {
               color: palette.mutedForeground,
             ),
           ),
+          if (controller.providerGroup(group)) ...[
+            const SizedBox(height: 4),
+            Text(
+              l.providerChooseConfigurationHint,
+              style: AppTypography.serverDetail.copyWith(
+                color: palette.mutedForeground,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -719,14 +734,7 @@ class ServerGroupView extends StatelessWidget {
             color: palette.surfaceHover,
             borderRadius: BorderRadius.circular(9),
           ),
-          child: group.country == null
-              ? Icon(LucideIcons.layers3, size: 20, color: palette.primary)
-              : Text(
-                  group.country!.isEmpty ? '—' : group.country!,
-                  style: AppTypography.serverGroupCode.copyWith(
-                    color: palette.mutedStrong,
-                  ),
-                ),
+          child: Icon(LucideIcons.layers3, size: 20, color: palette.primary),
         ),
         const SizedBox(width: 13),
         if (mobile) Expanded(child: label) else Flexible(child: label),
@@ -745,52 +753,54 @@ class ServerGroupView extends StatelessWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        OutlinedButton(
-          onPressed: testing
-              ? cancelling
-                    ? null
-                    : () => controller.cancelTest(group.id)
-              : group.rows.isEmpty || group.rows.any(controller.serverBusy)
-              ? null
-              : () => controller.test(context, group.rows, groupId: group.id),
-          style: OutlinedButton.styleFrom(
-            minimumSize: Size(
-              0,
-              mobile
-                  ? AppLayout.mobileButtonMinHeight
-                  : AppLayout.buttonMinHeight,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            foregroundColor: palette.foreground,
-            backgroundColor: palette.card,
-            side: BorderSide(color: palette.borderStrong),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.control),
-            ),
-            textStyle: AppTypography.serverGroupAction,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.standard,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppActivityBuilder(
-                builder: (context, activity) => activity.pinging
-                    ? const ButtonProgressIndicator()
-                    : const Icon(LucideIcons.refreshCw, size: 16),
+        if (!controller.providerGroup(group))
+          OutlinedButton(
+            onPressed: testing
+                ? cancelling
+                      ? null
+                      : () => controller.cancelTest(group.id)
+                : group.rows.isEmpty || group.rows.any(controller.serverBusy)
+                ? null
+                : () => controller.test(context, group.rows, groupId: group.id),
+            style: OutlinedButton.styleFrom(
+              minimumSize: Size(
+                0,
+                mobile
+                    ? AppLayout.mobileButtonMinHeight
+                    : AppLayout.buttonMinHeight,
               ),
-              const SizedBox(width: 8),
-              Text(
-                testing
-                    ? cancelling
-                          ? l.prototypePleaseWait
-                          : l.prototypeCancel
-                    : l.prototypeTestServers,
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              foregroundColor: palette.foreground,
+              backgroundColor: palette.card,
+              side: BorderSide(color: palette.borderStrong),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadii.control),
               ),
-            ],
+              textStyle: AppTypography.serverGroupAction,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.standard,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppActivityBuilder(
+                  builder: (context, activity) => activity.pinging
+                      ? const ButtonProgressIndicator()
+                      : const Icon(LucideIcons.refreshCw, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  testing
+                      ? cancelling
+                            ? l.prototypePleaseWait
+                            : l.prototypeCancel
+                      : l.prototypeTestServers,
+                ),
+              ],
+            ),
           ),
-        ),
-        ServerUseButton(controller: controller, group: group),
+        if (!controller.providerGroup(group))
+          ServerUseButton(controller: controller, group: group),
         if (group.source != null)
           SizedBox(
             width: 36,
@@ -815,6 +825,29 @@ class ServerUseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    if (controller.providerGroup(group)) {
+      final VoidCallback? browse = group.visibleRows.isEmpty
+          ? null
+          : () => controller.browse(
+              context,
+              group,
+              mobile:
+                  MediaQuery.sizeOf(context).width <=
+                  AppLayout.mobileBreakpoint,
+            );
+      if (inline) {
+        return IconButton(
+          tooltip: l.providerChooseConfiguration,
+          onPressed: browse,
+          icon: const Icon(LucideIcons.list, size: 18),
+        );
+      }
+      return OutlinedButton.icon(
+        onPressed: browse,
+        icon: const Icon(LucideIcons.list, size: 16),
+        label: Text(l.providerChooseConfiguration),
+      );
+    }
     final count = controller.entryCount(group.selection);
     final enabled = controller.canUse(group);
     final selected = controller.selected(group.selection);
@@ -944,16 +977,14 @@ class ServerNodeRow extends StatelessWidget {
               enabled: controller.canChoose(row),
               protocol: controller.protocol(row),
             ),
-            if (failure != null)
+            if (failure != null && row.type == 'outbound')
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 child: SelectableText(
                   appFailureMessage(
                     AppLocalizations.of(context)!,
-                    failure.success ? failure.locationError : failure.error,
-                    operation: failure.success
-                        ? AppLocalizations.of(context)!.prototypeByNodeLocation
-                        : AppLocalizations.of(context)!.prototypeSpeedTest,
+                    failure.error,
+                    operation: AppLocalizations.of(context)!.prototypeSpeedTest,
                   ),
                   style: AppTypography.settingsDetailNote.copyWith(
                     color: ColorManager.palette(context).destructive,
@@ -974,7 +1005,7 @@ class ServerNodeRow extends StatelessWidget {
     final l = AppLocalizations.of(context)!;
     final palette = ColorManager.palette(context);
     final conflict = controller.exitConflict(row);
-    final rowDetail = detail ?? controller.countryName(l, row.countryCode);
+    final rowDetail = detail ?? controller.sourceName(l, row);
     return Container(
       foregroundDecoration: running
           ? BoxDecoration(
@@ -1072,7 +1103,10 @@ class ServerNodeRow extends StatelessWidget {
                                                 color: palette.foreground,
                                               ),
                                         ),
-                                        if (protocol.isNotEmpty) ...[
+                                        for (final label in [
+                                          row.type,
+                                          if (protocol.isNotEmpty) protocol,
+                                        ]) ...[
                                           const SizedBox(height: 3),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
@@ -1088,7 +1122,7 @@ class ServerNodeRow extends StatelessWidget {
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              protocol,
+                                              label,
                                               textDirection: TextDirection.ltr,
                                               style: AppTypography
                                                   .serverProtocol
@@ -1098,28 +1132,34 @@ class ServerNodeRow extends StatelessWidget {
                                             ),
                                           ),
                                         ],
-                                        const SizedBox(height: 3),
-                                        Text.rich(
-                                          TextSpan(
-                                            text: '$rowDetail · ',
-                                            children: [
-                                              TextSpan(
-                                                text: controller.health(l, row),
-                                                style: TextStyle(
-                                                  color:
-                                                      ColorManager.nodeLatency(
-                                                        context,
-                                                        row.delay,
-                                                      ),
+                                        if (!controller.providerRow(row)) ...[
+                                          const SizedBox(height: 3),
+                                          Text.rich(
+                                            TextSpan(
+                                              text: '$rowDetail · ',
+                                              children: [
+                                                TextSpan(
+                                                  text: controller.health(
+                                                    l,
+                                                    row,
+                                                  ),
+                                                  style: TextStyle(
+                                                    color:
+                                                        ColorManager.nodeLatency(
+                                                          context,
+                                                          row.delay,
+                                                        ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
+                                            style: AppTypography.metadata
+                                                .copyWith(
+                                                  color:
+                                                      palette.mutedForeground,
+                                                ),
                                           ),
-                                          style: AppTypography.metadata
-                                              .copyWith(
-                                                color: palette.mutedForeground,
-                                              ),
-                                        ),
+                                        ],
                                         if (conflict) ...[
                                           const SizedBox(height: 3),
                                           Text(
@@ -1204,6 +1244,7 @@ class ServerMenu extends StatelessWidget {
       context,
       name: controller.serverName(row),
       source: controller.sourceName(l, row),
+      provider: controller.providerRow(row),
     );
     if (context.mounted && action != null) {
       await controller.serverAction(context, row, action);
@@ -1245,6 +1286,7 @@ class SourceMenu extends StatelessWidget {
       context,
       name: source.name,
       count: controller.sourceCount(source.id),
+      provider: controller.providerSource(source),
     );
     if (context.mounted && action != null) {
       await controller.sourceAction(context, source, action);

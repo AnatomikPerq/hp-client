@@ -11,6 +11,7 @@ import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/custom/state.dart';
 import 'package:onexray/service/connect/routing/custom/advanced.dart';
 import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
+import 'package:onexray/service/shared/xray/remnawave.dart';
 
 final catalog = RegionCatalog.fromJson(
   {
@@ -62,6 +63,367 @@ ResolvedServer node(int id, {String? address}) => ResolvedServer(
 );
 
 void main() {
+  test('copying a provider profile into personal Raw retains its tunnel routing semantics', () {
+    final source = <String, dynamic>{
+      'inbounds': [
+        {'tag': 'provider', 'protocol': 'http', 'port': 1080},
+      ],
+      'dns': {
+        'servers': ['1.1.1.1'],
+      },
+      'outbounds': [
+        {'tag': 'first', 'protocol': 'freedom'},
+      ],
+      'routing': {
+        'rules': [
+          {
+            'inboundTag': ['provider'],
+            'outboundTag': 'first',
+          },
+        ],
+      },
+    };
+    final profile = ResolvedProfile(
+      id: 99,
+      sourceId: 7,
+      name: 'Provider',
+      config: source,
+    );
+    final copied = RemnawaveAdapter.adapt(source)..['name'] = 'Personal Raw';
+    final provider = ConnectionCompiler.compile(
+      settings: ConnectionSettings(selection: const ServerSelection.server(99)),
+      entries: const [],
+      profile: profile,
+      regions: catalog,
+      options: options(),
+    ).config;
+    final raw = ConnectionCompiler.compile(
+      settings: ConnectionSettings(expert: true),
+      entries: const [],
+      raw: copied,
+      regions: catalog,
+      options: options(),
+    ).config..remove('name');
+    expect(raw, provider);
+    expect(copied.containsKey('metrics'), isFalse);
+    expect(copied.containsKey('log'), isFalse);
+    expect(copied.containsKey('env'), isFalse);
+    expect((source['inbounds'] as List).single['tag'], 'provider');
+  });
+
+  test('provider profiles bypass App routes and keep the complete graph on every platform', () {
+    final source = <String, dynamic>{
+      'remarks': 'Provider',
+      'inbounds': [
+        {
+          'tag': 'provider',
+          'protocol': 'socks',
+          'port': 1080,
+          'sniffing': {
+            'enabled': true,
+            'destOverride': ['http', 'tls'],
+          },
+        },
+      ],
+      'dns': {
+        'servers': ['1.1.1.1'],
+        'disableCache': true,
+      },
+      'outbounds': [
+        {
+          'tag': 'edge',
+          'protocol': 'socks',
+          'streamSettings': {
+            'sockopt': {'dialerProxy': 'last'},
+          },
+        },
+        {'tag': 'last', 'protocol': 'freedom'},
+      ],
+      'routing': {
+        'domainStrategy': 'IPIfNonMatch',
+        'rules': [
+          {
+            'inboundTag': ['provider'],
+            'ip': ['203.0.113.0/24'],
+            'balancerTag': 'provider-pool',
+          },
+        ],
+        'balancers': [
+          {
+            'tag': 'provider-pool',
+            'selector': ['edge'],
+            'fallbackTag': 'last',
+            'strategy': {'type': 'leastPing'},
+          },
+        ],
+      },
+      'observatory': {
+        'subjectSelector': ['edge'],
+        'probeURL': 'https://example.com/probe',
+      },
+    };
+    final before = jsonEncode(source);
+    final profile = ResolvedProfile(
+      id: 99,
+      sourceId: 7,
+      name: 'Row metadata',
+      config: source,
+    );
+    for (final platform in ConnectionPlatform.values) {
+      final compiled = ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          selection: const ServerSelection.server(99),
+          trafficMode: TrafficMode.custom,
+          smart: SmartRoutingSettings(
+            entryCount: 3,
+            finalExitId: 123,
+            fakeDns: true,
+            fragment: true,
+            blockAds: true,
+          ),
+        ),
+        entries: const [],
+        profile: profile,
+        regions: catalog,
+        options: options(
+          platform: platform,
+          windowsMode: WindowsMode.msix,
+          interfaceName: 'Ethernet',
+          lanProxyEnabled: true,
+        ),
+      );
+      final actual = compiled.config;
+      expect(compiled.profile, same(profile));
+      expect(compiled.entries, isEmpty);
+      expect(compiled.nodeTags, isEmpty);
+      expect(actual['routing']['domainStrategy'], 'IPIfNonMatch');
+      expect(actual['routing']['balancers'], source['routing']['balancers']);
+      expect(actual['observatory'], source['observatory']);
+      final rules = actual['routing']['rules'] as List;
+      expect(rules, hasLength(2));
+      expect(rules.first['outboundTag'], 'app-remna-dns');
+      expect(rules.last['inboundTag'], ['provider', 'tunIn']);
+      expect(rules.last['balancerTag'], 'provider-pool');
+      final outbounds = actual['outbounds'] as List;
+      expect(outbounds.map((value) => value['tag']), [
+        'edge',
+        'last',
+        'direct',
+        'block',
+        'app-remna-dns',
+      ]);
+      expect(
+        outbounds.first['streamSettings']['sockopt']['dialerProxy'],
+        'last',
+      );
+      expect(actual['dns']['disableCache'], isTrue);
+      expect(actual['metrics']['listen'], '127.0.0.1:18186');
+      expect(actual['stats'], isEmpty);
+      final inbounds = actual['inbounds'] as List;
+      expect(inbounds.where((value) => value['tag'] == 'tunIn'), hasLength(1));
+      expect(
+        inbounds.where((value) => value['tag'] == lanProxyInboundTag),
+        isEmpty,
+      );
+      expect(
+        inbounds.first['protocol'],
+        platform == ConnectionPlatform.windows ? 'socks' : 'tun',
+      );
+      expect(
+        inbounds.first['sniffing'],
+        (source['inbounds'] as List).single['sniffing'],
+      );
+    }
+    expect(jsonEncode(source), before);
+  });
+
+  test('provider tunnel and DNS policies pass through shared Raw platform compilation', () {
+    final source = <String, dynamic>{
+      'inbounds': [
+        {
+          'tag': 'provider-http',
+          'protocol': 'http',
+          'port': 12080,
+          'sniffing': {'enabled': true},
+        },
+        {
+          'tag': 'provider-tun',
+          'protocol': 'tun',
+          'settings': {
+            'name': 'ProviderTun',
+            'mtu': 1234,
+            'gateway': ['192.0.2.1/24'],
+            'autoOutboundsInterface': 'ProviderInterface',
+            'userLevel': 5,
+            'autoSystemDnsToGateway': true,
+          },
+          'sniffing': {'enabled': false, 'routeOnly': true},
+        },
+      ],
+      'dns': {
+        'servers': ['1.1.1.1'],
+      },
+      'outbounds': [
+        {
+          'tag': 'proxy',
+          'protocol': 'socks',
+          'streamSettings': {
+            'sockopt': {
+              'interface': 'ProviderInterface',
+              'dialerProxy': 'direct',
+            },
+          },
+        },
+        {
+          'tag': 'direct',
+          'protocol': 'freedom',
+          'settings': {'domainStrategy': 'UseIPv4'},
+        },
+        {'tag': 'block', 'protocol': 'blackhole'},
+        {
+          'tag': 'provider-dns',
+          'protocol': 'dns',
+          'settings': {'address': '9.9.9.9', 'port': 5353},
+          'streamSettings': {
+            'sockopt': {'interface': 'ProviderDnsInterface'},
+          },
+        },
+      ],
+      'routing': {
+        'rules': [
+          {
+            'type': 'field',
+            'inboundTag': ['provider-tun'],
+            'port': '53',
+            'outboundTag': 'provider-dns',
+          },
+          {
+            'type': 'field',
+            'inboundTag': ['provider-tun'],
+            'network': 'tcp,udp',
+            'outboundTag': 'proxy',
+          },
+        ],
+      },
+    };
+    final before = jsonEncode(source);
+    final profile = ResolvedProfile(
+      id: 99,
+      sourceId: 7,
+      name: 'Provider',
+      config: source,
+    );
+    for (final (platform, windowsMode) in [
+      (ConnectionPlatform.linux, WindowsMode.exe),
+      (ConnectionPlatform.windows, WindowsMode.exe),
+      (ConnectionPlatform.windows, WindowsMode.msix),
+    ]) {
+      final config = ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          selection: const ServerSelection.server(99),
+        ),
+        entries: const [],
+        profile: profile,
+        regions: catalog,
+        options: options(
+          platform: platform,
+          windowsMode: windowsMode,
+          interfaceName: 'Ethernet',
+          ipv6: false,
+        ),
+      ).config;
+      final inbounds = config['inbounds'] as List;
+      expect(inbounds, hasLength(2));
+      expect(inbounds.first, source['inbounds'][0]);
+      final tunnel = inbounds.last;
+      expect(tunnel['tag'], 'tunIn');
+      expect(tunnel['sniffing'], source['inbounds'][1]['sniffing']);
+      if (windowsMode == WindowsMode.msix) {
+        expect(tunnel['protocol'], 'socks');
+        expect(tunnel['port'], '18187');
+        expect(tunnel['settings'], {'auth': 'noauth', 'udp': true});
+      } else {
+        expect(tunnel['protocol'], 'tun');
+        expect(tunnel['settings']['name'], 'OneXrayTun');
+        expect(tunnel['settings']['mtu'], VpnConstants.tunMtu);
+        expect(tunnel['settings']['gateway'], ['198.18.0.1/15']);
+        expect(tunnel['settings']['autoOutboundsInterface'], 'Ethernet');
+        expect(tunnel['settings']['userLevel'], 5);
+        expect(tunnel['settings']['autoSystemDnsToGateway'], true);
+      }
+      final rules = config['routing']['rules'] as List;
+      expect(rules, hasLength(2));
+      expect(rules.first, {
+        ...source['routing']['rules'][0] as Map<String, dynamic>,
+        'inboundTag': ['tunIn'],
+      });
+      expect(rules.last['inboundTag'], ['tunIn']);
+      expect(rules.last['outboundTag'], 'proxy');
+      final outbounds = config['outbounds'] as List;
+      expect(outbounds.map((value) => value['tag']), [
+        'proxy',
+        'direct',
+        'block',
+        'provider-dns',
+      ]);
+      expect(outbounds.first['streamSettings']['sockopt'], {
+        'interface': 'Ethernet',
+        'dialerProxy': 'direct',
+      });
+      expect(
+        outbounds[1]['streamSettings']['sockopt']['interface'],
+        'Ethernet',
+      );
+      expect(outbounds[1]['settings'], source['outbounds'][1]['settings']);
+      expect(outbounds.last, source['outbounds'][3]);
+    }
+    expect(jsonEncode(source), before);
+  });
+
+  test('provider compilation requires one matching fixed profile without normal nodes', () {
+    final profile = ResolvedProfile(
+      id: 99,
+      sourceId: 7,
+      name: 'Provider',
+      config: {
+        'outbounds': [
+          {'tag': 'first', 'protocol': 'freedom'},
+        ],
+      },
+    );
+    for (final settings in [
+      ConnectionSettings(),
+      ConnectionSettings(selection: const ServerSelection.server(98)),
+      ConnectionSettings(
+        expert: true,
+        selection: const ServerSelection.server(99),
+      ),
+    ]) {
+      expect(
+        () => ConnectionCompiler.compile(
+          settings: settings,
+          entries: const [],
+          profile: profile,
+          regions: catalog,
+          options: options(),
+        ),
+        throwsFormatException,
+      );
+    }
+    expect(
+      () => ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          selection: const ServerSelection.server(99),
+        ),
+        entries: [node(1)],
+        profile: profile,
+        regions: catalog,
+        options: options(),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test(
     'LAN sharing adds one mixed SOCKS inbound without changing selected routes',
     () {
@@ -248,6 +610,7 @@ void main() {
                 'enabled': false,
                 'routeOnly': true,
                 'domainsExcluded': ['domain:example.net'],
+                'ipsExcluded': ['192.0.2.0/24'],
               },
             },
           ],
@@ -327,11 +690,11 @@ void main() {
               ).config;
               final active = enabled && mode != TrafficMode.allVpn;
               final servers = config['dns']['servers'] as List;
-              expect(servers.first['address'], active ? 'fakedns' : '8.8.8.8');
               expect(
-                servers.first['tag'],
-                active ? 'app-dns-fake' : 'app-dns-proxy',
+                servers.any((server) => server['tag'] == 'app-dns-fake'),
+                active,
               );
+              expect(servers.last['tag'], 'app-dns-proxy');
               expect(
                 servers.every(
                   (server) =>
@@ -351,9 +714,12 @@ void main() {
                   {'ipPool': '198.19.0.0/16', 'poolSize': 32768},
                   {'ipPool': 'fc00:1::/64', 'poolSize': 32768},
                 ]);
-                expect(servers[1]['address'], '8.8.8.8');
-                expect(servers.last['skipFallback'], true);
-                expect(servers.last['domains'], isNotEmpty);
+                expect(servers.last['address'], '8.8.8.8');
+                final direct = servers.firstWhere(
+                  (server) => server['tag'] == 'app-dns-direct',
+                );
+                expect(direct['skipFallback'], true);
+                expect(direct['domains'], isNotEmpty);
               }
               expect(
                 config['routing']['domainStrategy'],
@@ -384,21 +750,22 @@ void main() {
     );
   });
 
-  test('explicit FakeDNS address also enables pools and recovery', () {
-    final config = ConnectionCompiler.compile(
-      settings: ConnectionSettings(
-        smart: SmartRoutingSettings(directDnsAddress: 'fakedns'),
-      ),
-      entries: [node(1)],
-      regions: catalog,
-      options: options(),
-    ).config;
-    expect(config['fakedns'], isNotEmpty);
-    expect(
-      config['inbounds'].single['sniffing']['destOverride'],
-      contains('fakedns'),
-    );
-  });
+  test(
+    'FakeDNS uses its dedicated setting instead of a real resolver address',
+    () {
+      expect(
+        () => ConnectionCompiler.compile(
+          settings: ConnectionSettings(
+            smart: SmartRoutingSettings(directDnsAddress: 'fakedns'),
+          ),
+          entries: [node(1)],
+          regions: catalog,
+          options: options(),
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 
   test(
     'Raw FakeDNS preserves explicit sniffing and supplies missing inbounds',
@@ -503,12 +870,13 @@ void main() {
         options: options(ipv6: false, tunDnsIpv4Address: '192.0.2.53'),
       );
       final servers = compiled.config['dns']['servers'] as List;
-      expect(servers.first, {
-        'tag': 'app-dns-proxy',
-        'address': '8.8.8.8',
-        'queryStrategy': 'UseIPv4',
-      });
-      expect(servers.length, mode == TrafficMode.allVpn ? 1 : 2);
+      expect(servers.last['tag'], 'app-dns-proxy');
+      expect(servers.last['address'], '8.8.8.8');
+      expect(servers.last['queryStrategy'], 'UseIPv4');
+      expect(
+        servers.length,
+        mode == TrafficMode.allVpn ? 1 : (mode == TrafficMode.smart ? 3 : 2),
+      );
       if (mode != TrafficMode.allVpn) {
         final direct = servers.singleWhere(
           (server) => server['tag'] == 'app-dns-direct',
@@ -536,7 +904,7 @@ void main() {
             ).config['dns']['servers']
             as List;
     expect(disabled.last['address'], '8.8.8.8');
-    expect(disabled.last['domains'], isEmpty);
+    expect(disabled.last['domains'], isNull);
   });
 
   test('native TUN uses configured DNS in normal and Raw without replacing Raw DNS', () {
@@ -855,7 +1223,12 @@ void main() {
         expect(domainRule.containsKey('ip'), false);
         expect(ipRule['ip'], ['geoip:PRIVATE', 'geoip:CN']);
         expect(ipRule.containsKey('domain'), false);
-        expect(config['dns']['servers'].last['domains'], domainRule['domain']);
+        expect(
+          (config['dns']['servers'] as List).singleWhere(
+            (server) => server['tag'] == 'app-dns-direct',
+          )['domains'],
+          domainRule['domain'],
+        );
         expect(plan.nodeTags.values, entries.map((entry) => entry.id));
         expect(entries.first.outbound['tag'], 'Same user tag');
         expect(XrayJson.fromJson(config).toJson(), config);
@@ -1071,8 +1444,8 @@ void main() {
     });
     final servers = plan.config['dns']['servers'] as List;
     expect(servers.map((server) => server['address']), ['8.8.8.8', '8.8.8.8']);
-    expect(servers.last['domains'], ['domain:direct-only.test']);
-    expect(servers.last['skipFallback'], true);
+    expect(servers.first['domains'], ['domain:direct-only.test']);
+    expect(servers.first['skipFallback'], true);
     expect(template.encode(), original);
     _fixture('custom', plan);
   });
@@ -1151,8 +1524,12 @@ void main() {
           ['geoip:PRIVATE', 'geoip:CN'],
         );
         expect(
-          config['dns']['servers'].last['domains'],
-          directDns ? domains : isEmpty,
+          directDns
+              ? (config['dns']['servers'] as List).singleWhere(
+                  (server) => server['tag'] == 'app-dns-direct',
+                )['domains']
+              : config['dns']['servers'].last['domains'],
+          directDns ? domains : isNull,
         );
       }
     }
@@ -1242,7 +1619,7 @@ void main() {
         options: options(),
       );
       expect(plan.config['routing']['domainStrategy'], 'IPIfNonMatch');
-      expect(plan.config['dns']['servers'].last['domains'], isEmpty);
+      expect(plan.config['dns']['servers'].last['domains'], isNull);
       expect(
         (plan.config['routing']['rules'] as List).any(
           (rule) => ![
@@ -1327,6 +1704,89 @@ void main() {
     expect(semantic('one').containsKey('name'), false);
     expect(semantic('one')['futureRoot'], {'value': 'one'});
     expect(semantic('one'), isNot(semantic('two')));
+  });
+
+  test('advanced and Raw retain native DNS and sniffing fields retired from ordinary routing', () {
+    final dns = <String, dynamic>{
+      'serveStale': true,
+      'serveExpiredTTL': 300,
+      'enableParallelQuery': true,
+      'servers': [
+        {
+          'address': 'tcp://8.8.8.8',
+          'timeoutMs': 1200,
+          'disableCache': true,
+          'expectedIPs': ['geoip:CN'],
+          'unexpectedIPs': ['geoip:PRIVATE'],
+          'serveStale': false,
+          'serveExpiredTTL': 60,
+        },
+        {
+          'address': 'tcp://1.1.1.1',
+          'timeoutMs': 4000,
+          'disableCache': false,
+          'expectIPs': ['!geoip:PRIVATE'],
+        },
+      ],
+    };
+    final sniffing = <String, dynamic>{
+      'enabled': true,
+      'routeOnly': true,
+      'destOverride': ['http', 'tls', 'quic'],
+      'domainsExcluded': ['domain:private.example'],
+      'ipsExcluded': ['192.0.2.0/24'],
+    };
+    final raw = <String, dynamic>{
+      'outbounds': [node(1).outbound],
+      'dns': dns,
+      'inbounds': [
+        {'tag': 'tunIn', 'protocol': 'tun', 'sniffing': sniffing},
+      ],
+    };
+    final advanced = AdvancedRoutingDocument.fromJson({
+      'name': 'Advanced DNS',
+      'outbounds': [<String, dynamic>{}],
+      'dns': dns,
+      'inbounds': [
+        {'tag': 'tunIn', 'sniffing': sniffing},
+      ],
+    }).state;
+    final rawBefore = jsonEncode(raw);
+    final advancedBefore = advanced.encode();
+    for (final ipv6 in [false, true]) {
+      for (final isRaw in [false, true]) {
+        final config = ConnectionCompiler.compile(
+          settings: ConnectionSettings(
+            expert: isRaw,
+            trafficMode: TrafficMode.custom,
+          ),
+          entries: isRaw ? [] : [node(1)],
+          raw: isRaw ? raw : null,
+          custom: isRaw ? null : advanced,
+          regions: catalog,
+          options: options(ipv6: ipv6),
+        ).config;
+        final strategy = ipv6 ? 'UseIP' : 'UseIPv4';
+        expect(config['dns'], {
+          ...dns,
+          'queryStrategy': strategy,
+          'servers': [
+            for (final server in dns['servers'] as List)
+              {...server as Map<String, dynamic>, 'queryStrategy': strategy},
+          ],
+        });
+        expect(
+          (config['inbounds'] as List).singleWhere(
+            (inbound) => inbound['tag'] == 'tunIn',
+          )['sniffing'],
+          sniffing,
+        );
+      }
+    }
+    expect(jsonEncode(raw), rawBefore);
+    expect(advanced.encode(), advancedBefore);
+    expect(advanced.toJson()['dns'], dns);
+    expect(advanced.toJson()['inbounds'].single['sniffing'], sniffing);
   });
 
   test('Raw keeps the default outbound and routing untouched', () {
