@@ -4,10 +4,12 @@ import 'package:onexray/pages/settings/app_update/params.dart';
 import 'package:onexray/service/settings/app_update/service.dart';
 
 /// Root tabs choose their entry page from the same business-page registry.
+///
+/// Fork: three tabs. Home (`connect`) holds the connection and the current
+/// subscription's servers; Advanced is a page pushed from Settings.
 enum AppPrimaryDestination {
   connect(AppPageDestination.connect),
   servers(AppPageDestination.servers),
-  advanced(AppPageDestination.advanced),
   settings(AppPageDestination.settings);
 
   final AppPageDestination page;

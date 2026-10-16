@@ -58,6 +58,7 @@ Future<void> _pumpMenu(
 }
 
 String _label(AppLocalizations l, ServerAction action) => switch (action) {
+  ServerAction.favorite => l.prototypeAddFavorite,
   ServerAction.edit => l.prototypeEditServer,
   ServerAction.test => l.prototypeTestAgain,
   ServerAction.copy => l.prototypeSaveAsLocalServer,

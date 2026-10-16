@@ -11,6 +11,7 @@ import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/servers/view.dart';
 import 'package:onexray/pages/shared/widgets/page_app_bar.dart';
 import 'package:onexray/pages/theme/color.dart';
+import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 
@@ -44,53 +45,77 @@ class _ServersPageState extends State<ServersPage> {
     child: BlocBuilder<ServersController, ServersPageState>(
       builder: (context, state) {
         final l = AppLocalizations.of(context)!;
-        final mobileRoot =
+        final palette = ColorManager.palette(context);
+        final mobile =
             MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
         final empty = state.ready && !state.failed && state.servers.isEmpty;
-        final page = Scaffold(
+        final groups = controller.groups(l, filter: false);
+        final collapsed = controller.allCollapsed(groups);
+        return Scaffold(
           appBar: PageAppBar(
-            title: Text(l.prototypeServers),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(l.prototypeServers),
+                if (!empty && state.ready)
+                  Text(
+                    '${l.serversTotal(state.servers.length)} · '
+                    '${l.subscriptionsTotal(state.sources.length)}',
+                    style: AppTypography.groupMeta.copyWith(
+                      color: palette.mutedForeground,
+                    ),
+                  ),
+              ],
+            ),
             actions: [
-              if (!mobileRoot && !empty) ...[
-                OutlinedButton.icon(
-                  onPressed: () => controller.openSources(context),
+              if (!empty) ...[
+                IconButton(
+                  tooltip: collapsed
+                      ? l.serversExpandAll
+                      : l.serversCollapseAll,
+                  onPressed: groups.isEmpty
+                      ? null
+                      : () => controller.setAllCollapsed(groups, !collapsed),
+                  icon: Icon(
+                    collapsed
+                        ? LucideIcons.chevronsUpDown
+                        : LucideIcons.chevronsDownUp,
+                  ),
+                ),
+                IconButton(
+                  tooltip: l.serversUpdateAll,
+                  onPressed: state.refreshingAll || state.sources.isEmpty
+                      ? null
+                      : () => controller.refreshAll(context),
                   icon: AppActivityBuilder(
-                    builder: (context, activity) => activity.downloading
+                    builder: (context, activity) =>
+                        state.refreshingAll || activity.downloading
                         ? const ButtonProgressIndicator()
                         : const Icon(LucideIcons.refreshCw),
                   ),
-                  label: Text(l.prototypeUpdatesAndSources),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: () => controller.addServers(context),
-                  icon: const Icon(LucideIcons.plus),
-                  label: Text(l.prototypeAddServer),
-                ),
-              ] else if (mobileRoot)
                 IconButton(
-                  color: ColorManager.palette(context).primary,
+                  tooltip: l.prototypeUpdatesAndSources,
+                  onPressed: () => controller.openSources(context),
+                  icon: const Icon(LucideIcons.listChecks),
+                ),
+                const SizedBox(width: 4),
+              ],
+              if (mobile)
+                IconButton(
+                  color: palette.primary,
                   tooltip: l.prototypeAddServers,
                   onPressed: () => controller.addServers(context),
                   icon: const Icon(LucideIcons.plus),
+                )
+              else if (!empty)
+                FilledButton.icon(
+                  onPressed: () => controller.addServers(context),
+                  icon: const Icon(LucideIcons.plus),
+                  label: Text(l.prototypeAdd),
                 ),
             ],
-            bottom: mobileRoot || empty
-                ? null
-                : TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.page,
-                    ),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    tabs: [
-                      Tab(text: l.prototypeBySubscription),
-                      Tab(text: l.prototypeByNodeLocation),
-                    ],
-                    onTap: (index) =>
-                        controller.groupBy(ServerGrouping.values[index]),
-                  ),
           ),
           body: SafeArea(
             child: ServerLoadState(
@@ -99,19 +124,12 @@ class _ServersPageState extends State<ServersPage> {
               failure: state.failure,
               onRetry: controller.initialize,
               child: ResponsiveContent(
-                desktopMaxWidth: AppLayout.standardMaxWidth,
+                desktopMaxWidth: AppLayout.homeMaxWidth,
                 child: ServerBrowser(controller: controller, scroll: scroll),
               ),
             ),
           ),
         );
-        return mobileRoot
-            ? page
-            : DefaultTabController(
-                length: 2,
-                initialIndex: controller.grouping.index,
-                child: page,
-              );
       },
     ),
   );

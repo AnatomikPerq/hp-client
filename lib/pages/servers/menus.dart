@@ -4,16 +4,165 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
+import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/shared/widgets/adaptive_dialog.dart';
 
 Future<ServerAction?> showServerActionsMenu(
   BuildContext context, {
   required String name,
   required String source,
+  bool favorite = false,
 }) => showAppDialog<ServerAction>(
   context,
-  (_) => ServerActionsMenu(name: name, source: source),
+  (_) => ServerActionsMenu(name: name, source: source, favorite: favorite),
 );
+
+/// Desktop: the same actions as a popup next to the button that opened it.
+Future<ServerAction?> showServerActionsPopup(
+  BuildContext anchor, {
+  bool favorite = false,
+}) {
+  final l = AppLocalizations.of(anchor)!;
+  return _popup<ServerAction>(anchor, [
+    _popupItem(
+      anchor,
+      ServerAction.favorite,
+      favorite ? LucideIcons.starOff : LucideIcons.star,
+      favorite ? l.prototypeRemoveFavorite : l.prototypeAddFavorite,
+    ),
+    _popupItem(
+      anchor,
+      ServerAction.test,
+      LucideIcons.gauge,
+      l.prototypeTestAgain,
+    ),
+    _popupItem(
+      anchor,
+      ServerAction.edit,
+      LucideIcons.pencil,
+      l.prototypeEditServer,
+    ),
+    _popupItem(
+      anchor,
+      ServerAction.copy,
+      LucideIcons.copy,
+      l.prototypeSaveAsLocalServer,
+    ),
+    _popupItem(
+      anchor,
+      ServerAction.share,
+      LucideIcons.share2,
+      l.prototypeShareServer,
+    ),
+    const PopupMenuDivider(),
+    _popupItem(
+      anchor,
+      ServerAction.delete,
+      LucideIcons.trash2,
+      l.prototypeDelete,
+      destructive: true,
+    ),
+  ]);
+}
+
+Future<SourceAction?> showSourceActionsPopup(BuildContext anchor) {
+  final l = AppLocalizations.of(anchor)!;
+  return _popup<SourceAction>(anchor, [
+    _popupItem(
+      anchor,
+      SourceAction.update,
+      LucideIcons.refreshCw,
+      l.prototypeCheckForUpdates,
+    ),
+    _popupItem(
+      anchor,
+      SourceAction.test,
+      LucideIcons.gauge,
+      l.prototypeTestServers,
+    ),
+    _popupItem(
+      anchor,
+      SourceAction.edit,
+      LucideIcons.pencil,
+      l.prototypeEditSubscription,
+    ),
+    _popupItem(
+      anchor,
+      SourceAction.share,
+      LucideIcons.share2,
+      l.prototypeShareSubscription,
+    ),
+    const PopupMenuDivider(),
+    _popupItem(
+      anchor,
+      SourceAction.delete,
+      LucideIcons.trash2,
+      l.prototypeDelete,
+      destructive: true,
+    ),
+  ]);
+}
+
+Future<T?> _popup<T>(BuildContext anchor, List<PopupMenuEntry<T>> items) {
+  final button = anchor.findRenderObject()! as RenderBox;
+  final overlay =
+      Navigator.of(anchor).overlay!.context.findRenderObject()! as RenderBox;
+  final position = RelativeRect.fromRect(
+    Rect.fromPoints(
+      button.localToGlobal(
+        button.size.bottomLeft(Offset.zero),
+        ancestor: overlay,
+      ),
+      button.localToGlobal(
+        button.size.bottomRight(Offset.zero),
+        ancestor: overlay,
+      ),
+    ),
+    Offset.zero & overlay.size,
+  );
+  final palette = ColorManager.palette(anchor);
+  return showMenu<T>(
+    context: anchor,
+    position: position,
+    color: palette.popover,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadii.card),
+      side: BorderSide(color: palette.border),
+    ),
+    items: items,
+  );
+}
+
+PopupMenuItem<T> _popupItem<T>(
+  BuildContext context,
+  T value,
+  IconData icon,
+  String title, {
+  bool destructive = false,
+}) {
+  final palette = ColorManager.palette(context);
+  final color = destructive ? palette.destructive : palette.foreground;
+  return PopupMenuItem<T>(
+    value: value,
+    height: 40,
+    child: Row(
+      children: [
+        Icon(
+          icon,
+          size: 17,
+          color: destructive ? palette.destructive : palette.mutedStrong,
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            title,
+            style: AppTypography.serverMenuTitle.copyWith(color: color),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 Future<SourceAction?> showSourceActionsMenu(
   BuildContext context, {
@@ -30,10 +179,12 @@ class ServerActionsMenu extends StatelessWidget {
     super.key,
     required this.name,
     required this.source,
+    this.favorite = false,
   });
 
   final String name;
   final String source;
+  final bool favorite;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +194,12 @@ class ServerActionsMenu extends StatelessWidget {
       subtitle: source,
       body: Column(
         children: [
+          _menuRow(
+            context,
+            ServerAction.favorite,
+            favorite ? LucideIcons.starOff : LucideIcons.star,
+            favorite ? l.prototypeRemoveFavorite : l.prototypeAddFavorite,
+          ),
           _menuRow(
             context,
             ServerAction.edit,

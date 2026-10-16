@@ -324,6 +324,24 @@ abstract final class AppTypography {
   static final serverMenuTitle = _style(13, 700);
   static final serverMenuHint = _style(12, 400);
 
+  // Compact lists: home and servers share one node row and group card.
+  static final nodeTitle = _style(14, 600);
+  static final nodeTag = _style(12, 600);
+  static final nodePing = _style(12, 600);
+  static final groupTitle = _style(14, 700);
+  static final groupMeta = _style(12, 400);
+  static final groupBadge = _style(12, 700);
+  static final listSection = _style(12, 700);
+  static final filterChip = _style(12, 600);
+
+  // Home: the status strip, orb caption and quick actions.
+  static final homeMetric = _style(13, 600);
+  static final homeStatus = _style(13, 500);
+  static final homeServer = _style(15, 600);
+  static final homeLink = _style(13, 600);
+  static final homeAction = _style(14, 600);
+  static final sidebarVersion = _style(12, 400);
+
   static final shad = ShadTextTheme.custom(
     h1Large: pageTitle,
     h1: pageTitle,

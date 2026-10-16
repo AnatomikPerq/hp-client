@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:onexray/gen/assets.gen.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/main/desktop_window.dart';
@@ -37,6 +39,7 @@ class AdaptiveMainShell extends StatefulWidget {
 class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
   Future<void>? _servicesReady;
   bool _menusAttached = false;
+  bool _sidebarCollapsed = false;
 
   StatefulNavigationShell get navigationShell => widget.navigationShell;
 
@@ -197,11 +200,30 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
     AppUpdateInfo? appUpdateInfo,
   ) {
     final compact = width <= AppLayout.compactDesktopBreakpoint;
-    final sidebarWidth = !compact
+    final collapsed = _sidebarCollapsed;
+    final sidebarWidth = collapsed
+        ? AppLayout.collapsedSidebarWidth
+        : !compact
         ? AppLayout.desktopSidebarWidth
         : AppLayout.compactSidebarWidth;
     final palette = ColorManager.palette(context);
     final nativeSidebar = DesktopWindowFrame.hasNativeSidebar(context);
+    final l = AppLocalizations.of(context)!;
+    final toggle = IconButton(
+      key: const ValueKey('primary-sidebar-toggle'),
+      tooltip: collapsed ? l.sidebarExpand : l.sidebarCollapse,
+      onPressed: () => setState(() => _sidebarCollapsed = !collapsed),
+      style: IconButton.styleFrom(
+        foregroundColor: palette.mutedForeground,
+        minimumSize: const Size(32, 32),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: Icon(
+        collapsed ? LucideIcons.panelLeftOpen : LucideIcons.panelLeftClose,
+        size: 18,
+      ),
+    );
     return Scaffold(
       backgroundColor: nativeSidebar ? Colors.transparent : null,
       body: Row(
@@ -219,7 +241,9 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
               bottom: false,
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sidebarHorizontal,
+                  horizontal: collapsed
+                      ? AppSpacing.sidebarCollapsedHorizontal
+                      : AppSpacing.sidebarHorizontal,
                   vertical: nativeSidebar
                       ? AppSpacing.macOSSidebarVertical
                       : AppSpacing.sidebarVertical,
@@ -228,42 +252,62 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
-                      padding: EdgeInsetsDirectional.fromSTEB(
-                        compact
-                            ? AppSpacing.sidebarCompactBrandStart
-                            : AppSpacing.sidebarBrandStart,
-                        AppSpacing.sidebarBrandTop,
-                        compact
-                            ? AppSpacing.sidebarCompactBrandStart
-                            : AppSpacing.sidebarBrandStart,
-                        nativeSidebar
+                      padding: EdgeInsetsDirectional.only(
+                        start: collapsed ? 0 : AppSpacing.sidebarBrandStart / 2,
+                        top: AppSpacing.sidebarBrandTop,
+                        bottom: nativeSidebar
                             ? AppSpacing.macOSSidebarBrandBottom
                             : AppSpacing.sidebarBrandBottom,
                       ),
-                      // One line at any sidebar width; the name is longer
-                      // than the upstream brand the sidebar was sized for.
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          'HYPER CLIENT',
-                          maxLines: 1,
-                          style: AppTypography.desktopBrand.copyWith(
-                            color: palette.brand,
-                          ),
-                        ),
-                      ),
+                      child: collapsed
+                          ? Column(
+                              children: [
+                                const _BrandMark(),
+                                const SizedBox(height: 12),
+                                toggle,
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                const _BrandMark(),
+                                const SizedBox(width: 10),
+                                // One line at any sidebar width; the name is
+                                // longer than the upstream brand.
+                                Expanded(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: AlignmentDirectional.centerStart,
+                                    child: Text(
+                                      'HYPER CLIENT',
+                                      maxLines: 1,
+                                      style: AppTypography.desktopBrand
+                                          .copyWith(color: palette.brand),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                toggle,
+                              ],
+                            ),
                     ),
                     for (final primary in AppPrimaryDestination.values) ...[
                       if (primary.index > 0)
                         const SizedBox(height: AppSpacing.sidebarRowGap),
-                      _desktopDestination(context, primary),
+                      _desktopDestination(
+                        context,
+                        primary,
+                        collapsed: collapsed,
+                        updateAvailable: appUpdateInfo != null,
+                      ),
                     ],
                     const Spacer(),
                     if (appUpdateInfo != null)
                       _DesktopUpdateReminder(
+                        collapsed: collapsed,
                         onTap: () => _showDesktopUpdate(context, appUpdateInfo),
                       ),
+                    const SizedBox(height: 10),
+                    const _SidebarVersion(),
                   ],
                 ),
               ),
@@ -288,13 +332,16 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
 
   Widget _desktopDestination(
     BuildContext context,
-    AppPrimaryDestination primary,
-  ) {
+    AppPrimaryDestination primary, {
+    required bool collapsed,
+    required bool updateAvailable,
+  }) {
     final palette = ColorManager.palette(context);
     final selected = primary.index == navigationShell.currentIndex;
     final label = _label(context, primary);
     final color = selected ? palette.primary : palette.mutedStrong;
-    return Semantics(
+    final icon = Icon(_icon(primary), size: 21, color: color);
+    final item = Semantics(
       key: ValueKey('primary-navigation-${primary.name}'),
       label: label,
       selected: selected,
@@ -318,30 +365,42 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
               constraints: const BoxConstraints(
                 minHeight: AppSpacing.sidebarRowHeight,
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Icon(_icon(primary), size: 22, color: color),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style:
-                            (selected
-                                    ? AppTypography.selectedNavigationLabel
-                                    : AppTypography.navigationLabel)
-                                .copyWith(color: color),
+              child: collapsed
+                  ? Center(
+                      child:
+                          primary == AppPrimaryDestination.settings &&
+                              updateAvailable
+                          ? _UpdateBadge(child: icon)
+                          : icon,
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: [
+                          icon,
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  (selected
+                                          ? AppTypography
+                                                .selectedNavigationLabel
+                                          : AppTypography.navigationLabel)
+                                      .copyWith(color: color),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ),
         ),
       ),
     );
+    return collapsed ? Tooltip(message: label, child: item) : item;
   }
 
   void _showDesktopUpdate(BuildContext context, AppUpdateInfo updateInfo) {
@@ -362,9 +421,8 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
 
   IconData _icon(AppPrimaryDestination primary) {
     return switch (primary) {
-      AppPrimaryDestination.connect => LucideIcons.link,
-      AppPrimaryDestination.servers => LucideIcons.layers3,
-      AppPrimaryDestination.advanced => LucideIcons.terminal,
+      AppPrimaryDestination.connect => LucideIcons.shieldCheck,
+      AppPrimaryDestination.servers => LucideIcons.server,
       AppPrimaryDestination.settings => LucideIcons.settings,
     };
   }
@@ -372,23 +430,24 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
   String _label(BuildContext context, AppPrimaryDestination primary) {
     final localizations = AppLocalizations.of(context)!;
     return switch (primary) {
-      AppPrimaryDestination.connect => localizations.prototypeConnect,
+      AppPrimaryDestination.connect => localizations.navHome,
       AppPrimaryDestination.servers => localizations.prototypeServers,
-      AppPrimaryDestination.advanced => localizations.prototypeAdvanced,
       AppPrimaryDestination.settings => localizations.prototypeSettings,
     };
   }
 }
 
 class _DesktopUpdateReminder extends StatelessWidget {
-  const _DesktopUpdateReminder({required this.onTap});
+  const _DesktopUpdateReminder({required this.onTap, this.collapsed = false});
 
   final VoidCallback onTap;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context) {
     final label = AppLocalizations.of(context)!.appUpdateAvailable;
     final palette = ColorManager.palette(context);
+    const icon = _UpdateBadge(child: Icon(LucideIcons.download, size: 19));
     return Tooltip(
       message: label,
       child: Material(
@@ -400,34 +459,74 @@ class _DesktopUpdateReminder extends StatelessWidget {
           child: SizedBox(
             width: double.infinity,
             height: 44,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.symmetric(
-                horizontal: AppSpacing.controlHorizontal,
-              ),
-              child: Row(
-                children: [
-                  const _UpdateBadge(
-                    child: Icon(LucideIcons.download, size: 19),
-                  ),
-                  const SizedBox(width: AppSpacing.actionGap),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.desktopUpdateLabel.copyWith(
-                        color: palette.sidebarAccentForeground,
-                      ),
+            child: collapsed
+                ? const Center(child: icon)
+                : Padding(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                      horizontal: AppSpacing.controlHorizontal,
+                    ),
+                    child: Row(
+                      children: [
+                        icon,
+                        const SizedBox(width: AppSpacing.actionGap),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.desktopUpdateLabel.copyWith(
+                              color: palette.sidebarAccentForeground,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// The app logo, the sidebar's only mark when it is collapsed.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadii.card),
+      child: Assets.logo.image(width: 32, height: 32),
+    ),
+  );
+}
+
+class _SidebarVersion extends StatelessWidget {
+  const _SidebarVersion();
+
+  static final Future<String> _version = PackageInfo.fromPlatform()
+      .then((info) => info.version)
+      .catchError((_) => '');
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+    future: _version,
+    builder: (context, snapshot) {
+      final version = snapshot.data ?? '';
+      if (version.isEmpty) return const SizedBox.shrink();
+      return Text(
+        'v$version',
+        maxLines: 1,
+        overflow: TextOverflow.fade,
+        softWrap: false,
+        textAlign: TextAlign.center,
+        style: AppTypography.sidebarVersion.copyWith(
+          color: ColorManager.palette(context).mutedForeground,
+        ),
+      );
+    },
+  );
 }
 
 class _UpdateBadge extends StatelessWidget {

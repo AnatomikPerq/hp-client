@@ -1,16 +1,20 @@
 import 'dart:async';
 
-import 'package:onexray/pages/shared/widgets/page_app_bar.dart';
+import 'package:onexray/pages/main/navigation.dart';
+import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:onexray/pages/shared/widgets/app_activity.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/connect/controller.dart';
+import 'package:onexray/pages/connect/home_servers.dart';
 import 'package:onexray/pages/connect/view.dart';
 import 'package:onexray/pages/main/page_visibility.dart';
+import 'package:onexray/pages/shared/widgets/app_activity.dart';
 
+/// Home. Without an app bar: the window title and the sidebar already name
+/// it, and the orb should sit high on short windows.
 class ConnectPage extends StatefulWidget {
   const ConnectPage({super.key});
   @override
@@ -19,17 +23,25 @@ class ConnectPage extends StatefulWidget {
 
 class _ConnectPageState extends State<ConnectPage> {
   final controller = ConnectController();
+
+  /// The node list shares the Servers tab's selection, ping and menu logic.
+  final servers = ServersController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) controller.initialize();
+      if (mounted) {
+        controller.initialize();
+        servers.initialize();
+      }
     });
   }
 
   @override
   void dispose() {
     unawaited(controller.close());
+    unawaited(servers.close());
     super.dispose();
   }
 
@@ -39,10 +51,6 @@ class _ConnectPageState extends State<ConnectPage> {
     child: PageVisibility(
       onChanged: controller.setPageVisible,
       child: Scaffold(
-        appBar: PageAppBar(
-          title: Text(AppLocalizations.of(context)!.prototypeConnect),
-          actions: const [AppActivityIndicator()],
-        ),
         body: SafeArea(
           child: BlocBuilder<ConnectController, ConnectPageState>(
             buildWhen: (previous, next) => !previous.sameContentAs(next),
@@ -85,6 +93,7 @@ class _ConnectPageState extends State<ConnectPage> {
                     ? state.configuration.connection.rawId
                     : null,
                 location: controller.selectionTitle(l),
+                locationFlag: controller.selectionFlag(l),
                 runningPath: controller.runningRoute?.path,
                 locationDetail: controller.selectionDetail(l),
                 locationHealth: controller.selectionHealth(l),
@@ -92,18 +101,22 @@ class _ConnectPageState extends State<ConnectPage> {
                 methodDetail: controller.methodDescription(l),
                 onConnection: () => controller.connectionAction(context),
                 onAddServers: () => controller.addServers(context),
+                onPaste: () => servers.pasteFromClipboard(context),
                 onExpert: (value) => controller.toggleExpert(context, value),
-                onServer: () => controller.chooseServer(context),
+                onServer: () =>
+                    context.goPrimaryRoot(AppPrimaryDestination.servers),
                 onMethod: () => controller.chooseTrafficMethod(context),
                 onWhy: () => controller.showWhy(context),
                 onRawAdd: () => controller.editRaw(context),
                 onRawSelect: (row) => controller.selectRaw(context, row.id),
                 onRawActions: (row) => controller.showRawActions(context, row),
+                servers: HomeServerList(controller: servers),
                 runMode: controller.supportsRunMode ? controller.runMode : null,
                 proxyPort: controller.systemProxyPort,
                 onRunMode: (mode) => controller.setRunMode(context, mode),
                 livePing: state.livePing,
                 onLivePing: controller.measureLivePing,
+                activity: const AppActivityIndicator(),
               );
             },
           ),

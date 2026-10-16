@@ -86,6 +86,18 @@ Fork deviations from the upstream Raw contract, enforced in `ConnectionCompiler.
 
 See `protocols/README.md`. minewire nodes are ordinary server rows whose outbound has `"protocol": "minewire"`; `MinewireRuntime` starts one engine per node in the App process before compiling and swaps the node for `socks` to its loopback port. Engines connect in the background: the runtime waits for `connected`, not just a listening port. Server addresses are resolved **before** the tunnel comes up. Engine ports are stored in the runtime metadata so a Core that survives an App restart gets its engines back on the same ports.
 
+## UI layout
+
+The fork reworked navigation for usability after tunnel clients like INCY; `docs/app-navigation.md` still describes upstream's four tabs.
+
+- **Three tabs**: Home (`AppPrimaryDestination.connect`, path `/connect`), Servers, Settings. Advanced is no longer a tab: Settings → Advanced pushes `AppPageDestination.advanced` with `extra` 0 (VPN tunnel) or 1 (Xray). The desktop sidebar collapses to icons (`_sidebarCollapsed`, in memory only).
+- **Home** (`lib/pages/connect/view.dart`) has no app bar: TUN/proxy pill, ↑ speed · session clock · ↓ speed, the orb (the accessible connect control), the selected node with its flag, "Check connection" (`LivePingProbe`), the routing pill, Add / Paste / All servers, then `HomeServerList`: Automatic, favorites and the subscription holding the current selection. `ConnectPage` owns a second `ServersController` for that list, so rows, menus and pings behave exactly as on Servers. Speeds rebuild only through `trafficBuilder`; `ConnectView` itself is filtered by `sameContentAs`.
+- **Servers** is one scrolling list of collapsible `ServerGroupCard`s (no master/detail pane) with search, by-subscription/by-location toggle and filter chips (favorites, primary protocol). Collapse state and filters live in `ServersPageState`.
+- **Selecting a node never asks to reconnect**: `ServersController.choose` passes `confirmReconnect: false` to `applyConnectionChange`, relying on the live swap (and the coordinator's restart fallback). Tray changes and routing-method changes still confirm.
+- `ServerNodeTile` is the one node row. Node menus are popups at the `…` button on desktop and the existing bottom-sheet dialogs on mobile (`menus_test.dart` covers the latter); favorite moved into the menu (`ServerAction.favorite`).
+- **Flags**: Windows has no glyphs for regional-indicator emoji and prints "NL". `splitFlagEmoji` takes flags out of names, `CountryFlag` draws `assets/flags/<iso>.png` (Twemoji, CC-BY 4.0, see `LICENSE-THIRD-PARTY.md`), falling back to the measured `countryCode`, then a globe. The folder is excluded from `flutter_gen` so `assets.gen.dart` does not grow 250 getters.
+- Visual check without running the App or computer use: a throwaway widget test can load real fonts with `FontLoader` (Geist and Lucide from the pub cache, Segoe UI for Cyrillic), `precacheImage` the flags inside `tester.runAsync`, and write `RenderRepaintBoundary.toImage()` to PNG. Text in buttons inherits no family and still renders as Ahem boxes there. Do not leave such a test in `test/`: CI runs everything.
+
 ## Testing the VPN
 
 **Never start the tunnel or the system proxy mode system-wide on the owner's machine.** It runs another VPN through the system proxy (`127.0.0.1:10808`) that must not be disturbed.

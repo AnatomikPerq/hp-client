@@ -323,4 +323,61 @@ void main() {
       l.prototypeTemporarilyUnavailable,
     );
   });
+
+  test(
+    'Home shows the subscription of the chosen node before any probe',
+    () async {
+      final first = await server('first', source: 1);
+      final chosen = (await server(
+        'chosen',
+        source: 2,
+      )).copyWith(delay: PingDelayConstants.unknown);
+      controller.servers = [first, chosen];
+      controller.sources = [
+        for (final id in [1, 2])
+          SubscriptionData(
+            id: id,
+            name: 'Source $id',
+            url: 'https://example.test/$id',
+            hwidEnabled: false,
+            timestamp: DateTime(2026),
+          ),
+      ];
+      expect(controller.homeGroup(l)?.id, 'subscription:1');
+      final base = ConnectionConfiguration();
+      controller.configuration = ConnectionConfiguration(
+        connection: ConnectionSettings.fromJson({
+          ...base.connection.toJson(),
+          'selection': ServerSelection.server(chosen.id).toJson(),
+        }),
+        policy: base.policy,
+      );
+      expect(controller.homeGroup(l)?.id, 'subscription:2');
+      // Search on the Servers tab never hides Home's group.
+      controller.searchChanged('nothing matches');
+      expect(controller.groups(l), isEmpty);
+      expect(controller.homeGroup(l)?.id, 'subscription:2');
+    },
+  );
+
+  test('filters narrow groups and collapse state is per group', () async {
+    final one = await server('one', favorite: true);
+    final two = await server('two', country: 'SG');
+    controller.servers = [one, two];
+    expect(controller.protocols(), ['VLESS']);
+    controller.setFavoritesOnly(true);
+    expect(controller.filtering, isTrue);
+    expect(controller.groups(l).single.visibleRows, [one]);
+    controller.setFavoritesOnly(false);
+    controller.setProtocolFilter('TROJAN');
+    expect(controller.groups(l), isEmpty);
+    controller.setProtocolFilter(null);
+    final groups = controller.groups(l);
+    expect(controller.allCollapsed(groups), isFalse);
+    controller.toggleGroup(groups.single.id);
+    expect(controller.collapsed(groups.single.id), isTrue);
+    expect(controller.allCollapsed(groups), isTrue);
+    controller.setAllCollapsed(groups, false);
+    expect(controller.collapsed(groups.single.id), isFalse);
+  });
 }

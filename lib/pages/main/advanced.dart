@@ -6,10 +6,14 @@ import 'package:onexray/pages/main/navigation.dart';
 
 /// Route wiring stays in the shell; platform pages only edit their own drafts.
 class AdvancedRootPage extends StatelessWidget {
-  const AdvancedRootPage({super.key});
+  const AdvancedRootPage({super.key, this.initialTab = 0});
+
+  /// 0 opens the VPN tunnel tab, 1 the Xray tab.
+  final int initialTab;
 
   @override
   Widget build(BuildContext context) => AdvancedPage(
+    initialTab: initialTab,
     openTunnel: (context, destination, draft) =>
         context.pushScoped<bool>(switch (destination) {
           TunnelDestination.apple => AppPageDestination.appleVpn,

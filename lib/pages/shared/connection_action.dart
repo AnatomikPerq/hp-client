@@ -41,6 +41,7 @@ Future<ConnectionConfiguration?> applyConnectionChange(
   Future<void> Function()? writeAssets,
   Future<void> Function()? validateAssets,
   bool rethrowErrors = false,
+  bool confirmReconnect = true,
 }) async {
   final current = await coordinator.configuration;
   final next = ConnectionConfiguration(
@@ -54,6 +55,7 @@ Future<ConnectionConfiguration?> applyConnectionChange(
   if (!context.mounted) return null;
   final reconnect = coordinator.state.value.phase == ConnectionPhase.connected;
   if (reconnect &&
+      confirmReconnect &&
       !await showApplyAndReconnectDialog(
         context,
         label: label(next.connection),

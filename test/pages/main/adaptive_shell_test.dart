@@ -21,18 +21,17 @@ void main() {
     expect(AppPrimaryDestination.values.map((route) => route.name), [
       'connect',
       'servers',
-      'advanced',
       'settings',
     ]);
     expect(AppPrimaryDestination.values.map((route) => route.rootPath), [
       '/connect',
       '/servers',
-      '/advanced',
       '/settings',
     ]);
+    // Advanced is a page inside a tab, no longer a tab of its own.
     expect(
-      AppPrimaryDestination.fromPath('/advanced/routing-data'),
-      AppPrimaryDestination.advanced,
+      AppPrimaryDestination.fromPath('/settings/advanced'),
+      AppPrimaryDestination.settings,
     );
   });
 
@@ -188,6 +187,21 @@ void main() {
       tester.getSize(desktopNavigation).width,
       AppLayout.desktopSidebarWidth,
     );
+    // The sidebar folds to icons and back.
+    final toggle = find.byKey(const ValueKey('primary-sidebar-toggle'));
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(desktopNavigation).width,
+      AppLayout.collapsedSidebarWidth,
+    );
+    expect(find.text('HYPER CLIENT'), findsNothing);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(desktopNavigation).width,
+      AppLayout.desktopSidebarWidth,
+    );
     final desktopConnect = find.byKey(
       const ValueKey('primary-navigation-connect'),
     );
@@ -252,7 +266,7 @@ void main() {
     );
     expect(
       tester.widget<NavigationDestination>(connectDestination).label,
-      'Connect',
+      'Home',
     );
     expect(find.byType(Badge), findsOneWidget);
     await tester.tap(find.text('Settings'));

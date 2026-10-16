@@ -11,11 +11,12 @@ class SubscriptionPackageSummary extends StatelessWidget {
 
   final SubscriptionUserInfo info;
 
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    final palette = ColorManager.palette(context);
-    final now = DateTime.now();
+  /// `Remaining 20 GB · Expires in 5 days`, or empty when nothing is known.
+  static String text(
+    AppLocalizations l,
+    SubscriptionUserInfo info,
+    DateTime now,
+  ) {
     final remaining = info.remainingBytes;
     final used = info.usedBytes;
     final quota = info.unlimited
@@ -45,10 +46,29 @@ class SubscriptionPackageSummary extends StatelessWidget {
                     Duration.millisecondsPerDay)
                 .ceil(),
           );
+    return [?quota, ?expiryLabel].join(' · ');
+  }
+
+  /// Share of the quota already used, when the provider reports both values.
+  static double? usage(SubscriptionUserInfo info) {
+    final total = info.totalBytes;
+    final used = info.usedBytes;
+    if (total == null || total <= 0 || used == null) return null;
+    return (used / total).clamp(0.0, 1.0);
+  }
+
+  static bool warning(SubscriptionUserInfo info, DateTime now) =>
+      info.exhausted || info.isExpired(now);
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final palette = ColorManager.palette(context);
+    final now = DateTime.now();
     return Text(
-      [?quota, ?expiryLabel].join(' · '),
+      text(l, info, now),
       style: AppTypography.serverGroupSummary.copyWith(
-        color: info.exhausted || info.isExpired(now)
+        color: warning(info, now)
             ? palette.restartingText
             : palette.mutedForeground,
       ),

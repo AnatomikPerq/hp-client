@@ -29,6 +29,7 @@ import 'package:onexray/service/connect/routing/custom/configuration.dart';
 import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/pages/servers/catalog.dart';
 import 'package:onexray/pages/shared/connection_action.dart';
+import 'package:onexray/pages/shared/widgets/country_flag.dart';
 
 const _unchanged = Object();
 
@@ -247,7 +248,35 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
             : l10n.prototypeAutomaticEntries(count);
       }
     }
-    return _selectionName(l10n, settings.selection);
+    final selection = settings.selection;
+    if (selection.kind == SelectionKind.server) {
+      final row = servers.where((row) => row.id == selection.id).firstOrNull;
+      if (row != null) return nodeLabel(l10n, row).name;
+    }
+    return _selectionName(l10n, selection);
+  }
+
+  /// The flag beside the selection on Home: the running entry when
+  /// connected, else the chosen node or region.
+  String? selectionFlag(AppLocalizations l10n) {
+    final settings = configuration.connection;
+    if (settings.expert) return null;
+    final view = connectionView;
+    final entries = view.phase == ConnectionPhase.connected
+        ? view.runtime?.entries ?? const <RuntimeNode>[]
+        : const <RuntimeNode>[];
+    final id =
+        entries.firstOrNull?.id ??
+        (settings.selection.kind == SelectionKind.server
+            ? settings.selection.id
+            : null);
+    final row = id == null
+        ? null
+        : servers.where((row) => row.id == id).firstOrNull;
+    if (row != null) return nodeLabel(l10n, row).code;
+    return settings.selection.kind == SelectionKind.region
+        ? settings.selection.region?.toUpperCase()
+        : null;
   }
 
   String _selectionName(AppLocalizations l, ServerSelection selection) =>
@@ -324,11 +353,18 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     }
     final entries = runtime.entries;
     if (entries.isEmpty) return null;
-    final names = entries.map((entry) => entry.name);
+    // Emoji flags print as letters on Windows; the flag is drawn instead.
+    String plain(String name) {
+      final split = splitFlagEmoji(name).name;
+      return split.isEmpty ? name : split;
+    }
+
+    final names = entries.map((entry) => plain(entry.name));
     final exit = runtime.finalExit;
     return (
       entryCount: entries.length,
-      path: '${names.join(' + ')}${exit == null ? '' : ' → ${exit.name}'}',
+      path:
+          '${names.join(' + ')}${exit == null ? '' : ' → ${plain(exit.name)}'}',
     );
   }
 

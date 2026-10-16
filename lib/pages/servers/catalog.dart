@@ -1,6 +1,7 @@
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
+import 'package:onexray/pages/shared/widgets/country_flag.dart';
 import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/service/connect/settings.dart';
 
@@ -44,6 +45,27 @@ mixin ServerLabels {
   ServerCatalog get catalog;
   String serverName(CoreConfigData row) => catalog.display(row).name;
   String protocol(CoreConfigData row) => catalog.display(row).protocol;
+
+  /// `VLESS` out of `VLESS | XHTTP | REALITY`; empty when unreadable.
+  String primaryProtocol(CoreConfigData row) =>
+      protocol(row).split('|').first.trim();
+
+  /// The list label: the name without emoji flags, and the flag to draw.
+  /// A flag in the name wins over the measured location of the address.
+  ({String? code, String name}) nodeLabel(
+    AppLocalizations l10n,
+    CoreConfigData row,
+  ) {
+    final split = splitFlagEmoji(serverName(row));
+    final code = split.code ?? row.countryCode?.toUpperCase();
+    final name = split.name.isNotEmpty
+        ? split.name
+        : code == null || code.isEmpty
+        ? serverName(row)
+        : l10n.countryRegionName(code);
+    return (code: code == null || code.isEmpty ? null : code, name: name);
+  }
+
   String health(AppLocalizations l, CoreConfigData row) =>
       row.delay == PingDelayConstants.unknown
       ? l.prototypeNotTested
@@ -59,6 +81,11 @@ mixin ServerLabels {
 mixin ServerGroups on ServerLabels {
   ServerGrouping get grouping;
   String get query;
+
+  /// Narrow every group to one protocol, e.g. `VLESS`; null keeps all.
+  String? get protocolFilter => null;
+  bool get favoritesOnly => false;
+  bool get filtering => protocolFilter != null || favoritesOnly;
   List<CoreConfigData> get servers => catalog.servers;
   List<SubscriptionData> get sources => catalog.sources;
   String countryName(AppLocalizations l, String? code) {
@@ -73,7 +100,13 @@ mixin ServerGroups on ServerLabels {
 
   int sourceCount(int id) => servers.where((row) => row.subId == id).length;
 
+  bool matchesFilters(CoreConfigData row) =>
+      (!favoritesOnly || row.favorite) &&
+      (protocolFilter == null ||
+          primaryProtocol(row).toUpperCase() == protocolFilter);
+
   bool matches(AppLocalizations l, CoreConfigData row) {
+    if (!matchesFilters(row)) return false;
     final query = this.query.trim().toLowerCase();
     return query.isEmpty ||
         [
@@ -82,6 +115,19 @@ mixin ServerGroups on ServerLabels {
           row.countryCode ?? '',
           sourceName(l, row),
         ].any((value) => value.toLowerCase().contains(query));
+  }
+
+  /// Protocols present in the catalog, most common first.
+  List<String> protocols() {
+    final counts = <String, int>{};
+    for (final row in servers) {
+      final value = primaryProtocol(row).toUpperCase();
+      if (value.isNotEmpty) counts[value] = (counts[value] ?? 0) + 1;
+    }
+    return counts.keys.toList()..sort((a, b) {
+      final count = counts[b]!.compareTo(counts[a]!);
+      return count == 0 ? a.compareTo(b) : count;
+    });
   }
 
   List<CoreConfigData> favorites(AppLocalizations l) =>
@@ -105,10 +151,14 @@ mixin ServerGroups on ServerLabels {
           : source?.name ?? l.prototypeManualAdditions;
       final query = this.query.trim().toLowerCase();
       final wholeGroup = !filter || name.toLowerCase().contains(query);
-      final visible = wholeGroup
+      final visible = !filter
           ? entry.value
+          : wholeGroup
+          ? entry.value.where(matchesFilters).toList()
           : entry.value.where((row) => matches(l, row)).toList();
-      if (filter && query.isNotEmpty && visible.isEmpty && !wholeGroup) {
+      if (filter &&
+          visible.isEmpty &&
+          ((query.isNotEmpty && !wholeGroup) || filtering)) {
         continue;
       }
       result.add(

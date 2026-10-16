@@ -187,7 +187,12 @@ _PageRoute _route(AppPageDestination destination, _PageRouteBuilder builder) {
 final _pageRoutes = <_PageRoute>[
   _route(AppPageDestination.connect, (_, _) => const ConnectPage()),
   _route(AppPageDestination.servers, (_, _) => const ServersPage()),
-  _route(AppPageDestination.advanced, (_, _) => const AdvancedRootPage()),
+  _route(
+    AppPageDestination.advanced,
+    (_, state) => AdvancedRootPage(
+      initialTab: state.extra is int ? state.extra! as int : 0,
+    ),
+  ),
   _route(AppPageDestination.settings, (_, _) => const SettingsPage()),
   _route(AppPageDestination.localApi, (_, _) => const LocalApiPage()),
   _route(

@@ -15,6 +15,7 @@ import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/service/settings/language/locale.dart';
 import 'package:onexray/pages/connect/controller.dart';
+import 'package:onexray/pages/connect/hero.dart';
 import 'package:onexray/pages/connect/view.dart';
 import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/servers/controller.dart';
@@ -575,21 +576,16 @@ void main() {
           addTearDown(coordinator.dispose);
           addTearDown(coordinator.db.close);
           await tester.pumpWidget(_testApp(_connectionScreen(controller)));
-          final action = find.widgetWithText(
-            FilledButton,
-            stop ? 'Disconnect' : 'Connect',
-          );
+          // The orb is Home's connection control; its tooltip names the action.
+          expect(_orbLabel(tester), stop ? 'Disconnect' : 'Connect');
           try {
             // A second tap before rebuilding must not enqueue another command.
-            await tester.tap(action);
-            await tester.tap(action);
+            await tester.tap(_orb);
+            await tester.tap(_orb);
             await tester.pump();
             expect(find.byType(CircularProgressIndicator), findsWidgets);
             expect(coordinator.state.value.phase, phase);
-            expect(
-              tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-              isNull,
-            );
+            expect(_orbTap(tester), isNull);
             expect(
               stop ? coordinator.disconnectCount : coordinator.connectCount,
               1,
@@ -599,10 +595,7 @@ void main() {
             await tester.pumpAndSettle();
           }
           expect(find.byType(CircularProgressIndicator), findsNothing);
-          expect(
-            tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-            isNotNull,
-          );
+          expect(_orbTap(tester), isNotNull);
         },
       );
     }
@@ -626,19 +619,15 @@ void main() {
       addTearDown(coordinator.dispose);
       addTearDown(coordinator.db.close);
       await tester.pumpWidget(_testApp(_connectionScreen(controller)));
-      await tester.tap(
-        find.widgetWithText(FilledButton, stop ? 'Disconnect' : 'Connect'),
-      );
+      expect(_orbLabel(tester), stop ? 'Disconnect' : 'Connect');
+      await tester.tap(_orb);
       await tester.pump();
       gate.completeError(const ConnectionHostException('runtimeUnavailable'));
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(coordinator.state.value.phase, phase);
-      expect(
-        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-        isNotNull,
-      );
+      expect(_orbTap(tester), isNotNull);
       expect(tester.takeException(), isNull);
     });
   }
@@ -658,15 +647,15 @@ void main() {
     addTearDown(coordinator.db.close);
     await tester.pumpWidget(_testApp(_connectionScreen(controller)));
     try {
-      await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+      await tester.tap(_orb);
       await tester.pump();
       coordinator.state.value = const ConnectionView(
         phase: ConnectionPhase.preparing,
       );
       await tester.pump();
-      final cancel = find.widgetWithText(FilledButton, 'Cancel');
-      expect(tester.widget<FilledButton>(cancel).onPressed, isNotNull);
-      await tester.tap(cancel);
+      expect(_orbLabel(tester), 'Cancel');
+      expect(_orbTap(tester), isNotNull);
+      await tester.tap(_orb);
       expect(coordinator.cancelCount, 1);
       expect(coordinator.connectCount, 1);
       expect(coordinator.disconnectCount, 0);
@@ -787,6 +776,26 @@ class _Coordinator extends ConnectionCoordinator {
     );
   }
 }
+
+final _orb = find.byKey(const ValueKey('home-connection-orb'));
+
+String? _orbLabel(WidgetTester tester) => tester
+    .widget<Semantics>(
+      find
+          .ancestor(
+            of: _orb,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics && widget.properties.button == true,
+            ),
+          )
+          .first,
+    )
+    .properties
+    .label;
+
+VoidCallback? _orbTap(WidgetTester tester) =>
+    tester.widget<ConnectionHero>(find.byType(ConnectionHero)).onTap;
 
 Widget _connectionScreen(ConnectController controller) => ShadTheme(
   data: AppTheme.shad(Brightness.light),

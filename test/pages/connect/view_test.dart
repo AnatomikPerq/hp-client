@@ -68,6 +68,7 @@ void main() {
     List<CoreConfigData> raws = const [],
     VoidCallback? onAddServers,
     VoidCallback? onExpert,
+    Widget? servers,
   }) => ConnectView(
     view: view,
     hasServers: hasServers,
@@ -86,6 +87,7 @@ void main() {
     onRawAdd: () {},
     onRawSelect: (_) {},
     onRawActions: (_) {},
+    servers: servers,
   );
 
   Widget app(
@@ -147,36 +149,22 @@ void main() {
             scale: scale,
           ),
         );
-        await tester.pumpAndSettle();
-        final l = AppLocalizations.of(
-          tester.element(find.byType(ConnectView)),
-        )!;
-        final title = find.text(l.prototypeTraffic);
-        expect(title, findsOneWidget);
+        await tester.pump();
+        final readout = find.byType(TrafficReadout);
+        expect(readout, findsOneWidget);
+        // Read-only: the speeds and totals open nothing.
         expect(
-          find.ancestor(of: title, matching: find.byType(InkWell)),
-          findsNothing,
-        );
-        final card = find
-            .ancestor(of: title, matching: find.byType(Card))
-            .first;
-        expect(
-          find.descendant(
-            of: card,
-            matching: find.byIcon(LucideIcons.chevronRightDir),
-          ),
+          find.ancestor(of: readout, matching: find.byType(InkWell)),
           findsNothing,
         );
         for (final value in [
-          '248.72 KB/s',
-          '32.8 KB/s',
-          '158.91 KB',
-          '999.99 MB',
+          find.text('248.72 KB/s'),
+          find.text('32.8 KB/s'),
+          find.textContaining('158.91 KB'),
+          find.textContaining('999.99 MB'),
         ]) {
-          expect(find.text(value), findsOneWidget);
-          final paragraph = tester.renderObject<RenderParagraph>(
-            find.text(value),
-          );
+          expect(value, findsOneWidget);
+          final paragraph = tester.renderObject<RenderParagraph>(value);
           expect(
             paragraph.didExceedMaxLines,
             isFalse,
@@ -189,45 +177,45 @@ void main() {
   );
 
   for (final expert in [false, true]) {
-    testWidgets('desktop connection shares one panel, expert=$expert', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1160, 800));
+    testWidgets('home keeps one column, expert=$expert', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1160, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(app(screen(expert: expert)));
-      await tester.pumpAndSettle();
-      final panel = find.byKey(const ValueKey('desktop-connection-panel'));
-      final traffic = find.byKey(const ValueKey('desktop-traffic-panel'));
-      final panelRect = tester.getRect(panel);
-      final trafficRect = tester.getRect(traffic);
-      expect(panelRect.top, AppSpacing.desktopPageTop);
-      expect(trafficRect.top, panelRect.top);
-      expect(trafficRect.left - panelRect.right, 16);
-      expect(panelRect.width / trafficRect.width, closeTo(1.04, .001));
-      expect(panelRect.height, closeTo(trafficRect.height, .001));
+      await tester.pumpWidget(
+        app(screen(expert: expert, servers: const Text('server-list'))),
+      );
+      await tester.pump();
+      final panel = find.byKey(const ValueKey('home-connection-panel'));
+      expect(tester.getSize(panel).width, AppLayout.homeMaxWidth);
       expect(
         find.descendant(of: panel, matching: find.text('Disconnected')),
         findsOneWidget,
       );
-      expect(
-        find.descendant(of: panel, matching: find.text('Expert mode')),
-        findsOneWidget,
-      );
-      final connectButton = find.widgetWithText(FilledButton, 'Connect');
-      expect(
-        tester.getSize(connectButton).width,
-        AppLayout.connectDesktopButtonWidth,
-      );
-      expect(
-        tester.getSize(connectButton).height,
-        AppLayout.connectDesktopButtonMinHeight,
-      );
+      expect(find.text('Expert mode'), findsOneWidget);
       expect(
         tester.widget<TrafficReadout>(find.byType(TrafficReadout)).desktop,
         isTrue,
       );
+      // Quick actions sit below the orb, the node list below them.
+      final add = tester.getRect(find.byKey(const ValueKey('home-add')));
+      expect(add.top, greaterThan(tester.getRect(panel).bottom));
       expect(
-        find.text('Why this connection?'),
+        tester.getRect(find.byKey(const ValueKey('home-paste'))).top,
+        add.top,
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-all-servers'))).top,
+        add.top,
+      );
+      expect(find.text('server-list'), expert ? findsNothing : findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is IconButton && widget.tooltip == 'Why this connection?',
+        ),
+        expert ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('home-routing')),
         expert ? findsNothing : findsOneWidget,
       );
       expect(find.text('Add Raw JSON'), expert ? findsOneWidget : findsNothing);
@@ -235,28 +223,22 @@ void main() {
     });
   }
 
-  testWidgets('compact desktop stacks panels while mobile stays unchanged', (
+  testWidgets('mobile home keeps the same order without desktop sizing', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(850, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(app(screen()));
-    await tester.pumpAndSettle();
-    final panel = find.byKey(const ValueKey('desktop-connection-panel'));
-    final traffic = find.byKey(const ValueKey('desktop-traffic-panel'));
-    expect(tester.getRect(traffic).top - tester.getRect(panel).bottom, 16);
-    expect(tester.getSize(traffic).width, tester.getSize(panel).width);
     await tester.binding.setSurfaceSize(const Size(390, 900));
-    await tester.pumpAndSettle();
-    expect(panel, findsNothing);
-    expect(traffic, findsNothing);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(app(screen(servers: const Text('server-list'))));
+    await tester.pump();
+    final panel = find.byKey(const ValueKey('home-connection-panel'));
+    expect(tester.getSize(panel).width, 390 - AppSpacing.mobilePage * 2);
     expect(
       tester.widget<TrafficReadout>(find.byType(TrafficReadout)).desktop,
       isFalse,
     );
     expect(
-      tester.getSize(find.widgetWithText(FilledButton, 'Connect')).height,
-      AppLayout.connectButtonMinHeight,
+      tester.getRect(find.text('server-list')).top,
+      greaterThan(tester.getRect(find.byKey(const ValueKey('home-add'))).top),
     );
     expect(tester.takeException(), isNull);
   });
@@ -275,12 +257,13 @@ void main() {
         await tester.binding.setSurfaceSize(Size(width, 900));
         addTearDown(() => tester.binding.setSurfaceSize(null));
         await tester.pumpWidget(app(screen(), locale: locale, scale: 1.3));
-        await tester.pumpAndSettle();
+        await tester.pump();
         expect(tester.takeException(), isNull);
         final context = tester.element(find.byType(ConnectView));
         final l = AppLocalizations.of(context)!;
-        expect(find.text(l.prototypeCurrentSpeed), findsOneWidget);
-        expect(find.text(l.prototypeServers), findsOneWidget);
+        expect(find.text(l.homeCheckConnection), findsOneWidget);
+        expect(find.text(l.prototypeAdd), findsOneWidget);
+        expect(find.text(l.homePaste), findsOneWidget);
         expect(
           Directionality.of(context),
           locale.languageCode == 'fa' ? TextDirection.rtl : TextDirection.ltr,

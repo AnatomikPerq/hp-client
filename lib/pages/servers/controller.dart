@@ -29,10 +29,11 @@ import 'package:onexray/service/shared/ping/service.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 import 'package:onexray/service/servers/subscription/failure.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
+import 'package:onexray/service/servers/import.dart';
 
 export 'catalog.dart';
 
-enum ServerAction { edit, test, copy, share, delete }
+enum ServerAction { favorite, edit, test, copy, share, delete }
 
 enum SourceAction { update, test, edit, share, delete }
 
@@ -63,7 +64,12 @@ class ServersPageState {
     Set<int> favoritingServerIds = const {},
     this.selectingServers,
     Map<int, String> sourceErrors = const {},
-  }) : configuration = configuration ?? ConnectionConfiguration(),
+    Set<String> collapsedGroupIds = const {},
+    this.protocolFilter,
+    this.favoritesOnly = false,
+    this.refreshingAll = false,
+  }) : collapsedGroupIds = Set.unmodifiable(collapsedGroupIds),
+       configuration = configuration ?? ConnectionConfiguration(),
        catalog = catalog ?? ServerCatalog(),
        customRoutes = List.unmodifiable(customRoutes),
        pendingServerActions = Set.unmodifiable(pendingServerActions),
@@ -89,6 +95,10 @@ class ServersPageState {
   final Set<int> favoritingServerIds;
   final ServerSelection? selectingServers;
   final Map<int, String> sourceErrors;
+  final Set<String> collapsedGroupIds;
+  final String? protocolFilter;
+  final bool favoritesOnly;
+  final bool refreshingAll;
 
   ServersPageState copyWith({
     ConnectionConfiguration? configuration,
@@ -106,6 +116,10 @@ class ServersPageState {
     Set<int>? favoritingServerIds,
     Object? selectingServers = _unchanged,
     Map<int, String>? sourceErrors,
+    Set<String>? collapsedGroupIds,
+    Object? protocolFilter = _unchanged,
+    bool? favoritesOnly,
+    bool? refreshingAll,
   }) => ServersPageState(
     configuration: configuration ?? this.configuration,
     connectionView: connectionView ?? this.connectionView,
@@ -126,6 +140,12 @@ class ServersPageState {
         ? this.selectingServers
         : selectingServers as ServerSelection?,
     sourceErrors: sourceErrors ?? this.sourceErrors,
+    collapsedGroupIds: collapsedGroupIds ?? this.collapsedGroupIds,
+    protocolFilter: identical(protocolFilter, _unchanged)
+        ? this.protocolFilter
+        : protocolFilter as String?,
+    favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+    refreshingAll: refreshingAll ?? this.refreshingAll,
   );
 }
 
@@ -154,6 +174,10 @@ class ServersController extends PageCubit<ServersPageState>
   ServerCatalog get catalog => state.catalog;
   @override
   String get query => state.serverSearchQuery;
+  @override
+  String? get protocolFilter => state.protocolFilter;
+  @override
+  bool get favoritesOnly => state.favoritesOnly;
   set servers(List<CoreConfigData> rows) =>
       emit(state.copyWith(catalog: catalog.copyWith(servers: rows)));
   set sources(List<SubscriptionData> rows) =>
@@ -273,6 +297,96 @@ class ServersController extends PageCubit<ServersPageState>
     if (value != state.serverSearchQuery) {
       emit(state.copyWith(serverSearchQuery: value));
     }
+  }
+
+  void setProtocolFilter(String? value) {
+    if (value != state.protocolFilter) {
+      emit(state.copyWith(protocolFilter: value));
+    }
+  }
+
+  void setFavoritesOnly(bool value) {
+    if (value != state.favoritesOnly) {
+      emit(state.copyWith(favoritesOnly: value));
+    }
+  }
+
+  bool collapsed(String groupId) => state.collapsedGroupIds.contains(groupId);
+
+  void toggleGroup(String groupId) => emit(
+    state.copyWith(
+      collapsedGroupIds: collapsed(groupId)
+          ? ({...state.collapsedGroupIds}..remove(groupId))
+          : {...state.collapsedGroupIds, groupId},
+    ),
+  );
+
+  bool allCollapsed(Iterable<ServerGroup> groups) =>
+      groups.isNotEmpty && groups.every((group) => collapsed(group.id));
+
+  void setAllCollapsed(Iterable<ServerGroup> groups, bool value) => emit(
+    state.copyWith(
+      collapsedGroupIds: value
+          ? {...state.collapsedGroupIds, for (final group in groups) group.id}
+          : {},
+    ),
+  );
+
+  /// The subscription Home shows: the one holding the running or chosen
+  /// entry, else the first with servers. Never filtered by search.
+  ServerGroup? homeGroup(AppLocalizations l) {
+    final all = groups(l, filter: false);
+    final selection = configuration.connection.selection;
+    final running = runningEntries;
+    // A chosen node counts even before its first successful probe.
+    final row =
+        servers.where((row) => running.contains(row.id)).firstOrNull ??
+        (selection.kind == SelectionKind.server
+            ? servers.where((row) => row.id == selection.id).firstOrNull
+            : null);
+    final sourceId =
+        row?.subId ??
+        (selection.kind == SelectionKind.source ? selection.id : null);
+    final current = grouping == ServerGrouping.subscription && sourceId != null
+        ? 'subscription:$sourceId'
+        : currentGroupId;
+    return all.where((group) => group.id == current).firstOrNull ??
+        all.where((group) => group.rows.isNotEmpty).firstOrNull;
+  }
+
+  Future<void> refreshAll(BuildContext context) async {
+    if (state.refreshingAll) return;
+    emit(state.copyWith(refreshingAll: true));
+    try {
+      await run(context, () async {
+        final results = await SubscriptionService().refreshAll();
+        if (!context.mounted) return;
+        final message = subscriptionRefreshMessage(
+          AppLocalizations.of(context)!,
+          results,
+        );
+        if (message.isNotEmpty) ContextAlert.showToast(context, message);
+      });
+    } finally {
+      emit(state.copyWith(refreshingAll: false));
+    }
+  }
+
+  /// One tap import: the clipboard goes straight into the import flow, which
+  /// detects a link, a subscription or JSON on its own.
+  Future<void> pasteFromClipboard(BuildContext context) async {
+    String? input;
+    try {
+      input = await ServerImportService.readClipboard();
+    } catch (_) {
+      input = null;
+    }
+    if (!context.mounted) return;
+    if (input == null || input.trim().isEmpty) {
+      await addServers(context);
+      return;
+    }
+    await context.pushScoped(AppPageDestination.serversImport, extra: input);
   }
 
   void groupBy(ServerGrouping value) {
@@ -504,12 +618,15 @@ class ServersController extends PageCubit<ServersPageState>
     if (busy) return;
     selecting = selection;
     try {
+      // A live connection switches at once, like a tap on a node in a
+      // tunnel app; the coordinator swaps outbounds or restarts on failure.
       final saved = await applyConnectionChange(
         context,
         coordinator,
         {'selection': selection.toJson(), 'expert': false},
         label: (next) =>
             selectionName(AppLocalizations.of(context)!, next.selection),
+        confirmReconnect: false,
       );
       if (saved != null) configuration = saved;
     } finally {
@@ -586,6 +703,8 @@ class ServersController extends PageCubit<ServersPageState>
     if (serverBusy(row)) return;
     final l = AppLocalizations.of(context)!;
     switch (action) {
+      case ServerAction.favorite:
+        await toggleFavorite(context, row);
       case ServerAction.edit:
         await context.pushScoped(
           AppPageDestination.serverEditor,

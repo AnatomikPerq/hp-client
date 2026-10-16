@@ -46,3 +46,19 @@ GPL-3.0. Это производная работа, поэтому клиент
 Встроенное ядро — [Xray-core](https://github.com/XTLS/Xray-core),
 MPL-2.0, и обёртка [libXray](https://github.com/XTLS/libXray), MPL-2.0.
 Обе совместимы с GPL-3.0 при такой поставке.
+
+## Графика
+
+### Флаги стран (Twemoji)
+
+- **Что это:** 252 PNG 72×72 с флагами стран и регионов, а также ЕС и ООН. Ими рисуются флаги
+  узлов, потому что Windows не умеет показывать эмодзи-флаги и выводит вместо
+  них буквы кода страны.
+- **Где лежит:** `assets/flags/<код ISO 3166-1>.png`
+- **Версия:** Twemoji `15.1.0`
+- **Автор:** Twitter, Inc. и участники проекта; поддерживается
+  [jdecked/twemoji](https://github.com/jdecked/twemoji)
+- **Лицензия:** **CC-BY 4.0** (https://creativecommons.org/licenses/by/4.0/)
+
+Copyright 2019 Twitter, Inc and other contributors. Graphics licensed under
+CC-BY 4.0. Файлы не изменялись, только переименованы по коду страны.

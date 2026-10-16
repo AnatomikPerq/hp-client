@@ -6,6 +6,8 @@ abstract final class AppLayout {
   static const compactDesktopBreakpoint = 900.0;
   static const desktopSidebarWidth = 225.0;
   static const compactSidebarWidth = 190.0;
+  static const collapsedSidebarWidth = 72.0;
+  static const homeMaxWidth = 860.0;
   static const standardMaxWidth = 1120.0;
   static const advancedMaxWidth = 980.0;
   static const settingsMaxWidth = 1176.0;
@@ -59,6 +61,7 @@ abstract final class AppSpacing {
   static const desktopPageTop = 43.0;
   static const desktopPageBottom = 42.0;
   static const sidebarHorizontal = 17.0;
+  static const sidebarCollapsedHorizontal = 12.0;
   static const sidebarVertical = 36.0;
   static const macOSSidebarVertical = 16.0;
   static const macOSSidebarBrandBottom = 24.0;

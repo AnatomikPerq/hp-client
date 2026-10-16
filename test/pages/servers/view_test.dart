@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +13,7 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/service/settings/language/locale.dart';
 import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/servers/menus.dart';
+import 'package:onexray/pages/servers/node_tile.dart';
 import 'package:onexray/pages/servers/subscription/user_info.dart';
 import 'package:onexray/pages/servers/view.dart';
 import 'package:onexray/pages/theme/color.dart';
@@ -66,26 +67,26 @@ class _Controller extends ServersController {
   }
 }
 
-CoreConfigData _server(int id, String country, {bool favorite = false}) =>
-    CoreConfigData(
-      id: id,
-      name: 'Node $id',
-      type: 'outbound',
-      tags: 'vless,xhttp,tls',
-      data: base64Encode(
-        utf8.encode(
-          jsonEncode({
-            'tag': 'Node $id',
-            'protocol': 'vless',
-            'streamSettings': {'network': 'xhttp', 'security': 'tls'},
-          }),
-        ),
-      ),
-      delay: id * 20,
-      subId: 0,
-      countryCode: country,
-      favorite: favorite,
-    );
+CoreConfigData _server(
+  int id,
+  String country, {
+  bool favorite = false,
+  String protocol = 'vless',
+}) => CoreConfigData(
+  id: id,
+  name: 'Node $id',
+  type: 'outbound',
+  tags: '$protocol,xhttp,tls',
+  data: outboundCompanion({
+    'tag': 'Node $id',
+    'protocol': protocol,
+    'streamSettings': {'network': 'xhttp', 'security': 'tls'},
+  }).data.value,
+  delay: id * 20,
+  subId: 0,
+  countryCode: country,
+  favorite: favorite,
+);
 
 void main() {
   late AppDatabase db;
@@ -166,6 +167,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder iconButton(String tooltip) => find.byWidgetPredicate(
+    (widget) => widget is IconButton && widget.tooltip == tooltip,
+  );
+
   for (final locale in const [
     Locale('en'),
     Locale('zh'),
@@ -175,7 +180,7 @@ void main() {
   ]) {
     for (final width in [390.0, 1160.0]) {
       testWidgets(
-        'subscription package fits list and detail ($locale, $width)',
+        'subscription package fits the group header ($locale, $width)',
         (tester) async {
           controller.sources = [
             SubscriptionData(
@@ -192,16 +197,35 @@ void main() {
             ),
           ];
           controller.servers = [_server(1, 'JP').copyWith(subId: 1)];
-          await pumpBrowser(tester, width, locale: locale);
-          expect(find.byType(SubscriptionPackageSummary), findsWidgets);
-          expect(tester.takeException(), isNull);
-          await pumpBrowser(tester, width, locale: locale, groupPage: true);
-          expect(find.byType(SubscriptionPackageDetails), findsOneWidget);
-          expect(find.byType(SourceMenu), findsOneWidget);
-          expect(tester.takeException(), isNull);
+          for (final groupPage in [false, true]) {
+            await pumpBrowser(
+              tester,
+              width,
+              locale: locale,
+              groupPage: groupPage,
+            );
+            final meta = find.byKey(
+              const ValueKey('server-group-meta:subscription:1'),
+            );
+            expect(meta, findsOneWidget);
+            expect(find.byType(SourceMenu), findsOneWidget);
+            expect(tester.takeException(), isNull);
+            // The summary line opens the provider's full package details.
+            await tester.tap(meta);
+            await tester.pumpAndSettle();
+            expect(find.byType(SubscriptionPackageDetails), findsOneWidget);
+            expect(tester.takeException(), isNull);
+            Navigator.of(
+              tester.element(find.byType(SubscriptionPackageDetails)),
+            ).pop();
+            await tester.pumpAndSettle();
+          }
           controller.groupBy(ServerGrouping.location);
           await tester.pumpAndSettle();
-          expect(find.byType(SubscriptionPackageDetails), findsNothing);
+          expect(
+            find.byKey(const ValueKey('server-group-meta:subscription:1')),
+            findsNothing,
+          );
           expect(tester.takeException(), isNull);
         },
       );
@@ -219,25 +243,19 @@ void main() {
       timestamp: DateTime(2026, 9, 1),
     );
     controller.sources = [source];
-    controller.servers = [
-      _server(1, 'JP').copyWith(
-        subId: 1,
-        data: outboundCompanion({'tag': 'Node 1', 'protocol': 'vless'}).data,
-      ),
-    ];
+    controller.servers = [_server(1, 'JP').copyWith(subId: 1)];
     await pumpBrowser(tester, 390, groupPage: true);
-    expect(find.byType(SubscriptionPackageDetails), findsNothing);
-    expect(
-      tester
-          .widget<OutlinedButton>(
-            find.descendant(
-              of: find.byType(ServerUseButton),
-              matching: find.byType(OutlinedButton),
-            ),
-          )
-          .onPressed,
-      isNotNull,
-    );
+    final l = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
+    VoidCallback? use() => tester
+        .widget<OutlinedButton>(
+          find.descendant(
+            of: find.byType(ServerUseButton),
+            matching: find.byType(OutlinedButton),
+          ),
+        )
+        .onPressed;
+    expect(find.textContaining(l.subscriptionPackageExpired), findsNothing);
+    expect(use(), isNotNull);
     controller.sources = [
       source.copyWith(
         uploadBytes: const Value(1024),
@@ -248,85 +266,77 @@ void main() {
       ),
     ];
     await tester.pumpAndSettle();
-    expect(find.byType(SubscriptionPackageDetails), findsOneWidget);
-    final l = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
     expect(find.textContaining(l.subscriptionPackageExpired), findsOneWidget);
-    expect(
-      tester
-          .widget<OutlinedButton>(
-            find.descendant(
-              of: find.byType(ServerUseButton),
-              matching: find.byType(OutlinedButton),
-            ),
-          )
-          .onPressed,
-      isNotNull,
-    );
+    expect(use(), isNotNull);
     controller.sources = [source];
     await tester.pumpAndSettle();
-    expect(find.byType(SubscriptionPackageDetails), findsNothing);
+    expect(find.textContaining(l.subscriptionPackageExpired), findsNothing);
     expect(find.byType(ServerNodeRow), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   for (final brightness in Brightness.values) {
     for (final width in [427.0, 1160.0]) {
-      testWidgets(
-        'node latency colors preserve metadata ($brightness, $width)',
-        (tester) async {
-          final palette = AppColorTokens.fallback(brightness).palette;
-          final samples = [
-            (0, palette.runningBadge),
-            (500, palette.runningBadge),
-            (501, palette.restartingText),
-            (1000, palette.restartingText),
-            (1001, palette.primaryHover),
-            (PingDelayConstants.unknown, palette.mutedForeground),
-            (PingDelayConstants.error, palette.mutedForeground),
-            (PingDelayConstants.timeout, palette.mutedForeground),
-          ];
-          controller.servers = [
-            for (final (index, (delay, _)) in samples.indexed)
-              _server(index + 1, 'JP').copyWith(delay: delay),
-          ];
-          await pumpBrowser(
-            tester,
-            width,
-            brightness: brightness,
-            groupPage: true,
+      testWidgets('node latency colors stay readable ($brightness, $width)', (
+        tester,
+      ) async {
+        final palette = AppColorTokens.fallback(brightness).palette;
+        final samples = [
+          (0, palette.runningBadge),
+          (500, palette.runningBadge),
+          (501, palette.restartingText),
+          (1000, palette.restartingText),
+          (1001, palette.primaryHover),
+          (PingDelayConstants.unknown, null),
+          (PingDelayConstants.error, palette.mutedForeground),
+          (PingDelayConstants.timeout, palette.mutedForeground),
+        ];
+        controller.servers = [
+          for (final (index, (delay, _)) in samples.indexed)
+            _server(index + 1, 'JP').copyWith(delay: delay),
+        ];
+        await pumpBrowser(
+          tester,
+          width,
+          brightness: brightness,
+          groupPage: true,
+        );
+        final l = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
+        for (final (index, (delay, color)) in samples.indexed) {
+          final latency = find.descendant(
+            of: find.byKey(ValueKey(index + 1)),
+            matching: find.byType(NodeLatency),
           );
-          final l = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
-          for (final (index, (delay, color)) in samples.indexed) {
-            final label = controller.health(l, controller.servers[index]);
-            final prefix = '${l.countryRegionName('JP')} · ';
-            final text = tester.widget<Text>(
-              find.descendant(
-                of: find.byKey(ValueKey(index + 1)),
-                matching: find.text('$prefix$label'),
-              ),
-            );
-            final span = text.textSpan! as TextSpan;
-            expect(span.text, prefix);
-            expect(text.style!.color, palette.mutedForeground);
-            expect(span.children!.single.style!.color, color);
-            if (PingDelayConstants.isSuccessful(delay)) {
-              for (final background in [
-                palette.card,
-                palette.selectedSurface,
-              ]) {
-                final foregroundLuminance = color.computeLuminance() + 0.05;
-                final backgroundLuminance =
-                    background.computeLuminance() + 0.05;
-                final contrast = foregroundLuminance > backgroundLuminance
-                    ? foregroundLuminance / backgroundLuminance
-                    : backgroundLuminance / foregroundLuminance;
-                expect(contrast, greaterThanOrEqualTo(4.5));
-              }
+          final text = find.descendant(
+            of: latency,
+            matching: find.byType(Text),
+          );
+          if (color == null) {
+            // Never probed: no label at all.
+            expect(text, findsNothing);
+            continue;
+          }
+          final label = tester.widget<Text>(text);
+          expect(
+            label.data,
+            PingDelayConstants.isSuccessful(delay)
+                ? l.livePingResult(delay)
+                : l.livePingFailed,
+          );
+          expect(label.style!.color, color);
+          if (PingDelayConstants.isSuccessful(delay)) {
+            for (final background in [palette.card, palette.selectedSurface]) {
+              final foregroundLuminance = color.computeLuminance() + 0.05;
+              final backgroundLuminance = background.computeLuminance() + 0.05;
+              final contrast = foregroundLuminance > backgroundLuminance
+                  ? foregroundLuminance / backgroundLuminance
+                  : backgroundLuminance / foregroundLuminance;
+              expect(contrast, greaterThanOrEqualTo(4.5));
             }
           }
-          expect(tester.takeException(), isNull);
-        },
-      );
+        }
+        expect(tester.takeException(), isNull);
+      });
     }
   }
 
@@ -380,19 +390,16 @@ void main() {
               expect((button.icon as Icon).icon, LucideIcons.ellipsis);
             }
           }
+          // The group's test button spins while its test runs.
           expect(find.byType(ButtonProgressIndicator), findsOneWidget);
-          await tester.tap(
-            find.widgetWithText(OutlinedButton, l.prototypeCancel),
-          );
+          await tester.tap(iconButton(l.prototypeCancel));
           await tester.pump();
           await tester.pump();
           expect(controller.cancellingGroup(group), isTrue);
           expect(controller.state.serverTests.values.last.cancelling, isFalse);
           expect(
             tester
-                .widget<OutlinedButton>(
-                  find.widgetWithText(OutlinedButton, l.prototypePleaseWait),
-                )
+                .widget<IconButton>(iconButton(l.prototypePleaseWait))
                 .onPressed,
             isNull,
           );
@@ -400,10 +407,7 @@ void main() {
           controller.emit(controller.state.copyWith(serverTests: {}));
           AppEventBus.instance.updatePinging(false);
           await tester.pumpAndSettle();
-          expect(
-            find.widgetWithText(OutlinedButton, l.prototypeTestServers),
-            findsOneWidget,
-          );
+          expect(iconButton(l.prototypeTestServers), findsOneWidget);
           expect(find.byType(ButtonProgressIndicator), findsNothing);
           expect(tester.takeException(), isNull);
         },
@@ -459,34 +463,30 @@ void main() {
         expect(ping.isPinging, isTrue);
         expect(AppEventBus.instance.state.pinging, isTrue);
         expect(controller.state.serverTests, isEmpty);
+        // Background probes show on the automatic choice, which only the
+        // full list has.
         expect(
           find.byType(ButtonProgressIndicator),
-          width > AppLayout.mobileBreakpoint && !groupPage
-              ? findsNWidgets(2)
-              : findsOneWidget,
+          groupPage ? findsNothing : findsOneWidget,
         );
-        if (groupPage || width > AppLayout.mobileBreakpoint) {
-          expect(
-            tester
-                .widget<IconButton>(
-                  find.descendant(
-                    of: find.byType(ServerMenu),
-                    matching: find.byType(IconButton),
-                  ),
-                )
-                .onPressed,
-            isNotNull,
-          );
-          await tester.runAsync(() async {
-            await tester.tap(
-              find.widgetWithText(OutlinedButton, l.prototypeTestServers),
-            );
-          });
-          await tester.pump();
-          expect(find.byType(ShadToast), findsNothing);
-          expect(controller.state.serverTests, hasLength(1));
-          expect(batches, 1);
-        }
+        expect(
+          tester
+              .widget<IconButton>(
+                find.descendant(
+                  of: find.byType(ServerMenu),
+                  matching: find.byType(IconButton),
+                ),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        await tester.runAsync(() async {
+          await tester.tap(iconButton(l.prototypeTestServers));
+        });
+        await tester.pump();
+        expect(find.byType(ShadToast), findsNothing);
+        expect(controller.state.serverTests, hasLength(1));
+        expect(batches, 1);
         if (groupPage) {
           // A queued group must not reject single-node requests. Cancelling
           // that group must leave both node requests queued and independent.
@@ -496,6 +496,8 @@ void main() {
                 find.byTooltip('${l.prototypeMoreActions}: Imported'),
               );
             });
+            // The menu's entrance starts on the first frame after opening.
+            await tester.pump();
             await tester.pump(const Duration(seconds: 1));
             await tester.runAsync(() async {
               await tester.tap(find.text(l.prototypeTestAgain));
@@ -505,9 +507,7 @@ void main() {
           expect(controller.state.serverTests, hasLength(3));
           expect(find.byType(ShadToast), findsNothing);
           expect(batches, 1);
-          await tester.tap(
-            find.widgetWithText(OutlinedButton, l.prototypeCancel),
-          );
+          await tester.tap(iconButton(l.prototypeCancel));
           await tester.pump();
           expect(
             controller.state.serverTests.values.map((test) => test.cancelling),
@@ -524,14 +524,7 @@ void main() {
         });
       }
       await tester.pumpAndSettle();
-      expect(
-        batches,
-        groupPage
-            ? 3
-            : width > AppLayout.mobileBreakpoint
-            ? 2
-            : 1,
-      );
+      expect(batches, groupPage ? 3 : 2);
       expect(controller.state.serverTests, isEmpty);
       expect(find.byType(ButtonProgressIndicator), findsNothing);
       expect(tester.takeException(), isNull);
@@ -539,93 +532,111 @@ void main() {
   }
 
   for (final locale in const [Locale('en'), Locale('ru'), Locale('fa')]) {
-    testWidgets(
-      'desktop tabs use equal-width cards and independent scrolls: $locale',
-      (tester) async {
-        await pumpBrowser(tester, 1160, locale: locale);
-        final browser = find.byType(ServerBrowser);
-        final group = find.byType(ServerGroupView);
-        const columnWidth = (1160 - 225 - 56 - 16) / 2;
-        expect(group, findsOneWidget);
-        expect(tester.getSize(group).width, closeTo(columnWidth, 1));
-        expect(
-          find.descendant(
-            of: browser,
-            matching: find.byWidgetPredicate(
-              (widget) =>
-                  widget is Scrollable &&
-                  widget.axisDirection == AxisDirection.down,
-            ),
+    testWidgets('every group sits in one scrolling list: $locale', (
+      tester,
+    ) async {
+      await pumpBrowser(tester, 1160, locale: locale);
+      final browser = find.byType(ServerBrowser);
+      // Favorites first, then the manual group: no master/detail panes.
+      expect(find.byType(ServerGroupSliver), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: browser,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
           ),
-          findsNWidgets(2),
-        );
-        expect(find.byType(ServerNodeRow), findsNWidgets(3));
-        expect(
-          find.byType(TabBar),
-          findsNothing,
-        ); // Desktop tabs live in AppBar.
-        expect(find.byType(VerticalDivider), findsNothing);
-        expect(find.byType(PopupMenuButton<ServerAction>), findsNothing);
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(ServerNodeRow), findsNWidgets(3));
+      expect(find.byType(TabBar), findsNothing);
+      expect(find.byType(PopupMenuButton<ServerAction>), findsNothing);
 
-        controller.groupBy(ServerGrouping.location);
-        await tester.pumpAndSettle();
-        expect(group, findsOneWidget);
-        expect(tester.getSize(group).width, closeTo(columnWidth, 1));
-        expect(find.byType(ServerNodeRow), findsNWidgets(2));
-        expect(tester.takeException(), isNull);
-      },
-    );
+      controller.groupBy(ServerGrouping.location);
+      await tester.pumpAndSettle();
+      expect(find.byType(ServerGroupSliver), findsNWidgets(3));
+      expect(find.byType(ServerNodeRow), findsNWidgets(3));
+      expect(tester.takeException(), isNull);
+    });
   }
 
-  testWidgets(
-    'compact desktop stacks cards and browsing updates the shared detail',
-    (tester) async {
-      controller.groupBy(ServerGrouping.location);
-      await pumpBrowser(tester, 900);
-      final group = find.byType(ServerGroupView);
-      expect(tester.getSize(group).width, closeTo(900 - 190 - 56, 1));
-      final l = AppLocalizations.of(
-        tester.element(find.byType(ServerBrowser)),
-      )!;
-      await tester.tap(find.text(l.countryRegionName('SG')));
-      await tester.pumpAndSettle();
-      expect(controller.browsedOnMobile, isFalse);
-      expect(tester.widget<ServerGroupView>(group).group.country, 'SG');
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('a group header collapses its nodes, collapse all hides all', (
+    tester,
+  ) async {
+    controller.groupBy(ServerGrouping.location);
+    await pumpBrowser(tester, 1160);
+    final l = AppLocalizations.of(tester.element(find.byType(ServerBrowser)))!;
+    expect(find.byKey(const ValueKey(2)), findsOneWidget);
+    await tester.tap(find.text(l.countryRegionName('SG')));
+    await tester.pumpAndSettle();
+    expect(controller.collapsed('location:SG'), isTrue);
+    expect(find.byKey(const ValueKey(2)), findsNothing);
+    // The favorite JP node stays in both the favorites and the JP group.
+    expect(find.byKey(const ValueKey(1)), findsNWidgets(2));
+    final groups = controller.groups(l, filter: false);
+    controller.setAllCollapsed(groups, true);
+    await tester.pumpAndSettle();
+    expect(controller.allCollapsed(groups), isTrue);
+    expect(find.byKey(const ValueKey(1)), findsOneWidget);
+    controller.setAllCollapsed(groups, false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey(2)), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
-  testWidgets('mobile retains its tabs and separate group navigation', (
+  testWidgets('filter chips narrow nodes by favorites and protocol', (
+    tester,
+  ) async {
+    controller.servers = [
+      _server(1, 'JP', favorite: true),
+      _server(2, 'SG'),
+      _server(3, 'DE', protocol: 'trojan'),
+    ];
+    await pumpBrowser(tester, 1160);
+    final l = AppLocalizations.of(tester.element(find.byType(ServerBrowser)))!;
+    Finder chip(String label) => find.descendant(
+      of: find.byType(ServerToolbar),
+      matching: find.text(label),
+    );
+    expect(controller.protocols(), ['VLESS', 'TROJAN']);
+    await tester.tap(chip('TROJAN'));
+    await tester.pumpAndSettle();
+    expect(controller.protocolFilter, 'TROJAN');
+    expect(find.byKey(const ValueKey(3)), findsOneWidget);
+    expect(find.byKey(const ValueKey(2)), findsNothing);
+    await tester.tap(chip('TROJAN'));
+    await tester.pumpAndSettle();
+    expect(controller.protocolFilter, isNull);
+    await tester.tap(chip(l.prototypeFavorites));
+    await tester.pumpAndSettle();
+    expect(controller.favoritesOnly, isTrue);
+    expect(find.byKey(const ValueKey(1)), findsOneWidget);
+    expect(find.byKey(const ValueKey(2)), findsNothing);
+    await tester.tap(chip(l.serversFilterAll));
+    await tester.pumpAndSettle();
+    expect(controller.filtering, isFalse);
+    expect(find.byKey(const ValueKey(2)), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the grouping toggle switches to locations on mobile', (
     tester,
   ) async {
     await pumpBrowser(tester, 427);
-    expect(find.byType(TabBar), findsOneWidget);
-    expect(find.byType(ServerGroupView), findsNothing);
     final l = AppLocalizations.of(tester.element(find.byType(ServerBrowser)))!;
     expect(controller.grouping, ServerGrouping.subscription);
-    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.tabs.map((tab) => (tab as Tab).text), [
-      l.prototypeBySubscription,
-      l.prototypeByNodeLocation,
-    ]);
-    expect(
-      DefaultTabController.of(tester.element(find.byType(TabBar))).index,
-      0,
-    );
-    await tester.tap(find.widgetWithText(Tab, l.prototypeByNodeLocation));
+    expect(find.byType(TabBar), findsNothing);
+    await tester.tap(find.text(l.prototypeByNodeLocation));
     await tester.pumpAndSettle();
     expect(controller.grouping, ServerGrouping.location);
-    await tester.tap(find.text(l.countryRegionName('SG')));
-    await tester.pumpAndSettle();
-    expect(controller.browsedOnMobile, isTrue);
+    expect(find.text(l.countryRegionName('SG')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   for (final width in [427.0, 900.0, 1160.0]) {
-    testWidgets('node lists build lazily and scroll independently at $width', (
-      tester,
-    ) async {
-      final mobile = width <= AppLayout.mobileBreakpoint;
+    testWidgets('node lists build lazily at $width', (tester) async {
       controller.groupBy(ServerGrouping.location);
       controller.servers = [
         for (var id = 1; id <= 200; id++) _server(id, 'JP'),
@@ -653,47 +664,30 @@ void main() {
         ].indexed)
           _server(201 + index, country),
       ];
-      await pumpBrowser(tester, width, groupPage: mobile);
-      final group = find.byType(ServerGroupView);
-      final rows = find.descendant(
-        of: group,
-        matching: find.byType(ServerNodeRow),
-      );
-      final groupScroll = find.descendant(
-        of: group,
-        matching: find.byType(Scrollable),
-      );
-      final list = tester.widget<ListView>(
-        find.descendant(of: group, matching: find.byType(ListView)),
-      );
-      expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
-      expect(list.shrinkWrap, isFalse);
-      expect(rows.evaluate().length, inInclusiveRange(1, 25));
+      await pumpBrowser(tester, width);
+      final rows = find.byType(ServerNodeRow);
+      expect(rows.evaluate().length, inInclusiveRange(1, 30));
       expect(find.byKey(const ValueKey(200)), findsNothing);
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey(200)),
         1000,
-        scrollable: groupScroll,
-        maxScrolls: 40,
+        scrollable: find
+            .descendant(
+              of: find.byType(ServerBrowser),
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Scrollable &&
+                    widget.axisDirection == AxisDirection.down,
+              ),
+            )
+            .first,
+        maxScrolls: 60,
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey(200)), findsOneWidget);
-      expect(rows.evaluate().length, lessThan(25));
-      final last = tester.widget<ServerNodeRow>(
-        find.byKey(const ValueKey(200)),
-      );
-      expect(last.showDivider, isFalse);
-      if (!mobile) {
-        expect(scroll.offset, 0);
-        final position = tester.state<ScrollableState>(groupScroll).position;
-        final offset = position.pixels;
-        expect(offset, greaterThan(0));
-        scroll.jumpTo(200);
-        await tester.pumpAndSettle();
-        expect(scroll.offset, 200);
-        expect(position.pixels, offset);
-      }
+      expect(rows.evaluate().length, lessThan(30));
+      expect(scroll.offset, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
   }
@@ -738,23 +732,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'desktop node menu uses the same action dialog and closes without a mutation',
-    (tester) async {
-      await pumpBrowser(tester, 1160);
+  for (final width in [427.0, 1160.0]) {
+    testWidgets('the node menu closes without a mutation at $width', (
+      tester,
+    ) async {
+      await pumpBrowser(tester, width);
       final l = AppLocalizations.of(
         tester.element(find.byType(ServerBrowser)),
       )!;
       await tester.tap(
-        find.byTooltip('${l.prototypeMoreActions}: Node 1').first,
+        find.byTooltip('${l.prototypeMoreActions}: Node 2').first,
       );
       await tester.pumpAndSettle();
-      expect(find.byType(ServerActionsMenu), findsOneWidget);
-      await tester.tap(find.byTooltip(l.prototypeCloseDialog));
+      // Phones get the sheet with hints, desktops a popup at the button.
+      if (width <= AppLayout.mobileBreakpoint) {
+        expect(find.byType(ServerActionsMenu), findsOneWidget);
+        await tester.tap(find.byTooltip(l.prototypeCloseDialog));
+      } else {
+        expect(find.byType(ServerActionsMenu), findsNothing);
+        expect(find.text(l.prototypeEditServer), findsOneWidget);
+        expect(find.text(l.prototypeAddFavorite), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      }
       await tester.pumpAndSettle();
-      expect(find.byType(ServerActionsMenu), findsNothing);
+      expect(find.text(l.prototypeEditServer), findsNothing);
       expect(controller.servers, hasLength(2));
       expect(tester.takeException(), isNull);
-    },
-  );
+    });
+  }
 }

@@ -15,7 +15,13 @@ import 'package:onexray/pages/shared/widgets/settings_page.dart';
 class AdvancedPage extends StatelessWidget {
   final WidgetBuilder? xrayBuilder;
   final OpenTunnelPage? openTunnel;
-  const AdvancedPage({super.key, this.xrayBuilder, this.openTunnel});
+  final int initialTab;
+  const AdvancedPage({
+    super.key,
+    this.xrayBuilder,
+    this.openTunnel,
+    this.initialTab = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +32,7 @@ class AdvancedPage extends StatelessWidget {
       create: (_) => AdvancedController(),
       child: DefaultTabController(
         length: 2,
+        initialIndex: initialTab.clamp(0, 1),
         child: Scaffold(
           appBar: PageAppBar(
             title: Text(l.prototypeAdvanced),

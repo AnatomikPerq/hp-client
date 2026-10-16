@@ -47,6 +47,68 @@ class SettingsPage extends StatelessWidget {
                   horizontal: mobile ? 13 : 14,
                   vertical: 10,
                 );
+                final language = SettingRow(
+                  title: l10n.prototypeLanguage,
+                  value: languageNativeLabel(l10n, preferences.languageCode),
+                  minHeight: rowHeight,
+                  contentPadding: rowPadding,
+                  titleStyle: AppTypography.settingsRow,
+                  valueStyle:
+                      (mobile
+                              ? AppTypography.settingsVersion
+                              : AppTypography.desktopSettingsRowValue)
+                          .copyWith(color: palette.mutedStrong),
+                  leading: const Icon(LucideIcons.languages),
+                  showChevron: true,
+                  onTap: () => controller.openSetting(
+                    context,
+                    AppPageDestination.language,
+                  ),
+                );
+                // Fork: Advanced is no longer a tab; its two panes open here.
+                SettingRow advancedRow(
+                  IconData icon,
+                  String title,
+                  String hint,
+                  int tab,
+                ) => SettingRow(
+                  title: title,
+                  subtitle: hint,
+                  minHeight: mobile ? 58 : 64,
+                  contentPadding: rowPadding,
+                  titleStyle: AppTypography.settingsRow,
+                  subtitleStyle:
+                      (mobile
+                              ? AppTypography.settingsHint
+                              : AppTypography.desktopSettingsHint)
+                          .copyWith(color: palette.mutedForeground),
+                  leading: Icon(icon),
+                  showChevron: true,
+                  onTap: () => context.pushScoped(
+                    AppPageDestination.advanced,
+                    extra: tab,
+                  ),
+                );
+                final advanced = SettingSection(
+                  title: l10n.prototypeAdvanced,
+                  icon: LucideIcons.slidersHorizontal,
+                  padding: EdgeInsets.zero,
+                  dividerIndent: 0,
+                  children: [
+                    advancedRow(
+                      LucideIcons.network,
+                      l10n.prototypeVpnTunnel,
+                      l10n.settingsTunnelHint,
+                      0,
+                    ),
+                    advancedRow(
+                      LucideIcons.terminal,
+                      l10n.prototypeXrayRuntimeDiagnostics,
+                      l10n.settingsXrayHint,
+                      1,
+                    ),
+                  ],
+                );
                 final appearance = SettingSection(
                   title: l10n.prototypeAppearance,
                   icon: LucideIcons.palette,
@@ -58,6 +120,7 @@ class SettingsPage extends StatelessWidget {
                       onSelected: (theme) =>
                           controller.setTheme(context, theme),
                     ),
+                    language,
                     if (AppPlatform.isAndroid)
                       SettingRow(
                         title: l10n.trafficWidgetAdd,
@@ -99,27 +162,6 @@ class SettingsPage extends StatelessWidget {
                           AppPageDestination.appIcon,
                         ),
                       ),
-                  ],
-                );
-                final language = SettingSection(
-                  title: l10n.prototypeLanguage,
-                  icon: LucideIcons.languages,
-                  padding: EdgeInsets.zero,
-                  children: [
-                    SettingRow(
-                      title: languageNativeLabel(
-                        l10n,
-                        preferences.languageCode,
-                      ),
-                      minHeight: rowHeight,
-                      contentPadding: rowPadding,
-                      titleStyle: AppTypography.settingsRow,
-                      showChevron: true,
-                      onTap: () => controller.openSetting(
-                        context,
-                        AppPageDestination.language,
-                      ),
-                    ),
                   ],
                 );
                 final startup = SettingSection(
@@ -228,7 +270,7 @@ class SettingsPage extends StatelessWidget {
                   ],
                 );
                 return SettingsPageScroll(
-                  desktopMaxWidth: AppLayout.settingsMaxWidth,
+                  desktopMaxWidth: AppLayout.homeMaxWidth,
                   padding: EdgeInsets.zero,
                   child: Padding(
                     padding: EdgeInsetsDirectional.fromSTEB(
@@ -253,75 +295,15 @@ class SettingsPage extends StatelessWidget {
                               ),
                             ),
                           ),
-                        Builder(
-                          builder: (context) =>
-                              MediaQuery.sizeOf(context).width >
-                                  AppLayout.compactDesktopBreakpoint
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        children: [
-                                          appearance,
-                                          SizedBox(height: sectionGap),
-                                          language,
-                                          SizedBox(height: sectionGap),
-                                          startup,
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 56),
-                                    Expanded(
-                                      child: Column(
-                                        children: [
-                                          data,
-                                          SizedBox(height: sectionGap),
-                                          about,
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  children: [
-                                    appearance,
-                                    SizedBox(height: sectionGap),
-                                    language,
-                                    SizedBox(height: sectionGap),
-                                    startup,
-                                    SizedBox(height: sectionGap),
-                                    data,
-                                    SizedBox(height: sectionGap),
-                                    about,
-                                  ],
-                                ),
-                        ),
-                        Container(
-                          padding: mobile
-                              ? const EdgeInsetsDirectional.fromSTEB(
-                                  10,
-                                  25,
-                                  10,
-                                  0,
-                                )
-                              : const EdgeInsets.only(top: 19, bottom: 3),
-                          decoration: mobile
-                              ? null
-                              : BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(color: palette.border),
-                                  ),
-                                ),
-                          child: Text(
-                            l10n.prototypeSettingsLocationNote,
-                            style:
-                                (mobile
-                                        ? AppTypography.settingsNote
-                                        : AppTypography.desktopSettingsNote)
-                                    .copyWith(color: palette.mutedForeground),
-                          ),
-                        ),
+                        appearance,
+                        SizedBox(height: sectionGap),
+                        startup,
+                        SizedBox(height: sectionGap),
+                        advanced,
+                        SizedBox(height: sectionGap),
+                        data,
+                        SizedBox(height: sectionGap),
+                        about,
                       ],
                     ),
                   ),

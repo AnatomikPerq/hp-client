@@ -4,6 +4,7 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
+import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 
 /// TUN / system proxy switch shown under the connection button on desktop.
@@ -15,6 +16,7 @@ class RunModeSwitch extends StatelessWidget {
     required this.enabled,
     required this.pending,
     required this.onChanged,
+    this.compact = false,
   });
 
   final DesktopRunMode value;
@@ -23,10 +25,53 @@ class RunModeSwitch extends StatelessWidget {
   final bool pending;
   final ValueChanged<DesktopRunMode> onChanged;
 
+  /// Home: a small pill above the orb; the mode hint moves to a tooltip.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final palette = ColorManager.palette(context);
+    final hint = value == DesktopRunMode.tun
+        ? l.runModeTunHint
+        : l.runModeSystemProxyHint(proxyPort);
+    if (compact) {
+      return Tooltip(
+        message: hint,
+        child: Semantics(
+          container: true,
+          label: l.runModeLabel,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(AppRadii.pill),
+              border: Border.all(color: palette.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final mode in DesktopRunMode.values)
+                  _Segment(
+                    icon: mode == DesktopRunMode.tun
+                        ? LucideIcons.network
+                        : LucideIcons.globe,
+                    label: mode == DesktopRunMode.tun
+                        ? l.runModeTun
+                        : l.runModeSystemProxy,
+                    selected: mode == value,
+                    pending: pending && mode != value,
+                    compact: true,
+                    onTap: enabled && mode != value
+                        ? () => onChanged(mode)
+                        : null,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,9 +110,7 @@ class RunModeSwitch extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          value == DesktopRunMode.tun
-              ? l.runModeTunHint
-              : l.runModeSystemProxyHint(proxyPort),
+          hint,
           textAlign: TextAlign.center,
           style: AppTypography.supporting.copyWith(
             color: palette.mutedForeground,
@@ -85,6 +128,7 @@ class _Segment extends StatelessWidget {
     required this.selected,
     required this.pending,
     required this.onTap,
+    this.compact = false,
   });
 
   final IconData icon;
@@ -92,6 +136,7 @@ class _Segment extends StatelessWidget {
   final bool selected;
   final bool pending;
   final VoidCallback? onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -107,16 +152,17 @@ class _Segment extends StatelessWidget {
       label: label,
       child: Material(
         color: selected ? palette.primarySolid : Colors.transparent,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(compact ? AppRadii.pill : 9),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(compact ? AppRadii.pill : 9),
           child: ConstrainedBox(
-            // Tappable targets stay at least 40pt high.
-            constraints: const BoxConstraints(minHeight: 40),
+            // Tappable targets stay at least 40pt high, 32 in the pill.
+            constraints: BoxConstraints(minHeight: compact ? 32 : 40),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 10),
               child: Row(
+                mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (pending)
@@ -124,16 +170,25 @@ class _Segment extends StatelessWidget {
                   else
                     Icon(icon, size: 16, color: foreground),
                   const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
+                  if (compact)
+                    Text(
                       label,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.connectCaption.copyWith(
                         color: foreground,
                       ),
+                    )
+                  else
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.connectCaption.copyWith(
+                          color: foreground,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
