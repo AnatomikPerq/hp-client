@@ -8,9 +8,16 @@
 添加和刷新共用 HTTPS 下载、可选 Age 解密、文本分类、libXray 校验及事务入库。
 只有当前使用方式有可用条目才创建或替换；网络、HWID、解密、校验、零可用或写库失败均保留旧缓存、
 套餐、更新时间及输入草稿。报告本轮当前方式实际导入数，不把两类缓存相加，不比较节点 hash 或匹配提供方稳定 ID。
-普通节点和完整配置订阅添加、刷新直接提交；含手工 Raw/Custom/Geodata 的混合导入保留预览确认。
+普通节点和完整配置订阅添加、刷新直接提交；Remnawave 非 JSON 响应先确认是否转为普通订阅，
+含手工 Raw/Custom/Geodata 的混合导入保留预览确认。
 
 名称、HTTPS URL、Age 成对输入由服务检查；重复 URL 在写入事务中拒绝，下载前快速检查不替代提交复核。
+每个来源可选填 `userAgent`，仅覆盖该订阅本次下载的 `User-Agent` 请求头，自定义值优先。
+选择 Remnawave 时，空白输入默认填入 `v2rayN/<OneXray 版本> <完整 OneXray UA>`；仅增加提供方识别 JSON 所需的产品前缀，
+版本、包名、构建号和平台信息仍来自 OneXray。旧来源或清空后的 Remnawave 同样使用此默认值；其它来源留空沿用全局下载设置。
+切离 Remnawave 时清空本次表单自动填入且未经修改的 UA；手动输入、分享链接及已保存的显式 UA 保留。
+添加、编辑和刷新共用此设置，URL 原样请求，不自动附加格式端点。
+自定义值须为单行 ASCII 文本；UA 只影响提供方选择的响应，解密、分类及 libXray 校验仍照常执行。
 编辑只保存来源设置并使旧请求失效，不下载、不替换缓存或热切换当前运行，也不要求已经有可用缓存。
 更新保护准备中、待启动、运行中、固定选择、最终出口及收藏原行，保留它们的 ID 与配置原文，并插入全部新结果；
 同名新旧条目允许并存，保护行不计入本轮导入数。保护解除后后续更新清理旧行，不原地覆盖运行配置。
@@ -20,11 +27,17 @@
 
 来源保存 `panel=generic|remnawave` 和 `mode=appManaged|providerManaged`，分别表示面板标记与活动缓存类型。
 旧来源和旧备份缺字段时默认为 `generic/appManaged`。面板标记不替代格式识别；所有来源都先检查解密后的完整 Xray JSON。
-Remnawave 标记要求完整 Xray 配置；仅使用用户输入的 HTTPS URL，不追加 `/json`、冒用其它客户端 UA、
-通过 Accept 假定响应格式或替用户开启 HWID。
+Remnawave 在 Age 解密后先判断是否为 JSON：有效 JSON 统一进入完整配置解析，即使只有 `outbounds`；
+JSON 结构或 libXray 校验失败直接报错，不再尝试普通节点解析。
+非 JSON 响应由前台操作提示是否转为普通订阅；用户同意后将同一次响应的明文交给 libXray 节点解析，不重新下载。
+前台刷新遇到同一来源或整批的在途后台刷新时，补入确认回调，复用当前请求及解析结果；仅后台刷新仍不弹出确认。
+解析成功才在保存节点的同一事务中将 `panel/mode` 改为 `generic/appManaged`，保留来源 ID、URL、UA、Age 和 HWID。
+取消、普通解析失败或后台无交互上下文时保持来源与缓存原样；确认期间的来源编辑或删除仍使旧更新失效。
+仅使用用户输入的 HTTPS URL，不追加 `/json`，不通过 Accept 假定响应格式或替用户开启 HWID。
 
 新来源的“根据订阅格式”是尚未决定的输入状态：普通节点默认 App 管理，完整 JSON 默认提供方模式；
-成功导入后保存明确的两种 mode，已有来源刷新保持原 mode。用户也可在添加时明确选择。
+成功导入后保存明确的两种 mode，已有来源刷新保持原 mode；确认从 Remnawave 转为普通订阅时改为 App 管理。
+用户也可在添加时明确选择。
 一次完整响应同时保存完整配置与可独立表示的普通 outbound 派生缓存；含 `dialerProxy/proxySettings` 依赖的代理
 不会删掉引用后伪装成独立节点，系统辅助出站不作为普通节点。
 
@@ -40,7 +53,7 @@ App 的 Smart/Custom、智能选路和 LAN 共享偏好保留，切回 App 管�
 解密后的单对象或非空数组都可作为完整配置候选，数组每项独立保存为 `CoreConfigType.Remnawave`，关联同一来源。
 完整对象先应用 App 入口与系统出站适配，再交给 libXray 校验；数组中的非对象元素或任一校验失败使整次导入失败。
 不转换 Sing-box 配置；空数组按无配置处理。
-仅含 `outbounds` 的普通 JSON 继续旧节点解析路径；有其它根字段的完整候选校验失败不降级为普通节点。
+Generic 来源仅含 `outbounds` 的普通 JSON 继续旧节点解析路径；有其它根字段的完整候选校验失败不降级为普通节点。
 协议、算法等内核语义交给 libXray，不在 App 维护第二套 Core schema。
 
 完整对象不经过普通分享字段投影；outbounds 顺序/tag、链路、routing、DNS、balancers、observatory、mux 及未知扩展字段
@@ -62,7 +75,7 @@ App 的 Smart/Custom、智能选路和 LAN 共享偏好保留，切回 App 管�
 超额剩余显示零，已用保留原值；IEC 单位，日期/获取时间使用本地时间。过期或用尽只提示，不限制连接和选节点。
 
 套餐和节点在同一事务提交，获取时间来自响应；成功但无有效信息清除旧缓存，部分信息不拼接旧响应。
-仅重命名或改变 panel/mode 保留套餐；URL/Age/HWID 请求设置变化后清空。
+仅重命名或改变 panel/mode 保留套餐；URL/Age/HWID/User-Agent 请求设置变化后清空。
 panel/mode 变化同样使旧导入失效，迟到响应不得覆盖编辑、切换或删除结果。
 列表摘要和分组详情明确“提供方信息、非实时”，无数据隐藏区域，缺字段显示未提供。
 套餐不是 App 流量，不增加请求、定时器或周期，不进入分享和备份；恢复后由正常更新重新获取。
@@ -117,13 +130,14 @@ Age App Link 只携带算法，不带公私钥；接收端生成新密钥对，�
 
 ```text
 /config/add?type=outbound|raw|custom|custom-advanced&data=<base64>#<name>
-/sub/add?url=<https-url>&age=x25519|hybrid&panel=generic|remnawave&mode=appManaged|providerManaged#<name>
+/sub/add?url=<https-url>&age=x25519|hybrid&panel=generic|remnawave&mode=appManaged|providerManaged&userAgent=<encoded-user-agent>#<name>
 /dat/add?type=domain|ip&url=<https-url>#<name>
 ```
 
 解析严格检查 scheme、host、path、类型、重复/未知参数、Base64；订阅和 Geodata URL 只接受 HTTPS。
 旧 Profile/full 拒绝，不为退休类型生成链接；类型显式指定，不根据字段猜常规/高级。
 订阅链接的 age/panel/mode 可省略：缺 panel 为 generic，缺 mode 由首次响应决定；新生成链接携带保存的 panel/mode。
+可选 `userAgent` 保留该来源的显式下载 UA；省略时使用接收端对应面板的默认 UA。
 未知或重复参数拒绝，链接不包含 HWID、发送开关或秘密密钥；重复 URL 导入只刷新已有来源，不覆盖它的 panel/mode。
 Raw 保留原文语义，高级不经过普通模型；两类 Custom 共用名称唯一和三份上限，详见 [配置合同](xray-configuration.md)。
 

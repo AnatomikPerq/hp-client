@@ -103,6 +103,10 @@ version/pub get → native libraries/Core/Geodata → FFI generation → platfor
 build number through the environment, without rewriting Fastfile. Linux collects
 only the current version's ZIP/DEB.
 
+FFI generation runs `dart run tool/ffigen.dart` after refreshing the native
+headers. Use the same command from the App root after changing `c/include/` or
+the generator configuration; do not edit the generated bindings manually.
+
 Native outputs and Geodata are refreshed. Apple updates Xcode build numbers;
 `macos_se` also replaces `macos/` with `macos_se/`, preserving framework symlinks.
 Use a disposable checkout for those operations.
@@ -185,8 +189,10 @@ build jobs together.
   YAML files by manifest type and locale; dry-run returns before handling `--output`.
   [winget_manifest.py](winget_manifest.py) retains identity, release URL and user
   installation policy checks. Komac supplies the schema-required `InstallerSha256`;
-  no extra comparison with GitHub asset digests is performed. Only the final
-  Komac submit opens an external PR; use `--dry-run` for local validation.
+  no extra comparison with GitHub asset digests is performed. Before submission,
+  `komac sync-fork` updates the organization fork using the same PAT and
+  `KOMAC_FORK_OWNER` as the final submit. Fork synchronization changes GitHub;
+  the final Komac submit opens an external PR. Use `--dry-run` for local validation.
 
 For script checks, run `python -m unittest discover -s tests` from `build_scripts/`.
 Tests simulate external packagers; they do not prove signed installation, VPN,

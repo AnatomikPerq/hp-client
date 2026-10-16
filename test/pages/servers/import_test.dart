@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/enum.dart';
+import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/model/geo_data_type.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/service/settings/language/locale.dart';
@@ -25,12 +26,70 @@ import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
 import 'package:onexray/service/connect/raw/validator.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
   setUp(() {
     final bus = AppEventBus();
     addTearDown(bus.close);
   });
+
+  test(
+    'panel changes clear only the unedited auto-filled Remnawave UA',
+    () async {
+      PackageInfo.setMockInitialValues(
+        appName: 'OneXray',
+        packageName: 'net.yuandev.onexray',
+        version: '26.10.4',
+        buildNumber: '104',
+        buildSignature: '',
+      );
+      final controller = ServerImportController(
+        loadSubscription: (_) async => null,
+      );
+      addTearDown(controller.close);
+
+      await controller.setPanel(SubscriptionPanel.generic);
+      expect(controller.userAgent.text, isEmpty);
+      await controller.setPanel(SubscriptionPanel.remnawave);
+      expect(
+        controller.userAgent.text,
+        'v2rayN/26.10.4 OneXray/26.10.4 '
+        '(net.yuandev.onexray; build:104; ${Platform.operatingSystem})',
+      );
+      expect(controller.state.userAgent, controller.userAgent.text);
+      final generated = controller.userAgent.text;
+
+      await controller.setPanel(SubscriptionPanel.generic);
+      expect(controller.userAgent.text, isEmpty);
+      expect(controller.state.userAgent, isEmpty);
+      for (final custom in ['Custom/1.0', generated]) {
+        controller.userAgent.clear();
+        controller.userAgent.text = custom;
+        await controller.setPanel(SubscriptionPanel.remnawave);
+        await controller.setPanel(SubscriptionPanel.generic);
+        expect(controller.userAgent.text, custom);
+      }
+
+      controller.userAgent.clear();
+      final switching = controller.setPanel(SubscriptionPanel.remnawave);
+      await controller.setPanel(SubscriptionPanel.generic);
+      await switching;
+      expect(controller.userAgent.text, isEmpty);
+
+      controller.userAgent.clear();
+      final pending = controller.setPanel(SubscriptionPanel.remnawave);
+      controller.userAgent.text = 'Typed while loading';
+      await pending;
+      expect(controller.userAgent.text, 'Typed while loading');
+
+      controller.userAgent.clear();
+      final closing = controller.setPanel(SubscriptionPanel.remnawave);
+      await controller.close();
+      await closing;
+    },
+  );
+
   testWidgets('file import keeps loading while subscriptions download', (
     tester,
   ) async {
@@ -339,7 +398,7 @@ void main() {
       final inputs = <SubscriptionInput>[];
       final controller = ServerImportController(
         loadSubscription: (_) async => null,
-        insertSubscription: (input) async {
+        insertSubscription: (input, {confirmOrdinary}) async {
           inputs.add(input);
           return const SubscriptionInsertResult(
             status: SubscriptionUpdateResult.hwidRequired,
@@ -610,6 +669,7 @@ void main() {
         id: 7,
         name: 'Provider',
         url: 'https://provider.example/list',
+        userAgent: 'Example/old',
         ageSecretKey: 'secret',
         agePublicKey: 'public',
         hwidEnabled: true,
@@ -661,11 +721,13 @@ void main() {
     );
     expect(controller.secretKey.text, 'secret');
     expect(controller.publicKey.text, 'public');
+    expect(controller.userAgent.text, 'Example/old');
     expect(controller.state.hwidEnabled, isTrue);
     controller.toggleSecret();
     expect(controller.state.obscureSecret, false);
     controller.name.text = 'Renamed';
     controller.url.text = 'https://different.example/list';
+    controller.userAgent.text = 'Example/new';
     expect(controller.state.hwidEnabled, isFalse);
     controller.setHwidEnabled(true);
     await _tapVisible(tester, find.text('Save'));
@@ -687,6 +749,7 @@ void main() {
     expect(savedId, 7);
     expect(saved?.name, 'Renamed');
     expect(saved?.url, 'https://different.example/list');
+    expect(saved?.userAgent, 'Example/new');
     expect(saved?.ageSecretKey, 'secret');
     expect(saved?.agePublicKey, 'public');
     expect(saved?.hwidEnabled, isTrue);
@@ -832,7 +895,7 @@ void main() {
         SubscriptionInput? submitted;
         final controller = ServerImportController(
           loadSubscription: (_) async => null,
-          insertSubscription: (input) async {
+          insertSubscription: (input, {confirmOrdinary}) async {
             submitted = input;
             return const SubscriptionInsertResult(
               status: SubscriptionUpdateResult.success,
@@ -843,6 +906,7 @@ void main() {
         );
         controller.name.text = 'Provider';
         controller.url.text = 'https://example.test/subscription';
+        controller.userAgent.text = 'Example/test';
         controller.setPanel(SubscriptionPanel.remnawave);
         controller.setMode(mode);
         await tester.pumpWidget(
@@ -870,12 +934,92 @@ void main() {
         await tester.pumpAndSettle();
         expect(submitted!.panel, SubscriptionPanel.remnawave);
         expect(submitted!.mode, mode);
+        expect(submitted!.userAgent, 'Example/test');
         expect(find.byType(ServerImportFormPage), findsNothing);
         expect(tester.takeException(), isNull);
         await controller.close();
       }
     },
   );
+
+  for (final approved in [false, true]) {
+    testWidgets(
+      'non-JSON subscription conversion can be ${approved ? "accepted" : "cancelled"}',
+      (tester) async {
+        var parsed = false;
+        final controller = ServerImportController(
+          loadSubscription: (_) async => null,
+          insertSubscription: (input, {confirmOrdinary}) async {
+            expect(confirmOrdinary, isNotNull);
+            if (!await confirmOrdinary!(input.name)) {
+              return const SubscriptionInsertResult(
+                status: SubscriptionUpdateResult.invalidContent,
+                error: AppFailure(FailureCategory.conflict, 'cancelled'),
+              );
+            }
+            parsed = true;
+            return const SubscriptionInsertResult(
+              status: SubscriptionUpdateResult.success,
+              subId: 8,
+              count: 2,
+            );
+          },
+        );
+        addTearDown(controller.close);
+        controller.name.text = 'Provider';
+        controller.url.text = 'https://example.test/subscription';
+        controller.userAgent.text = 'Custom/1.0';
+        await controller.setPanel(SubscriptionPanel.remnawave);
+        await tester.pumpWidget(
+          _app(
+            Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showAppDialog<ServerImportResult>(
+                  context,
+                  (_) => ServerImportFormPage(
+                    controller: controller,
+                    action: ServerImportAction.subscription,
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        final l = AppLocalizations.of(
+          tester.element(find.byType(ServerImportFormPage)),
+        )!;
+        await _tapVisible(tester, find.text(l.prototypeAddSubscription).last);
+        await tester.pump(const Duration(milliseconds: 350));
+        expect(find.text(l.subscriptionRemnawaveFormatTitle), findsOneWidget);
+        expect(
+          find.text(l.subscriptionConvertToOrdinaryMessage('Provider')),
+          findsOneWidget,
+        );
+        expect(parsed, isFalse);
+        await tester.tap(
+          find
+              .text(approved ? l.subscriptionConvertToOrdinary : l.buttonCancel)
+              .last,
+        );
+        await tester.pumpAndSettle();
+        expect(parsed, approved);
+        expect(controller.state.busy, isFalse);
+        expect(controller.state.error, isNull);
+        expect(
+          find.byType(ServerImportFormPage),
+          approved ? findsNothing : findsOneWidget,
+        );
+        if (!approved) {
+          expect(controller.state.panel, SubscriptionPanel.remnawave);
+          expect(controller.url.text, 'https://example.test/subscription');
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'mode edit saves locally and reports refresh plus incompatible selection',
@@ -898,7 +1042,7 @@ void main() {
           submitted = input;
           return SubscriptionUpdateResult.success;
         },
-        insertSubscription: (_) async {
+        insertSubscription: (_, {confirmOrdinary}) async {
           downloads++;
           throw StateError('Editing must not import or download');
         },

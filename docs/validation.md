@@ -36,8 +36,14 @@
 
 以下是当前功能的验证合同，不记录某次构建或设备通过状态；执行结果保存在独立验收材料。
 
-- 在隔离库验证 schema 1–6 升至 7、新安装和重复打开：ID、JSON、Age/HWID、订阅及旧 Raw 保留，
+- 在隔离库验证 schema 1–7 升至 8、新安装和重复打开：ID、JSON、Age/HWID、订阅及旧 Raw 保留，
   旧地区列删除、panel/mode 缺省正确，未知选择统一回退，退休 full 不激活。
+  旧来源 UA 为空；显式 UA 只覆盖当前订阅请求，添加、刷新、编辑清空、分享及备份往返保持原始 URL，
+  不影响其它来源、Geodata 或全局下载 UA；Remnawave 空值使用带 OneXray 版本的最小 v2rayN 前缀，
+  面板选择填入默认值且不覆盖自定义输入；UA 变更使迟到请求失效，失败保留既有配置。
+- Remnawave 的 JSON（含仅 outbounds）进入完整解析；有效 JSON 的结构/内核错误不触发转换。
+  非 JSON 先确认，再把同一份 Age 解密明文交给 libXray；新增与刷新成功后原子保存 generic/appManaged，
+  取消、无前台确认、普通解析失败及确认期间来源变化均保留旧数据，受保护的运行/选择行继续保留。
 - 同一脱敏完整数组含普通 host 与 chain/balancer 图：逐项保存全部 Map，名称与原图分离；
   Age 解密先于分类，错误数组、Sing-box/资料 JSON、空结果和 native 校验失败不提交部分缓存。
 - 两种 mode 的活动列表、自动候选、最终出口、批测和计数统一过滤；离线切换不下载、重连或清套餐，
@@ -71,6 +77,7 @@ iOS Simulator 不能通过绕过它来验证刷新。设备验收需要检查 VP
 ```shell
 flutter gen-l10n
 dart run build_runner build
+dart run tool/ffigen.dart
 dart run tool/check_layer_dependencies.dart
 dart format --output=none --set-exit-if-changed <changed Dart files>
 flutter analyze
@@ -85,6 +92,8 @@ Pigeon、FFI、Drift 或本地化变更先生成对应输出；只改测试时�
   外部打包工具替身证明编排，不证明生成包能安装；渠道发布还需实际产物检查。
 - macOS SE 文件交接：`bash tool/test_dat_file_transfer.sh` 编译生产 Swift，
   验证完整清单、空集合、消息往返与发布回滚，不启动 App/VPN。
+- Apple 文件备份：`bash tool/test_backup_file_store.sh` 编译生产文件存储实现，验证首字节内容探测、绑定不覆盖、替换写入、
+  新实例重新访问、解绑保留文件及大小限制。命令行使用普通 bookmark，持久沙盒授权需在签名 App 中核对。
 - macOS SE 激活：`bash tool/test_system_extension_activation.sh` 编译生产 Swift，
   验证并发请求合并及完成后的重新激活；使用可控系统回复，不申请真实扩展授权或启动 VPN。
 - Android 原生：在 `android/` 执行 `./gradlew :app:testDebugUnitTest`，
@@ -98,6 +107,9 @@ Pigeon、FFI、Drift 或本地化变更先生成对应输出；只改测试时�
 
 ## 平台验收
 
+Android 模拟器直接使用当前分支构建覆盖已经安装的 OneXray，保留已有数据，不另建测试包或 applicationId。
+验证使用脱敏输入或临时响应替身，调用真实原生解析；完成后只清理本轮新增的测试数据。
+
 - Android UI 用模拟器验证；系统导入、导出和扫码可记录跳过。Widget 检查 4×2 最小尺寸、
   缩放、旋转、主题、语言与启动/停止。通知和真实代理请求需运行 VPN 后验证。
 - Android 自动化需普通第三方 UID 的后台启停、冷进程、Token 撤销和清理/恢复阻断，
@@ -106,4 +118,4 @@ Pigeon、FFI、Drift 或本地化变更先生成对应输出；只改测试时�
   和签名包需单独人工验收，不以纯 Dart/Swift 测试替代。
 - Windows/Linux 在对应环境验收；Windows 区分 EXE/ZIP 与 MSIX 的启动、退出、权限和数据根。
 - 云备份需真实提供商的授权、文件覆盖、重新打开及跨设备恢复；本地写入成功不等于云端同步完成。
-- 完成后区分自动测试、模拟器、真机、签名渠道及未测项；测试目标与数据始终隔离。
+- 完成后区分自动测试、模拟器、真机、签名渠道及未测项；测试输入使用脱敏数据，并保留原有数据。
