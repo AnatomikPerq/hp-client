@@ -2,6 +2,10 @@
 /// Keep platform safe areas and text scaling outside these constants.
 abstract final class AppLayout {
   static const macOSTitlebarHeight = 28.0;
+
+  /// The App's own caption on Windows and Linux, and its buttons.
+  static const desktopCaptionHeight = 40.0;
+  static const desktopCaptionButtonWidth = 46.0;
   static const mobileBreakpoint = 720.0;
   static const compactDesktopBreakpoint = 900.0;
   static const desktopSidebarWidth = 225.0;

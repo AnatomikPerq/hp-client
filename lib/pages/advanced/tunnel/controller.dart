@@ -177,6 +177,24 @@ class PolicyEditorController extends PageCubit<PolicyEditorPageState> {
   void updateSystemProxyPort(int port) =>
       update('proxyPort', port, section: 'desktop');
 
+  List<String> get systemProxyBypass => strings('desktop', 'proxyBypass');
+
+  void updateSystemProxyBypass(List<String> hosts) =>
+      update('proxyBypass', hosts, section: 'desktop');
+
+  /// The first exception the system proxy cannot take, as typed.
+  String? get invalidSystemProxyBypass =>
+      draft == null || !service.requiresInterface
+      ? null
+      : systemProxyBypass
+            .map((host) => host.trim())
+            .where(
+              (host) =>
+                  host.isNotEmpty &&
+                  !PlatformPolicy.validSystemProxyBypass(host),
+            )
+            .firstOrNull;
+
   bool get systemProxyPortInvalid =>
       draft != null &&
       service.requiresInterface &&
@@ -218,6 +236,10 @@ class PolicyEditorController extends PageCubit<PolicyEditorPageState> {
     }
     if (systemProxyPortInvalid) {
       return l.systemProxyPortInvalid;
+    }
+    final host = invalidSystemProxyBypass;
+    if (host != null) {
+      return l.systemProxyBypassInvalid(host);
     }
     return null;
   }

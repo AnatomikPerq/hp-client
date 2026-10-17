@@ -1,5 +1,6 @@
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 
@@ -87,4 +88,39 @@ class CountryFlag extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// The icon of a server or subscription: the first emoji of its name, else
+/// the flag of [countryCode], else a globe.
+///
+/// Decorative, like [CountryFlag]: the text next to it names the row.
+class NameIcon extends StatelessWidget {
+  const NameIcon({super.key, this.emoji, this.countryCode, this.size = 22});
+
+  final NameEmoji? emoji;
+  final String? countryCode;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = emoji;
+    final asset = value?.asset;
+    if (asset == null) {
+      return CountryFlag(code: value?.country ?? countryCode, size: size);
+    }
+    return ExcludeSemantics(
+      child: SizedBox.square(
+        dimension: size,
+        child: Image.asset(
+          asset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (context, _, _) =>
+              CountryFlag(code: countryCode, size: size),
+        ),
+      ),
+    );
+  }
 }

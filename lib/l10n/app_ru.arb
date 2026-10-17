@@ -831,6 +831,18 @@
   "groupUpdatedAt": "Обновлено {time}",
   "sidebarCollapse": "Свернуть панель",
   "sidebarExpand": "Развернуть панель",
-  "settingsTunnelHint": "DNS, IPv6, исходящий интерфейс, порт системного прокси",
-  "settingsXrayHint": "Данные маршрутизации, обновления, проверка скорости, логи, конфигурация"
+  "settingsTunnelHint": "DNS, IPv6, исходящий интерфейс, порт и исключения системного прокси",
+  "settingsXrayHint": "Данные маршрутизации, обновления, проверка скорости, логи, конфигурация",
+  "windowMinimize": "Свернуть",
+  "windowMaximize": "Развернуть",
+  "windowRestore": "Восстановить",
+  "windowClose": "Закрыть",
+  "systemProxyBypassTitle": "Исключения системного прокси",
+  "systemProxyBypassDescription": "Эти сайты открываются напрямую, мимо прокси. Локальные сети исключены всегда. Чтобы захватить поддомены, пишите *.example.com.",
+  "systemProxyBypassEmpty": "Своих исключений нет.",
+  "systemProxyBypassAdd": "Добавить домен",
+  "systemProxyBypassNumber": "Исключение {number}",
+  "systemProxyBypassRemove": "Удалить исключение {number}",
+  "systemProxyBypassInvalid": "Это не домен и не адрес: {host}",
+  "subscriptionTitleLoading": "Получаем название от провайдера…"
 }

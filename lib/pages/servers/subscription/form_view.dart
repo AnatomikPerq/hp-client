@@ -14,6 +14,8 @@ class SubscriptionFormView extends StatelessWidget {
     required this.nameLabel,
     required this.nameController,
     this.nameHint,
+    this.nameLoading = false,
+    this.nameLoadingHint,
     required this.urlLabel,
     required this.urlController,
     this.urlHint,
@@ -53,6 +55,10 @@ class SubscriptionFormView extends StatelessWidget {
   final String nameLabel;
   final TextEditingController nameController;
   final String? nameHint;
+
+  /// The provider's name is being looked up for the empty name field.
+  final bool nameLoading;
+  final String? nameLoadingHint;
   final String urlLabel;
   final TextEditingController urlController;
   final String? urlHint;
@@ -148,7 +154,10 @@ class SubscriptionFormView extends StatelessWidget {
         context,
         label: nameLabel,
         controller: nameController,
-        hintText: nameHint ?? nameLabel,
+        hintText: nameLoading
+            ? nameLoadingHint ?? nameHint ?? nameLabel
+            : nameHint ?? nameLabel,
+        trailing: nameLoading ? const ButtonProgressIndicator() : null,
       ),
       _editableField(
         context,
@@ -421,6 +430,7 @@ class SubscriptionFormView extends StatelessWidget {
     bool obscureText = false,
     bool enabled = true,
     ValueChanged<String>? onChanged,
+    Widget? trailing,
   }) {
     final palette = ColorManager.palette(context);
     return Directionality(
@@ -441,6 +451,7 @@ class SubscriptionFormView extends StatelessWidget {
         autocorrect: false,
         enableSuggestions: false,
         onChanged: onChanged,
+        trailing: trailing,
         decoration: ShadDecoration(
           border: ShadBorder.all(
             color: palette.border,
@@ -461,6 +472,7 @@ class SubscriptionFormView extends StatelessWidget {
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged,
     bool enabled = true,
+    Widget? trailing,
   }) {
     return Column(
       spacing: 7,
@@ -475,6 +487,7 @@ class SubscriptionFormView extends StatelessWidget {
           keyboardType: keyboardType,
           onChanged: onChanged,
           enabled: enabled,
+          trailing: trailing,
         ),
         if (helperText != null && helperText.isNotEmpty)
           Text(

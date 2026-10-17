@@ -93,7 +93,7 @@ class _ConnectPageState extends State<ConnectPage> {
                     ? state.configuration.connection.rawId
                     : null,
                 location: controller.selectionTitle(l),
-                locationFlag: controller.selectionFlag(l),
+                locationIcon: controller.selectionIcon(l),
                 runningPath: controller.runningRoute?.path,
                 locationDetail: controller.selectionDetail(l),
                 locationHealth: controller.selectionHealth(l),

@@ -832,5 +832,17 @@
   "sidebarCollapse": "جمع کردن نوار کناری",
   "sidebarExpand": "باز کردن نوار کناری",
   "settingsTunnelHint": "DNS، IPv6، رابط خروجی، درگاه پراکسی سیستم",
-  "settingsXrayHint": "داده‌های مسیریابی، به‌روزرسانی‌ها، تست سرعت، گزارش‌ها، پیکربندی"
+  "settingsXrayHint": "داده‌های مسیریابی، به‌روزرسانی‌ها، تست سرعت، گزارش‌ها، پیکربندی",
+  "windowMinimize": "کوچک کردن",
+  "windowMaximize": "بزرگ کردن",
+  "windowRestore": "بازگرداندن اندازه",
+  "windowClose": "بستن",
+  "systemProxyBypassTitle": "استثناهای پراکسی سیستم",
+  "systemProxyBypassDescription": "این سایت‌ها مستقیم و بدون پراکسی باز می‌شوند. شبکه‌های محلی همیشه مستثنا هستند. برای زیردامنه‌ها ‎*.example.com‎ بنویسید.",
+  "systemProxyBypassEmpty": "استثنای شخصی وجود ندارد.",
+  "systemProxyBypassAdd": "افزودن دامنه",
+  "systemProxyBypassNumber": "استثنای {number}",
+  "systemProxyBypassRemove": "حذف استثنای {number}",
+  "systemProxyBypassInvalid": "دامنه یا نشانی نیست: {host}",
+  "subscriptionTitleLoading": "در حال دریافت نام از ارائه‌دهنده…"
 }

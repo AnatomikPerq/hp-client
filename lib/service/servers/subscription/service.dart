@@ -522,6 +522,26 @@ class SubscriptionService {
       current.hwidEnabled == expected.hwidEnabled &&
       current.hwid == expected.hwid;
 
+  /// The provider's name for a subscription that is not added yet, so the
+  /// form can offer it for editing. Only the `Profile-Title` header is used;
+  /// saving downloads the content again. `null` when the provider has none.
+  Future<String?> readTitle(String url, {String? hwid}) async {
+    Headers? headers;
+    try {
+      headers = (await _client.getTextResponse(
+        url,
+        httpsOnly: true,
+        requestHeaders: DownloadRequestHeaders(hwid: hwid),
+      )).headers;
+    } on DioException catch (error) {
+      // Some panels name the subscription even on a refusal.
+      headers = error.response?.headers;
+    }
+    return SubscriptionLoadResult.parseTitle(
+      headers?['profile-title']?.firstOrNull,
+    );
+  }
+
   Future<SubscriptionLoadResult> _loadRows(SubscriptionInput input) =>
       AppEventBus.instance.trackDownload(() => _readSubscription(input));
 

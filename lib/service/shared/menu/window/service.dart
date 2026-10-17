@@ -4,6 +4,7 @@ import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:onexray/core/constants/preferences.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/core/tools/platform.dart';
+import 'package:onexray/core/tools/windows_frame.dart';
 import 'package:window_manager/window_manager.dart';
 
 final class WindowService with WindowListener {
@@ -19,6 +20,8 @@ final class WindowService with WindowListener {
   var _hasSidebarMaterial = false;
   double? _titlebarHeight;
   Brightness? _brightness;
+  Color? _frameColor;
+  int? _windowHandle;
 
   bool get hasSidebarMaterial => _hasSidebarMaterial;
   double? get titlebarHeight => _titlebarHeight;
@@ -72,6 +75,22 @@ final class WindowService with WindowListener {
     await windowManager.setPreventClose(true);
     windowManager.addListener(this);
     _listening = true;
+  }
+
+  /// The App draws its own caption on Windows; the native border follows the
+  /// App's colors instead of the system accent.
+  Future<void> updateFrameColor(Color color) async {
+    if (!AppPlatform.isWindows || _frameColor == color) return;
+    _frameColor = color;
+    try {
+      setWindowsBorderColor(
+        _windowHandle ??= await windowManager.getId(),
+        color.toARGB32(),
+      );
+    } catch (error, stackTrace) {
+      _frameColor = null;
+      ygLogger('update window border failed: $error\n$stackTrace');
+    }
   }
 
   /// Receives the resolved Flutter brightness, including system-theme changes.

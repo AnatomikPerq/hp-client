@@ -118,10 +118,11 @@ msix_config:
 
 flutter_gen:
   output: lib/gen/
-  # Flags are looked up by country code at runtime, not by generated getters.
+  # Flags and emoji are looked up by code at runtime, not by generated getters.
   assets:
     exclude:
       - assets/flags/**
+      - assets/emoji/**
 
 flutter:
   uses-material-design: true
@@ -135,6 +136,7 @@ flutter:
     - assets/app_icon/
     - assets/macos_icon/
     - assets/flags/
+    - assets/emoji/
 
 ffigen:
   name: NativeLibrary

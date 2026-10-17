@@ -14,6 +14,7 @@ import 'package:onexray/pages/servers/node_tile.dart';
 import 'package:onexray/pages/servers/subscription/user_info.dart';
 import 'package:onexray/pages/shared/widgets/adaptive_dialog.dart';
 import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
@@ -585,10 +586,18 @@ class ServerGroupCard extends StatelessWidget {
       if (source == null && !favorites) controller.summary(l, group),
     ].where((value) => value.isNotEmpty).join(' · ');
     final error = source == null ? null : controller.sourceErrors[source.id];
+    // A provider's emoji in the subscription name becomes its icon.
+    final split = source == null ? null : splitNameEmoji(group.name);
+    final emoji = split?.emoji;
+    final title = emoji != null && split!.name.isNotEmpty
+        ? split.name
+        : group.name;
     final leading = favorites
         ? Icon(LucideIcons.star600, size: 18, color: palette.restarting)
         : group.country != null
         ? CountryFlag(code: group.country!.isEmpty ? null : group.country)
+        : emoji != null
+        ? NameIcon(emoji: emoji)
         : Icon(LucideIcons.layers, size: 18, color: palette.primary);
     final radius = BorderRadius.circular(AppRadii.card);
     return InkWell(
@@ -622,7 +631,7 @@ class ServerGroupCard extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              group.name,
+                              title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.groupTitle.copyWith(
@@ -1041,6 +1050,7 @@ class ServerNodeRow extends StatelessWidget {
             children: [
               ServerNodeTile(
                 title: label.name,
+                emoji: label.emoji,
                 countryCode: label.code,
                 protocol: controller.protocol(row),
                 detail: detail,

@@ -9,6 +9,7 @@ import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/theme/theme.dart';
 import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
@@ -36,7 +37,7 @@ class ConnectView extends StatelessWidget {
     this.pendingChange,
     this.deletingRawIds = const {},
     required this.location,
-    this.locationFlag,
+    this.locationIcon = (emoji: null, code: null),
     this.runningPath,
     this.locationDetail,
     this.locationHealth,
@@ -71,7 +72,8 @@ class ConnectView extends StatelessWidget {
   final String location;
 
   /// Flag beside [location]; null draws none.
-  final String? locationFlag;
+  /// The first emoji of the node name, else its country.
+  final ({NameEmoji? emoji, String? code}) locationIcon;
   final String? runningPath;
   final String? locationDetail, locationHealth, methodDetail;
   final String method;
@@ -282,8 +284,13 @@ class ConnectView extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (locationFlag != null) ...[
-                        CountryFlag(code: locationFlag, size: 20),
+                      if (locationIcon.emoji != null ||
+                          locationIcon.code != null) ...[
+                        NameIcon(
+                          emoji: locationIcon.emoji,
+                          countryCode: locationIcon.code,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                       ],
                       Flexible(

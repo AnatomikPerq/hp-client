@@ -333,6 +333,9 @@ class ConnectionPreparation {
           payload: RunXrayRequest(compiled.xrayJson).toJson(),
         ).toJson(),
       ),
+      systemProxyBypass: systemProxy && policy.systemProxyBypass.isNotEmpty
+          ? policy.systemProxyBypass
+          : null,
     );
     return ConnectionRuntime.create(
       configuration: configuration,

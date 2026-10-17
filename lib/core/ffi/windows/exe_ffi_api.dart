@@ -248,7 +248,11 @@ class WindowsExeFfiApi extends WindowsFfiApi {
       }
       if (proxyPort != null) {
         final proxy = await _proxyManager();
-        await proxy?.apply(host: '127.0.0.1', port: proxyPort);
+        await proxy?.apply(
+          host: '127.0.0.1',
+          port: proxyPort,
+          bypass: desktopSystemProxyBypass(request),
+        );
       }
       await _notify(VpnStatus.connected);
       return commandSuccess(status: VpnStatus.connected);

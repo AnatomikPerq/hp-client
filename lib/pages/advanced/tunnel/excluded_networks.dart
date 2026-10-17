@@ -7,6 +7,9 @@ import 'package:onexray/pages/theme/theme.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 /// Owns only editing cursors; CIDR validation remains in PolicyEditorService.
+///
+/// Networks by default; the optional texts and icon reuse the same editor
+/// for other lists, such as the system proxy's host exceptions.
 class ExcludedNetworks extends StatefulWidget {
   const ExcludedNetworks({
     super.key,
@@ -15,6 +18,12 @@ class ExcludedNetworks extends StatefulWidget {
     required this.onChanged,
     this.rowKeyPrefix = 'excluded-cidr-row',
     this.maxEntries,
+    this.icon = LucideIcons.network,
+    this.hintText = '192.168.1.0/24',
+    this.emptyText,
+    this.addLabel,
+    this.itemLabel,
+    this.removeLabel,
   });
 
   final String rowKeyPrefix;
@@ -22,6 +31,12 @@ class ExcludedNetworks extends StatefulWidget {
   final List<String> values;
   final bool enabled;
   final ValueChanged<List<String>> onChanged;
+  final IconData icon;
+  final String hintText;
+  final String? emptyText;
+  final String? addLabel;
+  final String Function(int number)? itemLabel;
+  final String Function(int number)? removeLabel;
 
   @override
   State<ExcludedNetworks> createState() => _ExcludedNetworksState();
@@ -102,15 +117,13 @@ class _ExcludedNetworksState extends State<ExcludedNetworks> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      LucideIcons.network,
-                      size: 18,
-                      color: palette.mutedForeground,
-                    ),
+                    Icon(widget.icon, size: 18, color: palette.mutedForeground),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Semantics(
-                        label: l.prototypeBypassNetworkNumber(index + 1),
+                        label:
+                            widget.itemLabel?.call(index + 1) ??
+                            l.prototypeBypassNetworkNumber(index + 1),
                         child: TextField(
                           controller: fields[index],
                           enabled: widget.enabled,
@@ -118,15 +131,17 @@ class _ExcludedNetworksState extends State<ExcludedNetworks> {
                           enableSuggestions: false,
                           textDirection: TextDirection.ltr,
                           style: AppTypography.windowsNetworkInput,
-                          decoration: const InputDecoration(
-                            hintText: '192.168.1.0/24',
+                          decoration: InputDecoration(
+                            hintText: widget.hintText,
                             isDense: true,
                             filled: false,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
                             disabledBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
                           ),
                           onChanged: (_) => _publish(),
                         ),
@@ -134,7 +149,9 @@ class _ExcludedNetworksState extends State<ExcludedNetworks> {
                     ),
                     const SizedBox(width: 10),
                     IconButton(
-                      tooltip: l.prototypeRemoveBypassNetworkNumber(index + 1),
+                      tooltip:
+                          widget.removeLabel?.call(index + 1) ??
+                          l.prototypeRemoveBypassNetworkNumber(index + 1),
                       onPressed: widget.enabled ? () => _remove(index) : null,
                       style: IconButton.styleFrom(
                         minimumSize: const Size.square(36),
@@ -162,7 +179,7 @@ class _ExcludedNetworksState extends State<ExcludedNetworks> {
               ),
             ),
             child: Text(
-              l.prototypeNoBypassNetworks,
+              widget.emptyText ?? l.prototypeNoBypassNetworks,
               textAlign: TextAlign.center,
               style: AppTypography.windowsNetworkMeta.copyWith(
                 color: palette.mutedForeground,
@@ -183,7 +200,7 @@ class _ExcludedNetworksState extends State<ExcludedNetworks> {
             children: [
               const Icon(LucideIcons.plus, size: 16),
               const SizedBox(width: 8),
-              Text(l.prototypeAddNetwork),
+              Text(widget.addLabel ?? l.prototypeAddNetwork),
             ],
           ),
         ),

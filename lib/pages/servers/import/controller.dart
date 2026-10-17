@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/core/errors/json_diagnostic.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -48,6 +50,7 @@ class ServerImportPageState {
     this.hasAgeKeys = false,
     this.scannerPickingImage = false,
     this.hwidEnabled = false,
+    this.loadingTitle = false,
   }) : subscriptionImports = List.unmodifiable(subscriptionImports);
 
   final String inputText;
@@ -71,6 +74,9 @@ class ServerImportPageState {
   final bool hasAgeKeys;
   final bool scannerPickingImage;
   final bool hwidEnabled;
+
+  /// The provider's name for a new subscription is being looked up.
+  final bool loadingTitle;
 
   bool get generatingAgeKey => generatingAgeKeyType != null;
   bool get submitting => busy && !loadingSubscription && openingAction == null;
@@ -105,6 +111,7 @@ class ServerImportPageState {
     bool? hasAgeKeys,
     bool? scannerPickingImage,
     bool? hwidEnabled,
+    bool? loadingTitle,
   }) => ServerImportPageState(
     inputText: inputText ?? this.inputText,
     jsonInput: jsonInput ?? this.jsonInput,
@@ -137,6 +144,7 @@ class ServerImportPageState {
     hasAgeKeys: hasAgeKeys ?? this.hasAgeKeys,
     scannerPickingImage: scannerPickingImage ?? this.scannerPickingImage,
     hwidEnabled: hwidEnabled ?? this.hwidEnabled,
+    loadingTitle: loadingTitle ?? this.loadingTitle,
   );
 }
 
@@ -149,6 +157,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   final Future<String?> Function(SubscriptionInput, int?) _validateSubscription;
   final Future<SubscriptionInsertResult> Function(SubscriptionInput)
   _insertSubscription;
+  final Future<String?> Function(String url, String? hwid) _readTitle;
   ServerImportController({
     ServerImportService? service,
     this.subscriptionId,
@@ -158,6 +167,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
     Future<String?> Function(SubscriptionInput, int?)? validateSubscription,
     Future<SubscriptionInsertResult> Function(SubscriptionInput)?
     insertSubscription,
+    Future<String?> Function(String url, String? hwid)? readSubscriptionTitle,
   }) : service = service ?? ServerImportService(),
        _loadSubscription =
            loadSubscription ?? AppDatabase().subscriptionDao.searchRow,
@@ -165,6 +175,9 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
            saveSubscriptionInput ?? SubscriptionService().saveSubscriptionInput,
        _insertSubscription =
            insertSubscription ?? SubscriptionService().insertSubscription,
+       _readTitle =
+           readSubscriptionTitle ??
+           ((url, hwid) => SubscriptionService().readTitle(url, hwid: hwid)),
        _validateSubscription =
            validateSubscription ??
            ((input, id) async {
@@ -196,6 +209,14 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   String? _hwid;
   String? _hwidUrl;
   int _jsonRevision = 0;
+  Timer? _titleTimer;
+
+  /// The link the provider's name was last looked up for.
+  String? _titleUrl;
+
+  /// The provider's name this form put into the name field; replacing it is
+  /// fine, replacing a name the user typed is not.
+  String? _autoName;
 
   bool get supportsScan => AppPlatform.isMobile;
   bool get editingSubscription => subscriptionId != null;
@@ -245,6 +266,50 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
         hwidEnabled: hwidEnabled,
       ),
     );
+    _scheduleTitle();
+  }
+
+  /// A new subscription offers the provider's name (`Profile-Title`) while
+  /// the name field is empty or still holds a name filled in earlier. The
+  /// lookup waits for typing to pause; the user can edit the result.
+  void _scheduleTitle() {
+    if (editingSubscription || !isPageActive) return;
+    final link = SubscriptionUrl.normalize(url.text);
+    final uri = Uri.tryParse(link);
+    if (uri == null || !NetClient.isHttpsDownloadUri(uri)) {
+      _titleTimer?.cancel();
+      _titleUrl = null;
+      if (state.loadingTitle) emit(state.copyWith(loadingTitle: false));
+      return;
+    }
+    if (link == _titleUrl) return;
+    final current = name.text.trim();
+    if (current.isNotEmpty && current != _autoName) return;
+    _titleTimer?.cancel();
+    _titleUrl = link;
+    _titleTimer = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(_loadTitle(link)),
+    );
+  }
+
+  Future<void> _loadTitle(String link) async {
+    if (!isPageActive) return;
+    emit(state.copyWith(loadingTitle: true));
+    String? title;
+    try {
+      title = await _readTitle(link, state.hwidEnabled ? _hwid : null);
+    } catch (_) {
+      // Without the provider's name the field simply stays for the user.
+    }
+    // A newer link owns the lookup now.
+    if (!isPageActive || _titleUrl != link) return;
+    emit(state.copyWith(loadingTitle: false));
+    final current = name.text.trim();
+    if (title != null && (current.isEmpty || current == _autoName)) {
+      _autoName = title;
+      name.text = title;
+    }
   }
 
   void closePage(BuildContext context) {
@@ -903,6 +968,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
 
   @override
   void disposePageResources() {
+    _titleTimer?.cancel();
     jsonText.removeListener(_changed);
     jsonText.dispose();
     for (final controller in [text, name, url, secretKey, publicKey]) {

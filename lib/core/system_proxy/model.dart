@@ -129,3 +129,18 @@ const systemProxyDefaultBypass = <String>[
   '192.168.*',
   '<local>',
 ];
+
+/// The App's local exclusions followed by the user's own hosts, without
+/// repeats. Windows reads `<local>` anywhere; it stays last by convention.
+List<String> systemProxyBypassList(List<String> extra) {
+  final seen = <String>{};
+  final local = systemProxyDefaultBypass.last;
+  return [
+    for (final host in [
+      ...systemProxyDefaultBypass.take(systemProxyDefaultBypass.length - 1),
+      ...extra.map((host) => host.trim()),
+      local,
+    ])
+      if (host.isNotEmpty && seen.add(host.toLowerCase())) host,
+  ];
+}

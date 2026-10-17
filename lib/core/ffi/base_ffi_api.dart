@@ -64,6 +64,10 @@ int? desktopSystemProxyPort(StartVpnRequest request) {
   return port;
 }
 
+/// The user's hosts that bypass the system proxy in proxy mode.
+List<String> desktopSystemProxyBypass(StartVpnRequest request) =>
+    request.systemProxyBypass ?? const [];
+
 File desktopCoreErrorFile(String configPath) => File('$configPath.error');
 
 Future<String> readDesktopCoreStartError(

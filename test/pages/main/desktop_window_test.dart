@@ -1,10 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/main/desktop_caption.dart';
 import 'package:onexray/pages/main/desktop_window.dart';
 import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/theme/theme.dart';
-import 'package:window_manager/window_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -81,17 +81,27 @@ void main() {
       final caption = find.byKey(const ValueKey('desktop-window-caption'));
       final height = platform == TargetPlatform.macOS
           ? AppLayout.macOSTitlebarHeight
-          : kWindowCaptionHeight;
+          : AppLayout.desktopCaptionHeight;
       expect(tester.getTopLeft(caption), Offset.zero);
       expect(tester.getSize(caption), Size(480, height));
       expect(tester.getTopLeft(find.byKey(const Key('body'))).dy, height);
       expect(pageViewport, Size(480, 600 - height));
       if (platform == TargetPlatform.macOS) {
-        expect(find.byType(WindowCaption), findsNothing);
+        expect(find.byType(DesktopCaption), findsNothing);
       } else {
+        expect(find.text('HYPER CLIENT'), findsOneWidget);
         expect(
-          Directionality.of(tester.element(find.byType(WindowCaption))),
+          Directionality.of(
+            tester.element(find.byKey(const ValueKey('desktop-caption-close'))),
+          ),
           TextDirection.ltr,
+        );
+        // The close button sits on the physical right even in RTL.
+        expect(
+          tester
+              .getTopRight(find.byKey(const ValueKey('desktop-caption-close')))
+              .dx,
+          480,
         );
       }
       await tester.tap(find.text('Open'));

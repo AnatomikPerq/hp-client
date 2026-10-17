@@ -38,25 +38,30 @@ class SystemProxyManager {
 
   /// Points the system proxy at `host:port`.
   ///
-  /// PAC and auto-detection are switched off while the App's proxy is active:
-  /// both take precedence over a manual proxy and would bypass it.
-  Future<void> apply({required String host, required int port}) =>
-      _serial(() async {
-        final applied = SystemProxySettings(
-          enabled: true,
-          server: '$host:$port',
-          bypass: systemProxyDefaultBypass.join(';'),
-        );
-        final current = await backend.read();
-        final saved = await _readState();
-        // After a crash the current settings are the App's, not the user's:
-        // keep the snapshot taken before the App first took over.
-        final previous = saved != null && _owns(current, saved)
-            ? saved.previous
-            : current;
-        await _writeState(_State(previous: previous, applied: applied));
-        await backend.write(applied);
-      });
+  /// [bypass] adds the user's hosts to the local networks that never go
+  /// through the proxy. PAC and auto-detection are switched off while the
+  /// App's proxy is active: both take precedence over a manual proxy and
+  /// would bypass it.
+  Future<void> apply({
+    required String host,
+    required int port,
+    List<String> bypass = const [],
+  }) => _serial(() async {
+    final applied = SystemProxySettings(
+      enabled: true,
+      server: '$host:$port',
+      bypass: systemProxyBypassList(bypass).join(';'),
+    );
+    final current = await backend.read();
+    final saved = await _readState();
+    // After a crash the current settings are the App's, not the user's:
+    // keep the snapshot taken before the App first took over.
+    final previous = saved != null && _owns(current, saved)
+        ? saved.previous
+        : current;
+    await _writeState(_State(previous: previous, applied: applied));
+    await backend.write(applied);
+  });
 
   /// Writes the saved settings back if the system still uses the App's proxy.
   Future<SystemProxyRestore> restore() => _serial(() async {

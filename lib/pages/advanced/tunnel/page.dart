@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/advanced/tunnel/controller.dart';
+import 'package:onexray/pages/advanced/tunnel/excluded_networks.dart';
 import 'package:onexray/pages/advanced/tunnel/widgets.dart';
 import 'package:onexray/pages/shared/alert.dart';
 import 'package:onexray/pages/shared/widgets/dns_text_field.dart';
@@ -208,6 +209,34 @@ class VpnTunnelPane extends StatelessWidget {
                                 ? l.systemProxyPortInvalid
                                 : null,
                             onChanged: controller.updateSystemProxyPort,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (controller.service.requiresInterface)
+                    _section(
+                      icon: LucideIcons.listX,
+                      title: l.systemProxyBypassTitle,
+                      description: controller.invalidSystemProxyBypass == null
+                          ? l.systemProxyBypassDescription
+                          : l.systemProxyBypassInvalid(
+                              controller.invalidSystemProxyBypass!,
+                            ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: ExcludedNetworks(
+                            rowKeyPrefix: 'system-proxy-bypass-row',
+                            values: controller.systemProxyBypass,
+                            enabled: !controller.blocked,
+                            maxEntries: PlatformPolicy.maxSystemProxyBypass,
+                            icon: LucideIcons.globe,
+                            hintText: '*.example.com',
+                            emptyText: l.systemProxyBypassEmpty,
+                            addLabel: l.systemProxyBypassAdd,
+                            itemLabel: l.systemProxyBypassNumber,
+                            removeLabel: l.systemProxyBypassRemove,
+                            onChanged: controller.updateSystemProxyBypass,
                           ),
                         ),
                       ],

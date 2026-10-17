@@ -17,7 +17,10 @@ void main() {
   late int revealed;
 
   setUp(() {
-    controller = ServerImportController(loadSubscription: (_) async => null);
+    controller = ServerImportController(
+      loadSubscription: (_) async => null,
+      readSubscriptionTitle: (_, _) async => null,
+    );
     name = controller.name;
     url = controller.url;
     secret = controller.secretKey;
@@ -218,6 +221,8 @@ void main() {
           tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value,
           isFalse,
         );
+        // Let the provider-name lookup for the empty name run out.
+        await tester.pump(const Duration(seconds: 1));
         expect(tester.takeException(), isNull);
       });
     }

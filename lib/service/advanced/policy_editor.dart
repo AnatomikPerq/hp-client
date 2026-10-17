@@ -67,6 +67,18 @@ class PolicyEditorService {
               .where((value) => value.isNotEmpty)
               .toList();
     }
+    if (requiresInterface) {
+      // Blank rows are unfinished input; repeats add nothing to the list.
+      final seen = <String>{};
+      value['desktop']['proxyBypass'] =
+          (value['desktop']['proxyBypass'] as List)
+              .cast<String>()
+              .map((value) => value.trim())
+              .where(
+                (value) => value.isNotEmpty && seen.add(value.toLowerCase()),
+              )
+              .toList();
+    }
     final policy = PlatformPolicy.fromJson(value);
     policy.validateDns(platform, windowsMode: windowsMode);
     if (requiresInterface && policy.xrayOutboundInterfaceName.trim().isEmpty) {
@@ -154,8 +166,10 @@ class PolicyEditorService {
         result['interface'] = policy.xrayOutboundInterfaceName;
         result['desktop'] = {
           'runMode': policy.desktopRunMode.name,
-          if (policy.usesSystemProxy(platform))
+          if (policy.usesSystemProxy(platform)) ...{
             'proxyPort': policy.systemProxyPort,
+            'proxyBypass': policy.systemProxyBypass,
+          },
         };
         if (platform == ConnectionPlatform.windows &&
             (windowsMode ?? windowsBuildMode) == WindowsMode.msix) {

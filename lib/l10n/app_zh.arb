@@ -832,5 +832,17 @@
   "sidebarCollapse": "收起侧栏",
   "sidebarExpand": "展开侧栏",
   "settingsTunnelHint": "DNS、IPv6、出站接口、系统代理端口",
-  "settingsXrayHint": "路由数据、更新、测速、日志、配置"
+  "settingsXrayHint": "路由数据、更新、测速、日志、配置",
+  "windowMinimize": "最小化",
+  "windowMaximize": "最大化",
+  "windowRestore": "还原",
+  "windowClose": "关闭",
+  "systemProxyBypassTitle": "系统代理例外",
+  "systemProxyBypassDescription": "这些网站直接打开，不经过代理。本地网络始终排除。要包含子域名，请写 *.example.com。",
+  "systemProxyBypassEmpty": "没有自定义例外。",
+  "systemProxyBypassAdd": "添加域名",
+  "systemProxyBypassNumber": "例外 {number}",
+  "systemProxyBypassRemove": "删除例外 {number}",
+  "systemProxyBypassInvalid": "不是域名或地址：{host}",
+  "subscriptionTitleLoading": "正在从服务商获取名称…"
 }

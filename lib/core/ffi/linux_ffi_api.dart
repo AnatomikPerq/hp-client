@@ -100,7 +100,11 @@ class LinuxFfiApi extends BaseFfiApi {
       if (proxyPort != null) {
         try {
           final proxy = await _proxyManager();
-          await proxy?.apply(host: '127.0.0.1', port: proxyPort);
+          await proxy?.apply(
+            host: '127.0.0.1',
+            port: proxyPort,
+            bypass: desktopSystemProxyBypass(request),
+          );
         } catch (error) {
           await stopVpn();
           return commandFailed(failureDetails(error));

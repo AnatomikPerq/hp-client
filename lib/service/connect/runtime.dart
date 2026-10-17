@@ -128,6 +128,7 @@ class ConnectionRuntime {
       request.coreInvokeText,
       snapshotToken: request.snapshotToken,
       metadataJson: metadataJson,
+      systemProxyBypass: request.systemProxyBypass,
     );
     return ConnectionRuntime._(
       configuration: configuration,

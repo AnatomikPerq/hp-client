@@ -85,6 +85,15 @@ final class PlatformPolicy {
     if (port < 1 || port > 65535) {
       throw FormatException('Invalid system proxy port: $port');
     }
+    final bypass = desktop['proxyBypass'] as List<String>;
+    if (bypass.length > maxSystemProxyBypass) {
+      throw const FormatException('Too many system proxy exceptions');
+    }
+    for (final host in bypass) {
+      if (!validSystemProxyBypass(host)) {
+        throw FormatException('Invalid system proxy exception: $host');
+      }
+    }
     return PlatformPolicy._(policy);
   }
 
@@ -101,6 +110,23 @@ final class PlatformPolicy {
   DesktopRunMode get desktopRunMode =>
       DesktopRunMode.fromName(toJson()['desktop']['runMode'] as String);
   int get systemProxyPort => toJson()['desktop']['proxyPort'] as int;
+
+  /// The user's hosts that bypass the system proxy, on top of the local
+  /// networks the App always excludes.
+  List<String> get systemProxyBypass => List.unmodifiable(
+    (toJson()['desktop']['proxyBypass'] as List).cast<String>(),
+  );
+
+  static const maxSystemProxyBypass = 200;
+
+  /// One host pattern in the system proxy's exception list: a domain, an
+  /// address or a pattern with `*`, such as `*.example.com`. Separators,
+  /// quotes and whitespace would split or break the list on Windows and in
+  /// gsettings; a pattern of only `*` and `.` would bypass everything.
+  static bool validSystemProxyBypass(String value) =>
+      value.length <= 253 &&
+      RegExp(r'''^[^\s;,'"\\<>]+$''').hasMatch(value) &&
+      RegExp(r'[0-9\p{L}]', unicode: true).hasMatch(value);
 
   /// Proxy mode exists only where the App starts the Core itself.
   bool usesSystemProxy(ConnectionPlatform platform) =>
@@ -299,7 +325,7 @@ const _defaults = <String, dynamic>{
   },
   // 10808/10809 are the defaults of the most common other client and are
   // often taken on machines that run it; 10820 avoids that collision.
-  'desktop': {'runMode': 'tun', 'proxyPort': 10820},
+  'desktop': {'runMode': 'tun', 'proxyPort': 10820, 'proxyBypass': <String>[]},
 };
 
 Map<String, dynamic> _readPolicyObject(

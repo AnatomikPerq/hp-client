@@ -4,11 +4,12 @@ import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
 
-/// One server in a list: flag, name, protocol tags, latency and a menu.
+/// One server in a list: icon, name, protocol tags, latency and a menu.
 ///
 /// Home and Servers share it. Tapping the row is the selection itself; the
 /// running entry is outlined in the connected color, a chosen one in primary.
@@ -16,6 +17,7 @@ class ServerNodeTile extends StatelessWidget {
   const ServerNodeTile({
     super.key,
     required this.title,
+    this.emoji,
     this.countryCode,
     this.protocol = '',
     this.detail,
@@ -31,6 +33,9 @@ class ServerNodeTile extends StatelessWidget {
   });
 
   final String title;
+
+  /// The first emoji of the server name; [countryCode] is the fallback.
+  final NameEmoji? emoji;
   final String? countryCode;
 
   /// `VLESS | XHTTP | REALITY` as the catalog labels it.
@@ -82,7 +87,11 @@ class ServerNodeTile extends StatelessWidget {
                       dimension: 26,
                       child: busy
                           ? const Center(child: ButtonProgressIndicator())
-                          : CountryFlag(code: countryCode, size: 26),
+                          : NameIcon(
+                              emoji: emoji,
+                              countryCode: countryCode,
+                              size: 26,
+                            ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(child: _text(context, palette)),

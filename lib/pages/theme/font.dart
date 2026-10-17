@@ -341,6 +341,8 @@ abstract final class AppTypography {
   static final homeLink = _style(13, 600);
   static final homeAction = _style(14, 600);
   static final sidebarVersion = _style(12, 400);
+  static final windowCaptionBrand = _style(14, 800);
+  static final windowCaptionVersion = _style(12, 500);
 
   static final shad = ShadTextTheme.custom(
     h1Large: pageTitle,

@@ -1,6 +1,10 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/advanced/policy_editor.dart';
+import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
 
 void main() {
@@ -63,5 +67,102 @@ void main() {
     expect(same(proxy, withPort(proxy, 10900)), isFalse);
     // The port is inert while TUN runs.
     expect(same(tun, withPort(tun, 10900)), isTrue);
+  });
+
+  group('system proxy exceptions', () {
+    PlatformPolicy withBypass(PlatformPolicy policy, List<String> hosts) {
+      final json = policy.toJson();
+      json['desktop'] = {...json['desktop'] as Map, 'proxyBypass': hosts};
+      return PlatformPolicy.fromJson(json);
+    }
+
+    test('default to none and keep older stored policies valid', () {
+      expect(PlatformPolicy.defaults().systemProxyBypass, isEmpty);
+      final legacy = PlatformPolicy.defaults().toJson();
+      (legacy['desktop'] as Map).remove('proxyBypass');
+      expect(PlatformPolicy.fromJson(legacy).systemProxyBypass, isEmpty);
+    });
+
+    test('take domains, wildcards and addresses', () {
+      const hosts = [
+        'example.com',
+        '*.example.com',
+        'intranet',
+        '192.168.50.*',
+        '[::1]',
+        'пример.рф',
+      ];
+      expect(
+        withBypass(PlatformPolicy.defaults(), hosts).systemProxyBypass,
+        hosts,
+      );
+    });
+
+    test('reject what would break or empty the list', () {
+      for (final host in [
+        '',
+        'a b.com',
+        'a;b.com',
+        'a,b.com',
+        "it's.com",
+        r'back\slash',
+        '<local>',
+        '*',
+        '*.*',
+      ]) {
+        expect(
+          PlatformPolicy.validSystemProxyBypass(host),
+          isFalse,
+          reason: host,
+        );
+        expect(
+          () => withBypass(PlatformPolicy.defaults(), [host]),
+          throwsFormatException,
+          reason: host,
+        );
+      }
+      expect(
+        () => withBypass(
+          PlatformPolicy.defaults(),
+          List.filled(PlatformPolicy.maxSystemProxyBypass + 1, 'a.com'),
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('change the runtime only in proxy mode', () {
+      final tun = PlatformPolicy.defaults();
+      final proxy = tun.withDesktopRunMode(DesktopRunMode.systemProxy);
+      bool same(PlatformPolicy a, PlatformPolicy b) =>
+          PolicyEditorService.sameRuntime(a, b, ConnectionPlatform.windows);
+
+      expect(same(proxy, withBypass(proxy, ['example.com'])), isFalse);
+      expect(same(tun, withBypass(tun, ['example.com'])), isTrue);
+    });
+
+    test('the editor drops blank rows and repeats before saving', () {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinator = ConnectionCoordinator(database: db);
+      addTearDown(() async {
+        coordinator.dispose();
+        await db.close();
+      });
+      final service = PolicyEditorService(
+        coordinator: coordinator,
+        platform: ConnectionPlatform.linux,
+      );
+      final draft = PolicyEditorDraft(ConnectionConfiguration());
+      draft.policy['xrayOutboundInterfaceName'] = 'eth0';
+      draft.policy['desktop']['proxyBypass'] = [
+        ' example.com ',
+        '',
+        'EXAMPLE.com',
+        '*.lan',
+      ];
+      expect(service.validate(draft).systemProxyBypass, [
+        'example.com',
+        '*.lan',
+      ]);
+    });
   });
 }

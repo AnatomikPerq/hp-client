@@ -30,6 +30,7 @@ import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/pages/servers/catalog.dart';
 import 'package:onexray/pages/shared/connection_action.dart';
 import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 
 const _unchanged = Object();
 
@@ -256,11 +257,12 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     return _selectionName(l10n, selection);
   }
 
-  /// The flag beside the selection on Home: the running entry when
-  /// connected, else the chosen node or region.
-  String? selectionFlag(AppLocalizations l10n) {
+  /// The icon beside the selection on Home: the running entry when
+  /// connected, else the chosen node or region. A node shows the first
+  /// emoji of its name, else the flag of its measured location.
+  ({NameEmoji? emoji, String? code}) selectionIcon(AppLocalizations l10n) {
     final settings = configuration.connection;
-    if (settings.expert) return null;
+    if (settings.expert) return (emoji: null, code: null);
     final view = connectionView;
     final entries = view.phase == ConnectionPhase.connected
         ? view.runtime?.entries ?? const <RuntimeNode>[]
@@ -273,10 +275,16 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     final row = id == null
         ? null
         : servers.where((row) => row.id == id).firstOrNull;
-    if (row != null) return nodeLabel(l10n, row).code;
-    return settings.selection.kind == SelectionKind.region
-        ? settings.selection.region?.toUpperCase()
-        : null;
+    if (row != null) {
+      final label = nodeLabel(l10n, row);
+      return (emoji: label.emoji, code: label.code);
+    }
+    return (
+      emoji: null,
+      code: settings.selection.kind == SelectionKind.region
+          ? settings.selection.region?.toUpperCase()
+          : null,
+    );
   }
 
   String _selectionName(AppLocalizations l, ServerSelection selection) =>

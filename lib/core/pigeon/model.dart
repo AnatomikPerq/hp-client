@@ -13,6 +13,10 @@ class StartVpnRequest {
   String? snapshotToken;
   String? metadataJson;
 
+  /// Desktop proxy mode only: the user's hosts that bypass the system proxy.
+  /// Absent elsewhere, so the native start request contract is unchanged.
+  List<String>? systemProxyBypass;
+
   StartVpnRequest(
     this.tun,
     this.socksPort,
@@ -20,6 +24,7 @@ class StartVpnRequest {
     this.coreInvokeText, {
     this.snapshotToken,
     this.metadataJson,
+    this.systemProxyBypass,
   });
 
   factory StartVpnRequest.fromJson(Map<String, dynamic> json) =>

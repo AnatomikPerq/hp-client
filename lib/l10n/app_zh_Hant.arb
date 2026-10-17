@@ -832,5 +832,17 @@
   "sidebarCollapse": "收合側欄",
   "sidebarExpand": "展開側欄",
   "settingsTunnelHint": "DNS、IPv6、出站介面、系統代理連接埠",
-  "settingsXrayHint": "路由資料、更新、測速、日誌、設定"
+  "settingsXrayHint": "路由資料、更新、測速、日誌、設定",
+  "windowMinimize": "最小化",
+  "windowMaximize": "最大化",
+  "windowRestore": "還原",
+  "windowClose": "關閉",
+  "systemProxyBypassTitle": "系統代理例外",
+  "systemProxyBypassDescription": "這些網站直接開啟，不經過代理。本機網路一律排除。要包含子網域，請寫 *.example.com。",
+  "systemProxyBypassEmpty": "沒有自訂例外。",
+  "systemProxyBypassAdd": "新增網域",
+  "systemProxyBypassNumber": "例外 {number}",
+  "systemProxyBypassRemove": "刪除例外 {number}",
+  "systemProxyBypassInvalid": "不是網域或位址：{host}",
+  "subscriptionTitleLoading": "正在從服務商取得名稱…"
 }

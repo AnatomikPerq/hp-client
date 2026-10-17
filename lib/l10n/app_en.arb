@@ -3016,6 +3016,39 @@
   "@groupUpdatedAt": {"placeholders": {"time": {"type": "String"}}},
   "sidebarCollapse": "Collapse sidebar",
   "sidebarExpand": "Expand sidebar",
-  "settingsTunnelHint": "DNS, IPv6, outbound interface, system proxy port",
-  "settingsXrayHint": "Routing data, updates, speed test, logs, configuration"
+  "settingsTunnelHint": "DNS, IPv6, outbound interface, system proxy port and exceptions",
+  "settingsXrayHint": "Routing data, updates, speed test, logs, configuration",
+  "windowMinimize": "Minimize",
+  "windowMaximize": "Maximize",
+  "windowRestore": "Restore",
+  "windowClose": "Close",
+  "systemProxyBypassTitle": "System proxy exceptions",
+  "systemProxyBypassDescription": "These sites open directly, without the proxy. Local networks are always excluded. Write *.example.com to include subdomains.",
+  "systemProxyBypassEmpty": "No exceptions of your own.",
+  "systemProxyBypassAdd": "Add domain",
+  "systemProxyBypassNumber": "Exception {number}",
+  "@systemProxyBypassNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "systemProxyBypassRemove": "Remove exception {number}",
+  "@systemProxyBypassRemove": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "systemProxyBypassInvalid": "Not a domain or address: {host}",
+  "@systemProxyBypassInvalid": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionTitleLoading": "Getting the name from the provider…"
 }

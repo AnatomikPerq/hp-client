@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 <workspace>/
-  hp-client/   this repository (on the owner's machine: C:\Users\BADAB\Рабочий стол\hp-client)
+  hp-client/   this repository (on the owner's machine: C:\Users\BADAB\Рабочий стол\projects\hp-client)
   libXray/     OUR FORK: AnatomikPerq/libXray (upstream XTLS/libXray is remote `upstream`)
   output/      packaged builds land here
 ```
@@ -21,7 +21,7 @@ No Xray-core checkout is needed: libXray's `go.mod` pins the core, and the deskt
 
 ## Commands
 
-The Cyrillic path breaks Dart tooling (`flutter analyze` crashes, `dart run` misses its own package). Work through the ASCII junction `C:\Users\BADAB\dev\hp-client` **from PowerShell**; Git Bash resolves the junction back to the real path. Toolchains on the owner's machine:
+The Cyrillic path breaks Dart tooling (`flutter analyze` crashes, `dart run` misses its own package). Work through the ASCII junction `C:\Users\BADAB\dev\hp-client` **from PowerShell**; Git Bash resolves the junction back to the real path. If the workspace moves, re-point the junctions (`dev\hp-client`, `dev\libXray`) with `New-Item -ItemType Junction`; a dangling one makes every Dart command fail. Toolchains on the owner's machine:
 
 ```powershell
 $env:Path = "C:\Users\BADAB\flutter\stable\bin;" + $env:Path
@@ -72,6 +72,8 @@ Any failure falls back to a full restart: a half-configured tunnel is worse than
 
 `SystemProxyManager` (`lib/core/system_proxy/`) saves the previous settings to `run/system-proxy.json` **before** applying and restores them on stop, on an unexpected Core exit and on the next App start, but only while the system still points at the App's port. Windows keeps a legacy registry copy (`ProxyEnable`, `ProxyServer`, `ProxyOverride`, `AutoConfigURL`) next to the WinINet view; other software may write only that copy and it may disagree with WinINet (it does on the owner's machine), so it is snapshotted and restored verbatim.
 
+The exception list is `systemProxyDefaultBypass` (local networks, `<local>` last) plus the user's hosts from Settings → Advanced → VPN tunnel (`desktop.proxyBypass` in `PlatformPolicy`). They reach the FFI layer as `StartVpnRequest.systemProxyBypass`, a desktop-only optional field that mobile requests never carry. Changing them in proxy mode is a runtime change (reconnect without UAC).
+
 ## Config generation
 
 `ConnectionPreparation` (`lib/service/connect/preparation.dart`) resolves, allocates ports and calls the pure `ConnectionCompiler`. After compiling it applies two map transforms, in this order: the minewire bypass rules first in `routing.rules`, then `LiveControl.apply`, whose rule must end up above everything.
@@ -90,13 +92,15 @@ See `protocols/README.md`. minewire nodes are ordinary server rows whose outboun
 
 The fork reworked navigation for usability after tunnel clients like INCY; `docs/app-navigation.md` still describes upstream's four tabs.
 
+- **Window caption** (Windows, Linux): `DesktopCaption` (`lib/pages/main/desktop_caption.dart`) replaces window_manager's `WindowCaption`, like INCY: brand in `palette.brand`, version, thin Lucide buttons. It sits above the Navigator, so it wraps itself in a `Material` (otherwise text inherits `MaterialApp`'s debug style) and cannot use tooltips. On Windows 11 `WindowService.updateFrameColor` sets the DWM border color instead of the system accent. The sidebar hides its version where the caption shows it.
 - **Three tabs**: Home (`AppPrimaryDestination.connect`, path `/connect`), Servers, Settings. Advanced is no longer a tab: Settings → Advanced pushes `AppPageDestination.advanced` with `extra` 0 (VPN tunnel) or 1 (Xray). The desktop sidebar collapses to icons (`_sidebarCollapsed`, in memory only).
 - **Home** (`lib/pages/connect/view.dart`) has no app bar: TUN/proxy pill, ↑ speed · session clock · ↓ speed, the orb (the accessible connect control), the selected node with its flag, "Check connection" (`LivePingProbe`), the routing pill, Add / Paste / All servers, then `HomeServerList`: Automatic, favorites and the subscription holding the current selection. `ConnectPage` owns a second `ServersController` for that list, so rows, menus and pings behave exactly as on Servers. Speeds rebuild only through `trafficBuilder`; `ConnectView` itself is filtered by `sameContentAs`.
 - **Servers** is one scrolling list of collapsible `ServerGroupCard`s (no master/detail pane) with search, by-subscription/by-location toggle and filter chips (favorites, primary protocol). Collapse state and filters live in `ServersPageState`.
 - **Selecting a node never asks to reconnect**: `ServersController.choose` passes `confirmReconnect: false` to `applyConnectionChange`, relying on the live swap (and the coordinator's restart fallback). Tray changes and routing-method changes still confirm.
 - `ServerNodeTile` is the one node row. Node menus are popups at the `…` button on desktop and the existing bottom-sheet dialogs on mobile (`menus_test.dart` covers the latter); favorite moved into the menu (`ServerAction.favorite`).
-- **Flags**: Windows has no glyphs for regional-indicator emoji and prints "NL". `splitFlagEmoji` takes flags out of names, `CountryFlag` draws `assets/flags/<iso>.png` (Twemoji, CC-BY 4.0, see `LICENSE-THIRD-PARTY.md`), falling back to the measured `countryCode`, then a globe. The folder is excluded from `flutter_gen` so `assets.gen.dart` does not grow 250 getters.
-- Visual check without running the App or computer use: a throwaway widget test can load real fonts with `FontLoader` (Geist and Lucide from the pub cache, Segoe UI for Cyrillic), `precacheImage` the flags inside `tester.runAsync`, and write `RenderRepaintBoundary.toImage()` to PNG. Text in buttons inherits no family and still renders as Ahem boxes there. Do not leave such a test in `test/`: CI runs everything.
+- **Node icons**: the first emoji of a server or subscription name is its icon (`splitNameEmoji`, `NameIcon`); names without one show the flag of the measured `countryCode`, then a globe. Grouping by location still uses only the measured code. Images are Twemoji 15.1 (CC-BY 4.0, see `LICENSE-THIRD-PARTY.md`): `assets/emoji/<hex code points without FE0F>.png` and `assets/flags/<iso>.png`, built by `tool/twemoji.py`, which also writes the key table `twemoji_keys.dart`. Windows has no glyphs for regional-indicator flags and prints "NL", so flags are removed from the text; other emoji stay. Both folders are excluded from `flutter_gen`.
+- **New subscription name**: the add form fills the empty name with the provider's `Profile-Title` (`SubscriptionService.readTitle`, 500 ms after typing stops) and replaces it only while the user has not edited it. Widget tests that type a link into an empty form must stub `readSubscriptionTitle` and pump past the delay.
+- Visual check without running the App or computer use: a throwaway widget test can load real fonts with `FontLoader` (Geist and Lucide from the pub cache, Segoe UI for Cyrillic), `precacheImage` the flags and emoji inside `tester.runAsync`, and write `RenderRepaintBoundary.toImage()` to PNG. Text in buttons inherits no family and still renders as Ahem boxes there. Do not leave such a test in `test/`: CI runs everything.
 
 ## Testing the VPN
 

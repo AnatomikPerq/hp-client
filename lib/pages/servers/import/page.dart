@@ -383,6 +383,8 @@ class ServerImportFormPage extends StatelessWidget {
       nameLabel: l10n.prototypeSubscriptionName,
       nameController: controller.name,
       nameHint: l10n.prototypeExampleService,
+      nameLoading: controller.state.loadingTitle,
+      nameLoadingHint: l10n.subscriptionTitleLoading,
       urlLabel: l10n.prototypeSubscriptionLink,
       urlController: controller.url,
       urlHint: 'https://provider.example/subscription',

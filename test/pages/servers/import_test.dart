@@ -821,6 +821,54 @@ void main() {
       },
     );
   }
+
+  testWidgets('a new subscription offers the provider name', (tester) async {
+    final lookups = <String>[];
+    final controller = ServerImportController(
+      loadSubscription: (_) async => null,
+      readSubscriptionTitle: (url, hwid) async {
+        lookups.add(url);
+        return url.contains('other') ? 'Other VPN' : '🌟HYPER VPN💫';
+      },
+    );
+    addTearDown(controller.close);
+    Future<void> settle() async {
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    }
+
+    controller.url.text = 'https://provider.example/sub';
+    expect(lookups, isEmpty, reason: 'waits for typing to pause');
+    await settle();
+    expect(lookups, ['https://provider.example/sub']);
+    expect(controller.name.text, '🌟HYPER VPN💫');
+    expect(controller.state.loadingTitle, isFalse);
+    expect(controller.canSubmit(ServerImportAction.subscription), isTrue);
+
+    // A filled-in name follows the link; a name the user typed stays.
+    controller.url.text = 'https://other.example/sub';
+    await settle();
+    expect(controller.name.text, 'Other VPN');
+    controller.name.text = 'My VPN';
+    controller.url.text = 'https://provider.example/next';
+    await settle();
+    expect(lookups, hasLength(2));
+    expect(controller.name.text, 'My VPN');
+
+    final editing = ServerImportController(
+      subscriptionId: 7,
+      loadSubscription: (_) async => null,
+      readSubscriptionTitle: (url, hwid) async {
+        lookups.add(url);
+        return 'Never';
+      },
+    );
+    addTearDown(editing.close);
+    editing.url.text = 'https://provider.example/sub';
+    await settle();
+    expect(lookups, hasLength(2), reason: 'an existing name is not replaced');
+    expect(editing.name.text, isEmpty);
+  });
 }
 
 String _rawLink() => Uri(

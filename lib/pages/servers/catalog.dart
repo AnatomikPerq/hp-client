@@ -1,7 +1,7 @@
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
-import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/service/connect/settings.dart';
 
@@ -50,20 +50,24 @@ mixin ServerLabels {
   String primaryProtocol(CoreConfigData row) =>
       protocol(row).split('|').first.trim();
 
-  /// The list label: the name without emoji flags, and the flag to draw.
-  /// A flag in the name wins over the measured location of the address.
-  ({String? code, String name}) nodeLabel(
+  /// The list label: the name without its first emoji, which becomes the
+  /// icon, and without flags Windows cannot draw. Names without an emoji
+  /// show the flag of the measured location, [code], instead. Grouping by
+  /// location keeps using that measured code, never the emoji.
+  ({NameEmoji? emoji, String? code, String name}) nodeLabel(
     AppLocalizations l10n,
     CoreConfigData row,
   ) {
-    final split = splitFlagEmoji(serverName(row));
-    final code = split.code ?? row.countryCode?.toUpperCase();
+    final split = splitNameEmoji(serverName(row));
+    final measured = row.countryCode?.toUpperCase();
+    final code = measured == null || measured.isEmpty ? null : measured;
+    final named = split.emoji?.country ?? code;
     final name = split.name.isNotEmpty
         ? split.name
-        : code == null || code.isEmpty
+        : named == null
         ? serverName(row)
-        : l10n.countryRegionName(code);
-    return (code: code == null || code.isEmpty ? null : code, name: name);
+        : l10n.countryRegionName(named);
+    return (emoji: split.emoji, code: code, name: name);
   }
 
   String health(AppLocalizations l, CoreConfigData row) =>

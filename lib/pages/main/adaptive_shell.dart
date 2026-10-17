@@ -306,8 +306,11 @@ class _AdaptiveMainShellState extends State<AdaptiveMainShell> {
                         collapsed: collapsed,
                         onTap: () => _showDesktopUpdate(context, appUpdateInfo),
                       ),
-                    const SizedBox(height: 10),
-                    const _SidebarVersion(),
+                    // Windows and Linux show the version in the caption.
+                    if (!DesktopWindowFrame.hasCaption(context)) ...[
+                      const SizedBox(height: 10),
+                      const _SidebarVersion(),
+                    ],
                   ],
                 ),
               ),

@@ -117,4 +117,22 @@ void main() {
     expect(await proxy.restore(), SystemProxyRestore.keptForeign);
     expect(backend.current, userProxy);
   });
+
+  test('user exceptions join the local ones, <local> last', () async {
+    final backend = _FakeBackend(userProxy);
+    await manager(backend).apply(
+      host: '127.0.0.1',
+      port: 10820,
+      bypass: [' example.com', '*.lan', 'LOCALHOST', ''],
+    );
+    final hosts = backend.current.bypass.split(';');
+    expect(hosts.take(systemProxyDefaultBypass.length - 1), [
+      ...systemProxyDefaultBypass.take(systemProxyDefaultBypass.length - 1),
+    ]);
+    expect(hosts.skip(systemProxyDefaultBypass.length - 1), [
+      'example.com',
+      '*.lan',
+      '<local>',
+    ]);
+  });
 }

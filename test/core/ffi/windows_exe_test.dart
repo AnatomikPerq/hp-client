@@ -487,7 +487,7 @@ void main() {
     );
     late _ProxyBackend backend;
 
-    WindowsExeFfiApi createProxy() => WindowsExeFfiApi(
+    WindowsExeFfiApi createProxy({List<String>? bypass}) => WindowsExeFfiApi(
       filesDirectory: directory.path,
       executable: p.join(directory.path, 'HyperClientCore.exe'),
       process: process,
@@ -501,6 +501,7 @@ void main() {
             payload: RunXrayRequest('{"inbounds":[]}').toJson(),
           ).toJson(),
         ),
+        systemProxyBypass: bypass,
       ),
       notify: (status) async => events.add(status),
       notifyError: (error) => errors.add(error),
@@ -535,6 +536,14 @@ void main() {
       expect(backend.current, userProxy);
       // The graceful path, not a kill: no UAC for an elevated Core.
       expect(process.stops, 0);
+    });
+
+    test('user exceptions reach the system proxy', () async {
+      final api = createProxy(bypass: ['example.com', '*.lan']);
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(backend.current.bypass, endsWith(';example.com;*.lan;<local>'));
+      expect((await api.stopVpn()).status, VpnStatus.disconnected);
+      expect(backend.current, userProxy);
     });
 
     test('a Core that dies on its own gives the proxy back', () async {
