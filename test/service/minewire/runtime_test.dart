@@ -1,13 +1,16 @@
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
+import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/minewire/link.dart';
 import 'package:onexray/service/minewire/ping.dart';
 import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
+import 'package:onexray/service/shared/ping/batch.dart';
 
 class _Host implements MinewireHost {
   final engines = <int, MinewireEngineState>{};
@@ -15,12 +18,16 @@ class _Host implements MinewireHost {
   int nextPort = 41000;
   bool connect = true;
 
+  /// The engine keeps running and redialing after this error.
+  String? retrying;
+
   @override
   Future<int> start({
     required String serverAddress,
     required String password,
     required String mode,
     int? localPort,
+    String? interfaceName,
   }) async {
     starts.add(
       StartMinewireRequest(
@@ -28,15 +35,18 @@ class _Host implements MinewireHost {
         password,
         mode: mode,
         localPort: localPort,
+        interfaceName: interfaceName,
       ),
     );
     final port = localPort ?? nextPort++;
-    engines[port] = MinewireEngineState(
-      port,
-      connect,
-      connect,
-      connect ? null : 'bad password',
-    );
+    engines[port] = retrying != null
+        ? MinewireEngineState(port, true, false, retrying)
+        : MinewireEngineState(
+            port,
+            connect,
+            connect,
+            connect ? null : 'bad password',
+          );
     return port;
   }
 
@@ -192,33 +202,145 @@ void main() {
     );
   });
 
-  group('TCP ping', () {
-    test('measures connect time to the server', () async {
-      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-      addTearDown(server.close);
-      server.listen((socket) => socket.destroy());
-      final result = await minewireTcpPing(
-        MinewireLink(
-          password: 'x',
-          host: '127.0.0.1',
-          port: server.port,
-          name: 'n',
-        ),
-        3,
+  test('engines bind their uplinks only under a desktop tunnel', () async {
+    String? bound({
+      ConnectionPlatform platform = ConnectionPlatform.windows,
+      bool tunnel = true,
+      String name = ' Ethernet ',
+    }) => MinewireRuntime.uplinkInterface(
+      platform: platform,
+      tunnel: tunnel,
+      interfaceName: name,
+    );
+    expect(bound(), 'Ethernet');
+    expect(bound(platform: ConnectionPlatform.linux, name: 'eth0'), 'eth0');
+    expect(bound(tunnel: false), isNull);
+    expect(bound(platform: ConnectionPlatform.android), isNull);
+    expect(bound(name: ''), isNull);
+
+    await runtime.materialize([_minewire(2)], interfaceName: 'Ethernet');
+    await runtime.resume(
+      {3: 45557},
+      (id) async => _minewire(id),
+      interfaceName: 'Ethernet',
+    );
+    expect(host.starts.map((start) => start.interfaceName), [
+      'Ethernet',
+      'Ethernet',
+    ]);
+    await runtime.materialize([_minewire(4)]);
+    expect(host.starts.last.toJson().containsKey('interface'), isFalse);
+  });
+
+  test('DNS that may cross the tunnel goes over TCP', () {
+    final config = <String, dynamic>{
+      'dns': {
+        'servers': [
+          {'address': 'fakedns', 'tag': 'app-dns-fake'},
+          {'address': '8.8.8.8', 'tag': 'app-dns-proxy'},
+          {'address': '2001:4860:4860::8888', 'port': 5353},
+          {'address': '77.88.8.8', 'tag': 'app-dns-direct'},
+          'https://dns.google/dns-query',
+          '1.1.1.1',
+          'localhost',
+        ],
+      },
+      'outbounds': [
+        {'tag': 'app-entry-0', 'protocol': 'socks'},
+        {
+          'tag': 'dnsOut',
+          'protocol': 'dns',
+          'settings': {
+            'rules': [
+              {'action': 'hijack', 'qType': '1,28'},
+            ],
+          },
+          'streamSettings': {
+            'sockopt': {'dialerProxy': 'app-entry-0'},
+          },
+        },
+        {
+          'tag': 'dnsDirect',
+          'protocol': 'dns',
+          'streamSettings': {
+            'sockopt': {'dialerProxy': 'direct'},
+          },
+        },
+      ],
+    };
+    MinewireRuntime.applyTcpDns(config);
+    expect(config['dns']['servers'], [
+      {'address': 'fakedns', 'tag': 'app-dns-fake'},
+      {'address': 'tcp://8.8.8.8', 'tag': 'app-dns-proxy'},
+      {'address': 'tcp://[2001:4860:4860::8888]:5353'},
+      {'address': '77.88.8.8', 'tag': 'app-dns-direct'},
+      'https://dns.google/dns-query',
+      'tcp://1.1.1.1',
+      'localhost',
+    ]);
+    final outbounds = config['outbounds'] as List;
+    expect(outbounds[0].containsKey('settings'), isFalse);
+    expect(outbounds[1]['settings'], {
+      'rules': [
+        {'action': 'hijack', 'qType': '1,28'},
+      ],
+      'network': 'tcp',
+    });
+    expect(outbounds[2].containsKey('settings'), isFalse);
+  });
+
+  group('ping', () {
+    final link = MinewireLink(
+      password: 'secret',
+      host: '203.0.113.7',
+      port: 25565,
+      name: 'n',
+    );
+
+    test('runs the usual probe through a throwaway engine', () async {
+      final probe = await MinewirePingProbe.start(link, 3, runtime: runtime);
+      expect(probe.failure, isNull);
+      // Not part of any runtime: a disconnect or switch leaves it alone.
+      await runtime.stopAll();
+      expect(host.engines.keys, [41000]);
+
+      final source = jsonDecode(probe.source!.xrayJson);
+      expect(source['outbounds'].single, {
+        'tag': 'proxy',
+        'protocol': 'socks',
+        'settings': {'address': '127.0.0.1', 'port': 41000},
+      });
+      // The session setup counts, like another node's handshake does.
+      final measured = probe.complete(
+        const PingBatchResult(true, 150, '', countryCode: 'NL'),
       );
-      expect(result.success, isTrue);
-      expect(result.delay, greaterThan(0));
+      expect(measured.success, isTrue);
+      expect(measured.delay, greaterThanOrEqualTo(150));
+      expect(measured.countryCode, 'NL');
+      final failed = PingBatchResult.failed('timeout');
+      expect(probe.complete(failed), same(failed));
+
+      await probe.stop();
+      expect(host.engines, isEmpty);
     });
 
-    test('an unreachable server is a failure', () async {
-      final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-      final port = closed.port;
-      await closed.close();
-      final result = await minewireTcpPing(
-        MinewireLink(password: 'x', host: '127.0.0.1', port: port, name: 'n'),
-        3,
-      );
-      expect(result.success, isFalse);
+    test('an engine that cannot log in is an error at once', () async {
+      host.retrying = 'EOF';
+      final watch = Stopwatch()..start();
+      final probe = await MinewirePingProbe.start(link, 3, runtime: runtime);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+      expect(probe.source, isNull);
+      expect(probe.failure!.success, isFalse);
+      expect(probe.failure!.delay, PingDelayConstants.error);
+      expect(probe.failure!.error, 'EOF');
+      expect(host.engines, isEmpty);
+    });
+
+    test('an engine that never connects is a timeout', () async {
+      host.retrying = '';
+      final probe = await MinewirePingProbe.start(link, 1, runtime: runtime);
+      expect(probe.failure!.delay, PingDelayConstants.timeout);
+      expect(host.engines, isEmpty);
     });
   });
 

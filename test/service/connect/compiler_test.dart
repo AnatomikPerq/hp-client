@@ -453,6 +453,65 @@ void main() {
     );
   });
 
+  test('TUN never binds a loopback server to the physical interface', () {
+    final plan = ConnectionCompiler.compile(
+      settings: ConnectionSettings(smart: SmartRoutingSettings(entryCount: 2)),
+      // A minewire engine and a remote node.
+      entries: [
+        node(1, address: '127.0.0.1'),
+        node(2, address: '203.0.113.7'),
+      ],
+      regions: catalog,
+      options: options(
+        platform: ConnectionPlatform.windows,
+        interfaceName: 'Ethernet',
+      ),
+    );
+    final outbounds = {
+      for (final outbound in plan.config['outbounds'] as List)
+        outbound['tag']: outbound,
+    };
+    expect(outbounds['app-entry-0'].containsKey('streamSettings'), false);
+    expect(
+      outbounds['app-entry-1']['streamSettings']['sockopt']['interface'],
+      'Ethernet',
+    );
+    expect(
+      outbounds['direct']['streamSettings']['sockopt']['interface'],
+      'Ethernet',
+    );
+
+    final raw = ConnectionCompiler.compile(
+      settings: ConnectionSettings(expert: true),
+      raw: {
+        'outbounds': [
+          {
+            'tag': 'local',
+            'protocol': 'socks',
+            'settings': {
+              'servers': [
+                {'address': 'localhost', 'port': 1080},
+              ],
+            },
+            'streamSettings': {
+              'sockopt': {'interface': 'stale'},
+            },
+          },
+        ],
+      },
+      entries: const [],
+      regions: catalog,
+      options: options(
+        platform: ConnectionPlatform.linux,
+        interfaceName: 'eth0',
+      ),
+    );
+    expect(
+      (raw.config['outbounds'] as List).single.containsKey('streamSettings'),
+      false,
+    );
+  });
+
   test('Raw runtime keeps user configuration alongside managed fields', () {
     final source = <String, dynamic>{
       'inbounds': [

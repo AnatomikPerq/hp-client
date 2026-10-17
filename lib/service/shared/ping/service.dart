@@ -8,6 +8,7 @@ import 'package:drift/drift.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/minewire/link.dart';
 import 'package:onexray/service/minewire/ping.dart';
+import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -24,7 +25,10 @@ class PingService {
 
   factory PingService() => _singleton;
 
-  PingService._internal() : _databaseOverride = null, _batchOverride = null;
+  PingService._internal()
+    : _databaseOverride = null,
+      _batchOverride = null,
+      _minewireOverride = null;
 
   PingService.forTesting({
     required AppDatabase database,
@@ -34,12 +38,15 @@ class PingService {
       PingState,
     )
     runBatch,
+    MinewireRuntime? minewire,
   }) : _databaseOverride = database,
-       _batchOverride = runBatch {
+       _batchOverride = runBatch,
+       _minewireOverride = minewire {
     _automaticEnabled = automaticEnabled;
   }
 
   final AppDatabase? _databaseOverride;
+  final MinewireRuntime? _minewireOverride;
   final Future<List<PingBatchResult>> Function(
     List<PingBatchSource>,
     PingState,
@@ -210,13 +217,31 @@ class PingService {
           sources.add(source);
         }
       }
-      final results = [
-        ...await (_batchOverride ?? PingBatchRunner.run)(sources, pingState),
-        ...await Future.wait([
-          for (final link in minewireLinks)
-            minewireTcpPing(link, pingState.timeout.toInt()),
-        ]),
-      ];
+      // minewire nodes get a throwaway engine each and then the same probe
+      // as every other node, so their delays compare (see MinewirePingProbe).
+      final probes = await Future.wait([
+        for (final link in minewireLinks)
+          MinewirePingProbe.start(
+            link,
+            pingState.timeout.toInt(),
+            runtime: _minewireOverride,
+          ),
+      ]);
+      final List<PingBatchResult> results;
+      try {
+        final measured = await (_batchOverride ?? PingBatchRunner.run)([
+          ...sources,
+          for (final probe in probes) ?probe.source,
+        ], pingState);
+        var next = sources.length;
+        results = [
+          ...measured.take(sources.length),
+          for (final probe in probes)
+            probe.failure ?? probe.complete(measured[next++]),
+        ];
+      } finally {
+        await Future.wait([for (final probe in probes) probe.stop()]);
+      }
       batchRows.addAll(minewireRows);
       await db.transaction(() async {
         for (var index = 0; index < results.length; index++) {

@@ -245,11 +245,17 @@ class StartMinewireRequest {
   String? mode;
   int? localPort;
 
+  /// Binds the engine's uplink to this interface (desktop TUN). Older
+  /// libXray builds ignore it.
+  @JsonKey(name: 'interface')
+  String? interfaceName;
+
   StartMinewireRequest(
     this.serverAddress,
     this.password, {
     this.mode,
     this.localPort,
+    this.interfaceName,
   });
 
   factory StartMinewireRequest.fromJson(Map<String, dynamic> json) =>

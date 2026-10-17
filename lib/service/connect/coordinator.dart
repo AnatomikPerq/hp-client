@@ -192,12 +192,20 @@ class ConnectionCoordinator with WidgetsBindingObserver {
   /// A Core that survived an App restart still points at in-App engines.
   Future<void> _resumeMinewire(ConnectionRuntime runtime) async {
     if (runtime.minewirePorts.isEmpty) return;
-    await MinewireRuntime.instance.resume(runtime.minewirePorts, (id) async {
-      final row = await db.coreConfigDao.searchRow(id);
-      return row == null || row.type != 'outbound'
-          ? null
-          : ResolvedServer.fromRow(row);
-    });
+    await MinewireRuntime.instance.resume(
+      runtime.minewirePorts,
+      (id) async {
+        final row = await db.coreConfigDao.searchRow(id);
+        return row == null || row.type != 'outbound'
+            ? null
+            : ResolvedServer.fromRow(row);
+      },
+      interfaceName: MinewireRuntime.uplinkInterface(
+        platform: runtime.platform,
+        tunnel: runtime.request.tun != null,
+        interfaceName: runtime.configuration.policy.xrayOutboundInterfaceName,
+      ),
+    );
   }
 
   Future<ConnectionConfiguration> get configuration async =>

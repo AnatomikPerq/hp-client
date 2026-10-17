@@ -190,6 +190,7 @@ class AppHostApi {
     required String password,
     required String mode,
     int? localPort,
+    String? interfaceName,
   }) async {
     final response = await _invoke(
       LibXrayInvokeRequest(
@@ -199,6 +200,7 @@ class AppHostApi {
           password,
           mode: mode,
           localPort: localPort,
+          interfaceName: interfaceName,
         ).toJson(),
       ),
     );

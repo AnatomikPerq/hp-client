@@ -598,7 +598,14 @@ class ConnectionCompiler {
       }
       final stream = _object(outbound, 'streamSettings');
       final sockopt = _object(stream, 'sockopt');
-      _applyInterfacePolicy(sockopt, options);
+      if (_dialsLoopback(outbound)) {
+        // A local server, such as a minewire engine, is not behind the
+        // physical interface: Windows refuses the bound dial ("not valid in
+        // its context") and loopback traffic never enters the tunnel anyway.
+        sockopt.remove('interface');
+      } else {
+        _applyInterfacePolicy(sockopt, options);
+      }
       // UDP hopping redials with its own socket options, not the stream's.
       if (stream['finalmask'] case final Map<String, dynamic> mask) {
         for (final entry in _objects(mask, 'udp')) {
@@ -621,6 +628,24 @@ class ConnectionCompiler {
       if (sockopt.isEmpty) stream.remove('sockopt');
       if (stream.isEmpty) outbound.remove('streamSettings');
     }
+  }
+
+  /// Every server [outbound] dials is on loopback, in either Xray layout:
+  /// flat `address` or `servers`/`vnext` lists.
+  static bool _dialsLoopback(Map<String, dynamic> outbound) {
+    final settings = outbound['settings'];
+    if (settings is! Map) return false;
+    final addresses = [
+      ?settings['address'],
+      for (final key in const ['servers', 'vnext'])
+        if (settings[key] case final List servers)
+          for (final server in servers)
+            if (server is Map) server['address'],
+    ];
+    return addresses.isNotEmpty &&
+        addresses.every(
+          (address) => address is String && _loopbackListen(address),
+        );
   }
 
   static void _applyInterfacePolicy(

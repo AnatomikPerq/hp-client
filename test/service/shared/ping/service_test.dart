@@ -6,8 +6,11 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/service/connect/resolver.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/minewire/link.dart';
+import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/ping/batch.dart';
 import 'package:onexray/service/shared/ping/service.dart';
@@ -69,6 +72,50 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'minewire nodes go through the same probe via throwaway engines',
+    () async {
+      final plain = await db.coreConfigDao.insertRow(_node('Plain'));
+      final mine = await db.coreConfigDao.insertRow(_minewireNode('Mine'));
+      final broken = await db.coreConfigDao.insertRow(
+        _minewireNode('Broken', password: 'wrong'),
+      );
+      final engines = _Engines();
+      List<PingBatchSource>? probed;
+      final service = PingService.forTesting(
+        database: db,
+        minewire: MinewireRuntime(
+          host: engines,
+          resolve: (_) async => ['203.0.113.7'],
+        ),
+        runBatch: (sources, _) async {
+          probed = sources;
+          return const [
+            PingBatchResult(true, 20, ''),
+            PingBatchResult(true, 100, '', countryCode: 'NL'),
+          ];
+        },
+      );
+      await service.pingConfigIds([plain, mine, broken]);
+
+      // The plain node and the one engine that logged in, in that order.
+      expect(probed, hasLength(2));
+      expect(jsonDecode(probed![1].xrayJson)['outbounds'][0]['settings'], {
+        'address': '127.0.0.1',
+        'port': 42000,
+      });
+      expect((await db.coreConfigDao.searchRow(plain))!.delay, 20);
+      final mineRow = (await db.coreConfigDao.searchRow(mine))!;
+      expect(mineRow.delay, greaterThanOrEqualTo(100));
+      expect(mineRow.countryCode, 'NL');
+      expect(
+        (await db.coreConfigDao.searchRow(broken))!.delay,
+        PingDelayConstants.error,
+      );
+      expect(engines.running, isEmpty);
+    },
+  );
 
   test('imported-node and subscription queues always run', () async {
     final local = await db.coreConfigDao.insertRow(_node('Local'));
@@ -472,6 +519,58 @@ void main() {
     }
   });
 }
+
+/// Engines that connect unless the password is `wrong`.
+class _Engines implements MinewireHost {
+  final running = <int, MinewireEngineState>{};
+  var _next = 42000;
+
+  @override
+  Future<int> start({
+    required String serverAddress,
+    required String password,
+    required String mode,
+    int? localPort,
+    String? interfaceName,
+  }) async {
+    final port = _next++;
+    running[port] = password == 'wrong'
+        ? MinewireEngineState(port, true, false, 'EOF')
+        : MinewireEngineState(port, true, true, null);
+    return port;
+  }
+
+  @override
+  Future<void> stop({int? localPort}) async => running.remove(localPort);
+
+  @override
+  Future<List<MinewireEngineState>> state() async => running.values.toList();
+}
+
+CoreConfigCompanion _minewireNode(String name, {String password = 'secret'}) =>
+    CoreConfigCompanion.insert(
+      name: name,
+      type: 'outbound',
+      tags: 'minewire',
+      delay: PingDelayConstants.unknown,
+      subId: 0,
+      data: Value(
+        base64Encode(
+          utf8.encode(
+            jsonEncode({
+              'outbounds': [
+                MinewireLink(
+                  password: password,
+                  host: 'mw.test',
+                  port: 25565,
+                  name: name,
+                ).toOutbound(),
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
 
 List<PingBatchResult> _successes(int count) =>
     List.generate(count, (_) => const PingBatchResult(true, 20, ''));

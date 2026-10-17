@@ -217,10 +217,14 @@ class ConnectionPreparation {
     }
     // minewire engines run in the App and are reached through loopback SOCKS;
     // the servers handed to the compiler point at them.
-    final minewire = await MinewireRuntime.instance.materialize([
-      ...entries,
-      ?finalExit,
-    ]);
+    final minewire = await MinewireRuntime.instance.materialize(
+      [...entries, ?finalExit],
+      interfaceName: MinewireRuntime.uplinkInterface(
+        platform: platform,
+        tunnel: tun != null,
+        interfaceName: policy.xrayOutboundInterfaceName,
+      ),
+    );
     try {
       return await _finish(
         configuration: configuration,
@@ -293,6 +297,7 @@ class ConnectionPreparation {
     if (minewire.endpoints.isNotEmpty || control != null) {
       final config = compiled.config;
       MinewireRuntime.applyBypass(config, minewire.bypassRules);
+      if (minewire.endpoints.isNotEmpty) MinewireRuntime.applyTcpDns(config);
       // Last: the control rule has to stay first, ahead of the bypass.
       control?.apply(config);
       compiled = CompiledConnection(

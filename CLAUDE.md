@@ -76,7 +76,9 @@ The exception list is `systemProxyDefaultBypass` (local networks, `<local>` last
 
 ## Config generation
 
-`ConnectionPreparation` (`lib/service/connect/preparation.dart`) resolves, allocates ports and calls the pure `ConnectionCompiler`. After compiling it applies two map transforms, in this order: the minewire bypass rules first in `routing.rules`, then `LiveControl.apply`, whose rule must end up above everything.
+`ConnectionPreparation` (`lib/service/connect/preparation.dart`) resolves, allocates ports and calls the pure `ConnectionCompiler`. After compiling it applies map transforms, in this order: the minewire bypass rules first in `routing.rules`, `MinewireRuntime.applyTcpDns` when a minewire engine is in the runtime, then `LiveControl.apply`, whose rule must end up above everything.
+
+In TUN mode `_applyOutboundPolicy` binds every outbound to the physical interface **except one whose servers are all on loopback** (a minewire engine): Windows rejects a dial to `127.0.0.1` bound to `Ethernet` ("not valid in its context"), which left TUN with minewire completely dead.
 
 Fork deviations from the upstream Raw contract, enforced in `ConnectionCompiler._rawRuntimeMap` (Raw and Advanced templates):
 
@@ -87,6 +89,10 @@ Fork deviations from the upstream Raw contract, enforced in `ConnectionCompiler.
 ## Non-standard protocols
 
 See `protocols/README.md`. minewire nodes are ordinary server rows whose outbound has `"protocol": "minewire"`; `MinewireRuntime` starts one engine per node in the App process before compiling and swaps the node for `socks` to its loopback port. Engines connect in the background: the runtime waits for `connected`, not just a listening port. Server addresses are resolved **before** the tunnel comes up. Engine ports are stored in the runtime metadata so a Core that survives an App restart gets its engines back on the same ports.
+
+minewire carries **TCP only** (the engine refuses SOCKS UDP, the server has no UDP). DNS that may cross it must be TCP: `applyTcpDns` turns plain-IP DNS servers (except `app-dns-direct`) into `tcp://` and sets `network: tcp` on a `dns` outbound not dialed through `direct`. With UDP, every Xray lookup waited out the 4 s DNS timeout in proxy mode and the system resolver got no answer at all in TUN. In TUN the engines also bind their uplinks to the physical interface (`MinewireRuntime.uplinkInterface`, `startMinewire.interface`). A minewire node's ping is a throwaway engine plus the ordinary libXray probe through it, with the session setup added (`MinewirePingProbe`); a bare TCP connect always won the automatic selection.
+
+The engine itself is a patched copy of upstream's `src/core` in `libXray/third_party/minewire-cli` (`replace` in libXray's `go.mod`, changes in its `PATCHES.md`): whole frames per write, an injectable dialer, no process-killing panics on malformed frames. The wire protocol is unchanged.
 
 ## UI layout
 
