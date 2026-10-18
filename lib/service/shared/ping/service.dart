@@ -107,15 +107,16 @@ class PingService {
     }
     return _enqueuePing(() async {
       final db = _database;
-      final rows = <CoreConfigData>[];
-      for (final id in targetIds) {
-        final row = await db.coreConfigDao.searchRow(id);
-        if (row != null &&
-            _isPingableConfig(row) &&
-            (force || isUnmeasured(row))) {
-          rows.add(row);
-        }
-      }
+      final byId = {
+        for (final row in await db.coreConfigDao.searchRows(targetIds))
+          row.id: row,
+      };
+      final rows = <CoreConfigData>[
+        for (final id in targetIds)
+          if (byId[id] case final row?
+              when _isPingableConfig(row) && (force || isUnmeasured(row)))
+            row,
+      ];
       if (rows.isEmpty) {
         return;
       }

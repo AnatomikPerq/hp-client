@@ -19,6 +19,11 @@ class GoRouteApp extends StatelessWidget {
     return BlocProvider(
       create: (_) => AppEventBus(),
       child: BlocBuilder<AppEventBus, AppEventBusState>(
+        // Only what the app shell itself uses. Ping batches, downloads and
+        // update checks emit too; each of their widgets listens on its own.
+        buildWhen: (previous, next) =>
+            previous.themeCode != next.themeCode ||
+            previous.languageCode != next.languageCode,
         builder: (context, state) => _buildApp(context, state),
       ),
     );

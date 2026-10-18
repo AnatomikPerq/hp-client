@@ -128,7 +128,11 @@ void main() {
       LogFileViewerParams(title: 'access log', path: logFile.path),
     );
     addTearDown(controller.close);
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // The first read is asynchronous; a fixed 100 ms lost the race under
+    // the load of a full test run.
+    for (var i = 0; i < 100 && !controller.state.fileExists; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
 
     expect(controller.state.lines, ['first line', 'second line']);
     expect(controller.state.fileExists, isTrue);

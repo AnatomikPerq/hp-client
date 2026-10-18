@@ -70,6 +70,18 @@ class CoreConfigDao extends DatabaseAccessor<AppDatabase>
     )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
+  /// The rows with these ids, in no particular order: a query per 500 ids
+  /// instead of one per id, under SQLite's bound-variable limit.
+  Future<List<CoreConfigData>> searchRows(Iterable<int> ids) async {
+    final unique = ids.toSet().toList();
+    return [
+      for (var start = 0; start < unique.length; start += 500)
+        ...await (select(
+          coreConfig,
+        )..where((tbl) => tbl.id.isIn(unique.skip(start).take(500)))).get(),
+    ];
+  }
+
   Future<bool> updateRow(CoreConfigData entry) async {
     if (entry.type != CoreConfigType.outbound.name &&
         entry.type != CoreConfigType.raw.name) {

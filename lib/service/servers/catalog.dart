@@ -52,15 +52,29 @@ class ServerCatalog {
   }) => ServerCatalog._(
     servers == null ? this.servers : List.unmodifiable(servers),
     sources == null ? this.sources : List.unmodifiable(sources),
-    servers == null
-        ? displays
-        : Map.unmodifiable({
-            for (final row in servers) row.id: ServerDisplay.fromRow(row),
-          }),
+    servers == null ? displays : _displaysFor(servers),
     sources == null
         ? sourcesById
         : Map.unmodifiable({for (final source in sources) source.id: source}),
   );
+
+  /// A ping batch rewrites only delay and location, yet every watcher gets
+  /// all rows again. Parsing each node (Base64, UTF-8, JSON) once per change
+  /// instead of once per row per emission keeps ping rounds cheap.
+  Map<int, ServerDisplay> _displaysFor(List<CoreConfigData> rows) {
+    final previous = {for (final row in servers) row.id: row};
+    return Map.unmodifiable({
+      for (final row in rows)
+        row.id: switch ((previous[row.id], displays[row.id])) {
+          (final old?, final display?)
+              when old.data == row.data &&
+                  old.type == row.type &&
+                  old.name == row.name =>
+            display,
+          _ => ServerDisplay.fromRow(row),
+        },
+    });
+  }
 
   ServerDisplay display(CoreConfigData row) =>
       displays[row.id] ?? ServerDisplay.fromRow(row);

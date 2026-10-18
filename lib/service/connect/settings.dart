@@ -40,6 +40,16 @@ class ServerSelection {
     if (id != null) 'id': id,
     if (region != null) 'region': region,
   };
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServerSelection &&
+      other.kind == kind &&
+      other.id == id &&
+      other.region == region;
+
+  @override
+  int get hashCode => Object.hash(kind, id, region);
 }
 
 class SmartRoutingSettings {

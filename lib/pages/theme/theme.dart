@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:onexray/pages/theme/color.dart';
@@ -19,8 +20,18 @@ abstract final class AppTheme {
     contentPadding: EdgeInsets.symmetric(horizontal: 18),
   );
 
+  static final _materialThemes =
+      <(Brightness, bool, TargetPlatform), ThemeData>{};
+  static final _shadThemes =
+      <(Brightness, bool, TextScaler, TargetPlatform), ShadThemeData>{};
+
+  /// One instance per brightness and layout. Its many `WidgetStateProperty`
+  /// closures have no `==`, so a fresh ThemeData never equals the last one,
+  /// and MaterialApp's AnimatedTheme then animated every rebuild for 200 ms,
+  /// rebuilding each theme reader on every frame. ThemeData also captures
+  /// the platform (density, tap targets), which tests override.
   static ThemeData material(Brightness brightness, {bool mobile = false}) =>
-      _build(
+      _materialThemes[(brightness, mobile, defaultTargetPlatform)] ??= _build(
         brightness: brightness,
         colors: AppColorTokens.fallback(brightness),
         mobile: mobile,
@@ -184,6 +195,23 @@ abstract final class AppTheme {
     Brightness brightness, {
     bool mobile = false,
     TextScaler textScaler = TextScaler.noScaling,
+  }) {
+    final key = (brightness, mobile, textScaler, defaultTargetPlatform);
+    final cached = _shadThemes[key];
+    if (cached != null) return cached;
+    // Text scales change rarely; the bound only guards against growth.
+    if (_shadThemes.length >= 16) _shadThemes.clear();
+    return _shadThemes[key] = _shad(
+      brightness,
+      mobile: mobile,
+      textScaler: textScaler,
+    );
+  }
+
+  static ShadThemeData _shad(
+    Brightness brightness, {
+    required bool mobile,
+    required TextScaler textScaler,
   }) {
     final palette = AppColorTokens.fallback(brightness).palette;
     // Shad buttons use a tight height. Grow it with the scaled label instead of

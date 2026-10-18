@@ -164,12 +164,23 @@ abstract class BaseFfiApi {
   }
 
   final _sharedIsolate = IsolateManager.createShared(concurrent: 1);
+
+  /// A ping batch holds its worker for up to the probe timeout (twice that
+  /// with location probes). On the shared worker it queued every call behind
+  /// it: the ports for Connect, a live node switch, minewire state, imports.
+  /// libXray serializes pings itself; other methods run alongside.
+  final _longIsolate = IsolateManager.createShared(concurrent: 1);
+
   void stopSharedIsolate() {
     _sharedIsolate.stop();
+    _longIsolate.stop();
   }
 
-  Future<String> invoke(String requestJson) async {
-    return _sharedIsolate.compute(_cgoInvoke, requestJson);
+  Future<String> invoke(String requestJson, {bool long = false}) async {
+    return (long ? _longIsolate : _sharedIsolate).compute(
+      _cgoInvoke,
+      requestJson,
+    );
   }
 }
 

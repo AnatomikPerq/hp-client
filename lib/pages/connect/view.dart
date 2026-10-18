@@ -260,8 +260,13 @@ class ConnectView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          trafficBuilder?.call(!mobile) ??
-              TrafficReadout(view: view, desktop: !mobile),
+          // Speeds and the session clock change every second; without a
+          // boundary each tick repainted the whole page, node list included.
+          RepaintBoundary(
+            child:
+                trafficBuilder?.call(!mobile) ??
+                TrafficReadout(view: view, desktop: !mobile),
+          ),
           const SizedBox(height: 6),
           Center(
             child: Semantics(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:onexray/core/errors/failure.dart';
@@ -389,13 +390,16 @@ class AppHostApi {
   }
 
   Future<LibXrayInvokeResponse> _invoke(LibXrayInvokeRequest request) async {
-    final requestJson = JsonTool.encoder.convert(request.toJson());
+    // Compact: the indented form only made every request bigger to encode,
+    // scan and copy across the isolate boundary.
+    final requestJson = jsonEncode(request.toJson());
     LibXrayInvokeLimits.validate(requestJson, "request");
+    final long = request.method == LibXrayMethod.pingBatch;
     late final String responseJson;
     if (AppPlatform.isLinux) {
-      responseJson = await LinuxFfiApi().invoke(requestJson);
+      responseJson = await LinuxFfiApi().invoke(requestJson, long: long);
     } else if (AppPlatform.isWindows) {
-      responseJson = await WindowsFfiApi().invoke(requestJson);
+      responseJson = await WindowsFfiApi().invoke(requestJson, long: long);
     } else {
       responseJson = await _api.invoke(requestJson);
     }

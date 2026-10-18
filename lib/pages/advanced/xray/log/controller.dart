@@ -89,6 +89,12 @@ class LogFileViewerController extends PageCubit<LogFileViewerPageState> {
         _resetMissingFile();
         return;
       }
+      // Nothing new: keep the lines. Decoding and splitting up to 1 MiB
+      // every second only made the open viewer burn CPU.
+      if (!replace && chunk.data.isEmpty && state.failure == null) {
+        _offset = chunk.offset;
+        return;
+      }
       if (replace) {
         _droppedContent = chunk.offset > 0;
         _buffer = chunk.offset > 0

@@ -289,8 +289,7 @@ class ServersController extends PageCubit<ServersPageState>
       .where((test) => test.groupId == group.id)
       .every((test) => test.cancelling);
   bool selectingGroup(ServerSelection value) =>
-      selecting != null &&
-      jsonEncode(selecting!.toJson()) == jsonEncode(value.toJson());
+      selecting != null && selecting == value;
 
   void _searchChanged() => searchChanged(search.text);
   void searchChanged(String value) {
@@ -432,8 +431,7 @@ class ServersController extends PageCubit<ServersPageState>
 
   bool selected(ServerSelection selection) =>
       !configuration.connection.expert &&
-      jsonEncode(configuration.connection.selection.toJson()) ==
-          jsonEncode(selection.toJson());
+      configuration.connection.selection == selection;
 
   // Display only: running identities come from the active runtime. Offline
   // previews use existing successful probes, never start a probe or select VPN.
@@ -556,14 +554,21 @@ class ServersController extends PageCubit<ServersPageState>
     choose(context, ServerSelection.server(row.id));
   }
 
-  Set<int> get runningEntries =>
-      connectionView.phase == ConnectionPhase.connected
-      ? {
-          for (final entry
-              in connectionView.runtime?.entries ?? const <RuntimeNode>[])
-            entry.id,
-        }
-      : {};
+  /// Asked once per row; built once per connection state.
+  Set<int> get runningEntries {
+    final view = connectionView;
+    if (identical(view, _runningEntriesView)) return _runningEntries;
+    _runningEntriesView = view;
+    return _runningEntries = view.phase == ConnectionPhase.connected
+        ? Set.unmodifiable({
+            for (final entry in view.runtime?.entries ?? const <RuntimeNode>[])
+              entry.id,
+          })
+        : const {};
+  }
+
+  ConnectionView? _runningEntriesView;
+  Set<int> _runningEntries = const {};
 
   String summary(AppLocalizations l, ServerGroup group) {
     var available = 0;
