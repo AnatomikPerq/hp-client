@@ -7,6 +7,7 @@ import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/service/advanced/local_api/service.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
@@ -25,16 +26,21 @@ import 'package:path/path.dart' as p;
 
 Future<List<int>> allocateRuntimePorts(
   List<dynamic> rawInbounds, {
-  Future<List<int>> Function(int count)? getFreePorts,
-  Set<int> reserved = const {},
+  List<int> excludePorts = const [],
+  Future<List<int>> Function(int count, {List<int>? excludePorts})?
+  getFreePorts,
 }) async {
   final allocate = getFreePorts ?? AppHostApi().getFreePorts;
   for (var attempt = 0; attempt < 5; attempt++) {
-    final candidates = await allocate(2);
+    final candidates = await allocate(
+      2,
+      excludePorts: excludePorts.isEmpty ? null : excludePorts,
+    );
     if (candidates.length == 2 &&
         candidates.toSet().length == 2 &&
-        candidates.every((port) => port > 0 && port <= 65535) &&
-        !candidates.any(reserved.contains) &&
+        candidates.every(
+          (port) => port > 0 && port <= 65535 && !excludePorts.contains(port),
+        ) &&
         !rawInbounds.any(
           (entry) =>
               entry is Map &&
@@ -190,9 +196,10 @@ class ConnectionPreparation {
     if (proxyPort != null && reuse == null) {
       await ensureSystemProxyPortFree(proxyPort);
     }
+    final apiPort = await LocalApiService.instance.reservedPort();
     final allocated = await allocateRuntimePorts(
       userInbounds.cast<Map<String, dynamic>>(),
-      reserved: {?proxyPort},
+      excludePorts: [?apiPort, ?proxyPort],
     );
     final ports = reuse == null
         ? [proxyPort ?? allocated[0], allocated[1]]
@@ -211,7 +218,7 @@ class ConnectionPreparation {
           LiveControl.create(
             (await allocateRuntimePorts(
               userInbounds.cast<Map<String, dynamic>>(),
-              reserved: {...ports},
+              excludePorts: [?apiPort, ...ports],
             ))[0],
           );
     }

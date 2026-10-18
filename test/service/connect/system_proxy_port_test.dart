@@ -24,8 +24,9 @@ void main() {
     var calls = 0;
     final ports = await allocateRuntimePorts(
       const [],
-      reserved: {10820},
-      getFreePorts: (_) async => ++calls == 1 ? [10820, 40000] : [40001, 40002],
+      excludePorts: [10820],
+      getFreePorts: (_, {excludePorts}) async =>
+          ++calls == 1 ? [10820, 40000] : [40001, 40002],
     );
     expect(ports, [40001, 40002]);
   });
