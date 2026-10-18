@@ -32,7 +32,7 @@ Xray-совместимые протоколы как основу и **доба
 |---|---|---|
 | VLESS, VMess, Trojan, Shadowsocks, Hysteria2, WireGuard | всё, что умеет Xray-core, включая XHTTP и REALITY | есть |
 | **minewire** (`mw://`) | маскирует трафик под игровой протокол Minecraft | есть, Windows |
-| **AmneziaWG 2.0** (`awg://`, `vpn://`, `.conf`) | WireGuard с обфускацией Amnezia: мусорные пакеты, паддинги, свои заголовки, защита заголовков; внутри ядра, с UDP | есть, Windows |
+| **AmneziaWG** до 3.1 (`awg://`, `vpn://`, `.conf`) | WireGuard с обфускацией Amnezia: мусорные пакеты, паддинги, свои заголовки, защита заголовков, случайные тайминги; внутри ядра, с UDP | есть, Windows |
 
 ## Платформы
 

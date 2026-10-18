@@ -8,7 +8,7 @@ import 'package:onexray/service/shared/share/xray_config_share.dart';
 /// Share links of AmneziaWG and WireGuard, which libXray does not know and
 /// drops: they are parsed here, before libXray, like minewire links.
 ///
-/// - `awg://<base64 of a .conf>#<name>`, as providers serve AmneziaWG 2.0;
+/// - `awg://<base64 of a .conf>#<name>`, as providers serve AmneziaWG up to 3.1;
 /// - `vpn://<base64>`, AmneziaVPN's key: Qt-compressed JSON whose AmneziaWG
 ///   and WireGuard containers each carry a `.conf` (an Xray container
 ///   carries an Xray client config, which is taken as well);

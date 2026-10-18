@@ -13,7 +13,7 @@ import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
 
 String _key(String fill) => base64.encode(utf8.encode(fill * 32));
 
-/// The shape of the AmneziaWG 2.0 config a provider serves, with fake keys.
+/// The shape of the AmneziaWG 3.1 config a provider serves, with fake keys.
 final _conf =
     '''
 [Interface]
@@ -54,7 +54,7 @@ Map<String, dynamic> _settings(Map<String, dynamic> outbound) =>
 
 void main() {
   group('.conf', () {
-    test('every AmneziaWG 2.0 key reaches the outbound', () {
+    test('every AmneziaWG 3.1 key reaches the outbound', () {
       final outbound = AmneziaWG.fromConf(_conf, name: '🧬 Mutant')!;
       expect(outbound['tag'], '🧬 Mutant');
       expect(outbound['protocol'], 'amneziawg');
