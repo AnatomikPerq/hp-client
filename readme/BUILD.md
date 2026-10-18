@@ -7,7 +7,7 @@
 
 ```
 <рабочая папка>/
-  hp-client/   — этот репозиторий (у владельца лежит прямо на Рабочем столе)
+  hp-client/   — этот репозиторий (у владельца: Рабочий стол\projects)
   libXray/     — НАШ форк: github.com/AnatomikPerq/libXray
   output/      — сюда складываются готовые пакеты
 ```
@@ -33,14 +33,14 @@
 
 ## Путь с кириллицей
 
-Путь `…\Рабочий стол\hp-client` ломает Dart-тулинг: `flutter analyze`
+Путь `…\Рабочий стол\projects\hp-client` ломает Dart-тулинг: `flutter analyze`
 падает на разборе JSON анализатора, `dart run` пишет «package_config.json
 did not contain its own root package». Рецепт — ASCII-junction и
 **PowerShell** (bash из Git разворачивает junction обратно в настоящий путь):
 
 ```powershell
-New-Item -ItemType Junction -Path C:\Users\BADAB\dev\hp-client -Target 'C:\Users\BADAB\Рабочий стол\hp-client'
-New-Item -ItemType Junction -Path C:\Users\BADAB\dev\libXray   -Target 'C:\Users\BADAB\Рабочий стол\libXray'
+New-Item -ItemType Junction -Path C:\Users\BADAB\dev\hp-client -Target 'C:\Users\BADAB\Рабочий стол\projects\hp-client'
+New-Item -ItemType Junction -Path C:\Users\BADAB\dev\libXray   -Target 'C:\Users\BADAB\Рабочий стол\projects\libXray'
 Set-Location C:\Users\BADAB\dev\hp-client
 $env:Path = "C:\Users\BADAB\flutter\stable\bin;" + $env:Path
 flutter pub get
