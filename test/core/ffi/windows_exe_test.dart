@@ -116,7 +116,7 @@ void main() {
     },
   );
 
-  test('empty EXE status/stop need no VCore or package identity', () async {
+  test('empty EXE status/stop need no Vole or package identity', () async {
     final api = create();
     expect(await api.getTunFilesDir(), directory.path);
     expect((await api.readVpnStatus()).status, VpnStatus.disconnected);
