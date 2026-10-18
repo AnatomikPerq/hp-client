@@ -38,15 +38,31 @@ XrayInbound createSocksInbound(String port, {bool fakeDns = false}) =>
       sniffing: _createSniffing(fakeDns),
     );
 
-XrayInbound createLanProxyInbound(int port, {bool fakeDns = false}) =>
-    XrayInbound(
-      listen: '0.0.0.0',
-      port: '$port',
-      protocol: 'socks',
-      settings: XrayInboundSocksSettings(auth: 'noauth', udp: true).toJson(),
-      tag: lanProxyInboundTag,
-      sniffing: _createSniffing(fakeDns),
-    );
+/// SOCKS5 and HTTP for other devices on the network, always with an
+/// account: an open proxy on every interface would serve anyone who finds it.
+XrayInbound createLanProxyInbound(
+  int port, {
+  required String user,
+  required String password,
+  bool fakeDns = false,
+}) {
+  if (user.isEmpty || password.isEmpty) {
+    throw const FormatException('LAN proxy sharing needs a login and password');
+  }
+  return XrayInbound(
+    listen: '0.0.0.0',
+    port: '$port',
+    protocol: 'socks',
+    settings: {
+      ...XrayInboundSocksSettings(auth: 'password', udp: true).toJson(),
+      'accounts': [
+        {'user': user, 'pass': password},
+      ],
+    },
+    tag: lanProxyInboundTag,
+    sniffing: _createSniffing(fakeDns),
+  );
+}
 
 XrayInboundSniffing _createSniffing(bool fakeDns) => XrayInboundSniffing(
   enabled: true,

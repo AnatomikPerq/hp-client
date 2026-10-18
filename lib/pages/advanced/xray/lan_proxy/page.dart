@@ -109,6 +109,36 @@ class LanProxyPage extends StatelessWidget {
                               ],
                             ),
                           ),
+                          // Made when sharing is turned on.
+                          if (controller.password.isNotEmpty)
+                            for (final (key, title, value) in [
+                              ('user', l.lanProxyUser, controller.user),
+                              (
+                                'password',
+                                l.lanProxyPassword,
+                                controller.password,
+                              ),
+                            ])
+                              SettingRow(
+                                key: ValueKey('lan-proxy-$key'),
+                                title: title,
+                                value: value,
+                                valueTextDirection: TextDirection.ltr,
+                                trailing: IconButton(
+                                  tooltip: l.lanProxyCopy,
+                                  onPressed: () =>
+                                      controller.copy(context, value),
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size.square(36),
+                                    maximumSize: const Size.square(36),
+                                    padding: EdgeInsets.zero,
+                                    foregroundColor: palette.mutedStrong,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  icon: const Icon(LucideIcons.copy, size: 17),
+                                ),
+                              ),
                         ],
                       ),
                       Text(

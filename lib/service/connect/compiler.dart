@@ -62,6 +62,8 @@ class RuntimeOptions {
   final int socksPort;
   final bool lanProxyEnabled;
   final int lanProxyPort;
+  final String lanProxyUser;
+  final String lanProxyPassword;
   final bool ipv6;
   final String tunDnsIpv4Address;
   final String tunDnsIpv6Address;
@@ -84,6 +86,8 @@ class RuntimeOptions {
     required this.socksPort,
     this.lanProxyEnabled = false,
     this.lanProxyPort = defaultLanProxyPort,
+    this.lanProxyUser = '',
+    this.lanProxyPassword = '',
     this.ipv6 = true,
     this.tunDnsIpv4Address = '8.8.8.8',
     this.tunDnsIpv6Address = '2001:4860:4860::8888',
@@ -100,6 +104,11 @@ class RuntimeOptions {
     }
     if (systemProxy && !desktop) {
       throw const FormatException('System proxy mode is desktop-only');
+    }
+    if (lanProxyEnabled && (lanProxyUser.isEmpty || lanProxyPassword.isEmpty)) {
+      throw const FormatException(
+        'LAN proxy sharing needs a login and password',
+      );
     }
     if (lanProxyEnabled && (lanProxyPort < 1024 || lanProxyPort > 65535)) {
       throw const FormatException('LAN proxy port must be within 1024–65535');
@@ -393,6 +402,8 @@ class ConnectionCompiler {
           if (options.lanProxyEnabled)
             createLanProxyInbound(
               options.lanProxyPort,
+              user: options.lanProxyUser,
+              password: options.lanProxyPassword,
               fakeDns: FakeDns.usesServer(dns),
             ),
         ],
@@ -619,6 +630,8 @@ class ConnectionCompiler {
       inbounds.add(
         createLanProxyInbound(
           options.lanProxyPort,
+          user: options.lanProxyUser,
+          password: options.lanProxyPassword,
           fakeDns: FakeDns.usedByRaw(config),
         ).toJson(),
       );

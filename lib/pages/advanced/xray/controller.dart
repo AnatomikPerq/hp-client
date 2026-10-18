@@ -259,7 +259,13 @@ class XrayRuntimeController extends PageCubit<XrayRuntimePageState> {
     try {
       final draft = await policyEditor.load();
       if (!isPageActive || !context.mounted) return;
-      draft.policy['lanProxy']['enabled'] = enabled;
+      final sharing = draft.policy['lanProxy'] as Map<String, dynamic>;
+      sharing['enabled'] = enabled;
+      // The account is made once and kept, so devices set up stay working.
+      if (enabled && (sharing['password'] as String).isEmpty) {
+        sharing['user'] = PlatformPolicy.defaultLanProxyUser;
+        sharing['password'] = PlatformPolicy.generateLanProxyPassword();
+      }
       final saved = await policyEditor.save(
         draft: draft,
         confirm: (_) async => true,

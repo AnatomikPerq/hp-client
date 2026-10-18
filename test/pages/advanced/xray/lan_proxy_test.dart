@@ -122,6 +122,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(AlertDialog), findsNothing);
         expect(service.configuration.policy.lanProxyEnabled, isTrue);
+        // Turning sharing on makes its account.
+        expect(service.configuration.policy.lanProxyUser, 'hyper');
+        expect(service.configuration.policy.lanProxyPassword, hasLength(20));
         expect(controller.lanProxyEnabled, isTrue);
         expect(service.saves, 1);
         expect(controller.state.lanProxySaving, isFalse);
@@ -138,6 +141,49 @@ void main() {
       },
     );
   }
+
+  testWidgets('the account is shown and copied for other devices', (
+    tester,
+  ) async {
+    service.configuration = ConnectionConfiguration(
+      policy: PlatformPolicy.fromJson({
+        'lanProxy': {
+          'enabled': true,
+          'user': 'hyper',
+          'password': 'Abc123secret',
+        },
+      }),
+    );
+    await tester.binding.setSurfaceSize(const Size(1000, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final copied = <String>[];
+    final controller = LanProxyController(
+      draft: await service.load(),
+      service: service,
+      copy: (text) async => copied.add(text),
+    );
+    registerCleanup(tester, controller.close);
+    await tester.pumpWidget(
+      _app(LanProxyPage(createController: () => controller)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('hyper'), findsOneWidget);
+    expect(find.text('Abc123secret'), findsOneWidget);
+    for (final key in ['user', 'password']) {
+      final button = find.descendant(
+        of: find.byKey(ValueKey('lan-proxy-$key')),
+        matching: find.byType(IconButton),
+      );
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pump();
+    }
+    expect(copied, ['hyper', 'Abc123secret']);
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(controller.close);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('Raw saves the shared port without a restart affordance', (
     tester,
@@ -208,6 +254,9 @@ void main() {
         expect(find.byType(AlertDialog), findsNothing);
         expect(service.configuration.policy.lanProxyPort, 11026);
         expect(service.saves, 1);
+        // Sharing never starts without an account.
+        expect(service.configuration.policy.lanProxyUser, 'hyper');
+        expect(service.configuration.policy.lanProxyPassword, hasLength(20));
         expect(
           coordinator.state.value.phase,
           connected ? ConnectionPhase.connected : ConnectionPhase.disconnected,

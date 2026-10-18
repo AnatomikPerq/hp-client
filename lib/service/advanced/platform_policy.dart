@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:onexray/core/ffi/windows/model.dart';
 import 'package:onexray/core/ffi/windows/mode.dart';
@@ -114,6 +115,24 @@ final class PlatformPolicy {
   String get maskAddress => toJson()['log']['maskIp'] == true ? 'full' : '';
   bool get lanProxyEnabled => toJson()['lanProxy']['enabled'] as bool;
   int get lanProxyPort => toJson()['lanProxy']['port'] as int;
+
+  /// The account other devices use for the LAN proxy. Upstream shares it
+  /// without one; the fork never listens beyond loopback without accounts.
+  String get lanProxyUser => toJson()['lanProxy']['user'] as String;
+  String get lanProxyPassword => toJson()['lanProxy']['password'] as String;
+
+  static const defaultLanProxyUser = 'hyper';
+
+  /// 20 characters from 62: about 119 bits, typed by hand on a TV if needed.
+  static String generateLanProxyPassword([Random? random]) {
+    const alphabet =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    final source = random ?? Random.secure();
+    return String.fromCharCodes([
+      for (var i = 0; i < 20; i++)
+        alphabet.codeUnitAt(source.nextInt(alphabet.length)),
+    ]);
+  }
 
   DesktopRunMode get desktopRunMode =>
       DesktopRunMode.fromName(toJson()['desktop']['runMode'] as String);
@@ -303,7 +322,7 @@ const _defaults = <String, dynamic>{
   'dnsIpv6Address': '2001:4860:4860::8888',
   'dnsServerName': 'dns.google',
   'xrayOutboundInterfaceName': '',
-  'lanProxy': {'enabled': false, 'port': 11024},
+  'lanProxy': {'enabled': false, 'port': 11024, 'user': '', 'password': ''},
   'android': {
     'appScope': 'all',
     'includedAppPackageNames': <String>[],

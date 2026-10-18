@@ -299,6 +299,8 @@ class ConnectionPreparation {
         metricsPort: ports[1],
         lanProxyEnabled: !settings.expert && policy.lanProxyEnabled,
         lanProxyPort: policy.lanProxyPort,
+        lanProxyUser: policy.lanProxyUser,
+        lanProxyPassword: policy.lanProxyPassword,
         ipv6: policy.ipv6Enabled,
         tunDnsIpv4Address: policy.dnsIpv4Address,
         tunDnsIpv6Address: policy.dnsIpv6Address,

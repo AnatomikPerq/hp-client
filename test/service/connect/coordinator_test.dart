@@ -1039,6 +1039,8 @@ void main() {
               socksPort: 18004,
               lanProxyEnabled: configuration.policy.lanProxyEnabled,
               lanProxyPort: configuration.policy.lanProxyPort,
+              lanProxyUser: configuration.policy.lanProxyUser,
+              lanProxyPassword: configuration.policy.lanProxyPassword,
             ),
           );
           return ConnectionRuntime.create(
@@ -1112,6 +1114,8 @@ void main() {
           final draft = await editor.load();
           draft.policy['lanProxy']['enabled'] = change.enabled;
           draft.policy['lanProxy']['port'] = change.port;
+          draft.policy['lanProxy']['user'] = 'hyper';
+          draft.policy['lanProxy']['password'] = 'lan-secret';
           expect(
             await editor.save(
               draft: draft,

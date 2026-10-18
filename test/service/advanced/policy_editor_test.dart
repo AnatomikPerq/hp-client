@@ -189,10 +189,12 @@ void main() {
         ),
         isTrue,
       );
-      expect(
-        (await coordinator.configuration).policy.toJson()['lanProxy'],
-        sharing,
-      );
+      expect((await coordinator.configuration).policy.toJson()['lanProxy'], {
+        ...sharing,
+        // The fork's account; only turning sharing on in the UI makes one.
+        'user': '',
+        'password': '',
+      });
       expect(host.runtime, same(active));
       expect(coordinator.state.value.phase, ConnectionPhase.connected);
       draft = await service.load();

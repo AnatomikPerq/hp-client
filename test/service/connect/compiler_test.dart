@@ -37,6 +37,8 @@ RuntimeOptions options({
   String tunDnsIpv6Address = '2001:4860:4860::8888',
   bool lanProxyEnabled = false,
   int lanProxyPort = defaultLanProxyPort,
+  String lanProxyUser = 'hyper',
+  String lanProxyPassword = 'lan-secret',
 }) => RuntimeOptions(
   platform: platform,
   windowsMode: windowsMode,
@@ -49,6 +51,8 @@ RuntimeOptions options({
   tunDnsIpv6Address: tunDnsIpv6Address,
   lanProxyEnabled: lanProxyEnabled,
   lanProxyPort: lanProxyPort,
+  lanProxyUser: lanProxyUser,
+  lanProxyPassword: lanProxyPassword,
 );
 
 ResolvedServer node(int id, {String? address}) => ResolvedServer(
@@ -137,7 +141,14 @@ void main() {
             'protocol': 'socks',
             'listen': '0.0.0.0',
             'port': '11024',
-            'settings': {'auth': 'noauth', 'udp': true},
+            // The fork never shares a proxy beyond loopback without an account.
+            'settings': {
+              'auth': 'password',
+              'udp': true,
+              'accounts': [
+                {'user': 'hyper', 'pass': 'lan-secret'},
+              ],
+            },
             'sniffing': {
               'enabled': true,
               'routeOnly': false,
@@ -157,6 +168,24 @@ void main() {
       expect(advanced.encode(), advancedBefore);
     },
   );
+
+  test('sharing without a login and password is refused', () {
+    for (final (user, password) in [('', 'lan-secret'), ('hyper', '')]) {
+      expect(
+        () => options(
+          lanProxyEnabled: true,
+          lanProxyUser: user,
+          lanProxyPassword: password,
+        ),
+        throwsFormatException,
+      );
+    }
+    // Off, an empty account is the default and fine.
+    expect(
+      options(lanProxyUser: '', lanProxyPassword: '').lanProxyEnabled,
+      isFalse,
+    );
+  });
 
   test('sharing uses the saved port and includes managed FakeDNS recovery', () {
     final compiled = ConnectionCompiler.compile(
