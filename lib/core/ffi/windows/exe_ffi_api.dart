@@ -1,8 +1,7 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:onexray/core/ffi/base_ffi_api.dart';
-import 'package:onexray/core/ffi/desktop_core_exit.dart';
+import 'package:onexray/core/ffi/core_process_monitor.dart';
 import 'package:onexray/core/ffi/windows/core_process.dart';
 import 'package:onexray/core/ffi/windows/ffi_api.dart';
 import 'package:onexray/core/ffi/windows/model.dart';
@@ -26,11 +25,18 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   _createSystemProxy;
   Future<SystemProxyManager?>? _systemProxy;
   final Duration _gracefulStop;
-  final _exitWatches = <int, DesktopCoreExitWatch>{};
-  // Cancelling waits also invalidates the reads already triggered by their exits.
-  int _watchGeneration = 0;
-  int _queryGeneration = 0;
-  bool _observing = false;
+  late final _monitor = CoreProcessMonitor(
+    discoverPids: _process.findPids,
+    watchExit: _process.watchExit,
+    canPublish: () => _transition == null,
+    notify: (status) async {
+      // A Core that exited on its own left the system proxy pointing at a
+      // closed port.
+      if (status == VpnStatus.disconnected) await _restoreSystemProxy();
+      await _notify(status);
+    },
+    notifyError: _notifyError,
+  );
   VpnStatus? _transition;
 
   WindowsExeFfiApi({
@@ -69,17 +75,10 @@ class WindowsExeFfiApi extends WindowsFfiApi {
 
   @override
   Future<void> observeVpnStatus() async {
-    _observing = true;
-    final query = _findCorePids();
-    final generation = _queryGeneration;
-    try {
-      // A proxy-mode Core that died with the App, or with the machine, left
-      // the system proxy pointing at a closed port. Give the user theirs back.
-      if ((await query).isEmpty) await _restoreSystemProxy();
-    } catch (_) {
-      if (generation == _queryGeneration) disposeVpnStatus();
-      rethrow;
-    }
+    await _monitor.observe();
+    // A proxy-mode Core that died with the App, or with the machine, left
+    // the system proxy pointing at a closed port. Give the user theirs back.
+    if (!await _running()) await _restoreSystemProxy();
   }
 
   Future<String> _runDirectory() async => p.join(await getTunFilesDir(), 'run');
@@ -101,76 +100,9 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   }
 
   @override
-  void disposeVpnStatus() {
-    _observing = false;
-    _clearExitWatches();
-  }
+  void disposeVpnStatus() => _monitor.dispose();
 
-  void _clearExitWatches() {
-    _watchGeneration++;
-    _queryGeneration++;
-    for (final watch in _exitWatches.values) {
-      watch.cancel();
-    }
-    _exitWatches.clear();
-  }
-
-  void _syncExitWatches(Set<int> pids) {
-    for (final pid in _exitWatches.keys.toList()) {
-      if (!pids.contains(pid)) _exitWatches.remove(pid)?.cancel();
-    }
-    for (final pid in pids) {
-      if (_exitWatches.containsKey(pid)) continue;
-      final watch = _process.watchExit(pid);
-      final generation = _watchGeneration;
-      int? queryGeneration;
-      _exitWatches[pid] = watch;
-      unawaited(
-        watch.exited
-            .then((exited) async {
-              if (!identical(_exitWatches[pid], watch)) return;
-              _exitWatches.remove(pid);
-              if (!exited || !_observing || _transition != null) return;
-              final query = _findCorePids();
-              queryGeneration = _queryGeneration;
-              final pids = await query;
-              if (pids.isEmpty) await _restoreSystemProxy();
-              if (_observing &&
-                  _transition == null &&
-                  generation == _watchGeneration &&
-                  queryGeneration == _queryGeneration) {
-                await _notify(
-                  pids.isNotEmpty
-                      ? VpnStatus.connected
-                      : VpnStatus.disconnected,
-                );
-              }
-            })
-            .catchError((Object error) {
-              if (identical(_exitWatches[pid], watch)) {
-                _exitWatches.remove(pid)?.cancel();
-              }
-              if (_observing &&
-                  _transition == null &&
-                  generation == _watchGeneration &&
-                  (queryGeneration == null ||
-                      queryGeneration == _queryGeneration)) {
-                _notifyError(error);
-              }
-            }),
-      );
-    }
-  }
-
-  Future<Set<int>> _findCorePids() async {
-    // Claim the query revision before awaiting, including one-shot status reads.
-    final generation = ++_queryGeneration;
-    final pids = await _process.findPids();
-    if (_observing && generation == _queryGeneration) _syncExitWatches(pids);
-    return pids;
-  }
-
-  Future<bool> _running() async => (await _findCorePids()).isNotEmpty;
+  Future<bool> _running() async => (await _monitor.readPids()).isNotEmpty;
 
   @override
   Future<NativeVpnCommandResult> readVpnStatus() async {
@@ -238,7 +170,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
           ? await _process.start(_corePath, arguments)
           : await _process.startUnelevated(_corePath, arguments);
       await Future<void>.delayed(const Duration(seconds: 1));
-      if (!(await _findCorePids()).contains(pid)) {
+      if (!(await _monitor.readPids()).contains(pid)) {
         throw StateError(
           await readDesktopCoreStartError(
             config,
@@ -286,12 +218,12 @@ class WindowsExeFfiApi extends WindowsFfiApi {
 
   Future<void> _stop() async {
     // A denied stop must still retire older queries, but keep live exit watches.
-    _queryGeneration++;
+    _monitor.invalidateQueries();
     // Hand the proxy back first, so apps never see a closed local port.
     await _restoreSystemProxy();
     await _stopGracefully();
     await _process.stopAll();
-    _clearExitWatches();
+    _monitor.clearWatches();
   }
 
   /// Asks the Core to exit through its stop file. An elevated Core cannot be

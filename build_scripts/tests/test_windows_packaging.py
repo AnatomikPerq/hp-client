@@ -52,23 +52,6 @@ class WindowsPackagingTest(unittest.TestCase):
             self.config_path,
         )
 
-    def test_build_app_packages_only_msix(self):
-        calls = []
-        self.builder.package_msix = lambda: calls.append("msix")
-        self.builder.fastforge_build = self.fail
-
-        self.builder.build_app()
-
-        self.assertEqual(calls, ["msix"])
-
-    def test_exe_mode_packages_installer_and_zip_without_msix(self):
-        self.builder.mode = "exe"
-        calls = []
-        self.builder.package_msix = self.fail
-        self.builder.package_exe_and_zip = lambda: calls.append("exe,zip")
-        self.builder.build_app()
-        self.assertEqual(calls, ["exe,zip"])
-
     def _bundle(self):
         source = (Path(self.builder.root_dir) / "build/windows" /
                   self.builder.target_architecture / "runner/Release")
@@ -84,6 +67,7 @@ class WindowsPackagingTest(unittest.TestCase):
         return source
 
     def test_fastforge_builds_both_formats_with_explicit_mode_and_architecture(self):
+        self.builder.mode = "exe"
         original_config = self.config_path.read_bytes()
         pubspec = Path(self.pubspec_path).read_bytes()
         for target, package_arch, inno_arch, processor_arch in (
@@ -109,7 +93,7 @@ class WindowsPackagingTest(unittest.TestCase):
                     (dist / "unrelated.msix").write_bytes(b"not an EXE-mode artifact")
 
                 with patch.object(self.builder, "fastforge_build", side_effect=package) as fastforge:
-                    self.builder.package_exe_and_zip()
+                    self.builder.build_app()
                 fastforge.assert_called_once_with(
                     "exe,zip",
                     arguments=(
@@ -219,8 +203,9 @@ class WindowsPackagingTest(unittest.TestCase):
         with patch("app.windows._WINTUN_SHA256", "0" * 64), self.assertRaisesRegex(ValueError, "hash mismatch"):
             self.builder.install_wintun()
 
-    def test_installer_preserves_released_identity_and_scopes_cleanup(self):
+    def test_installer_keeps_released_identity_and_machine_scope(self):
         root = Path(__file__).resolve().parents[2]
+        # These distributed identity values must not drift across upgrades.
         installer = (root / "windows/packaging/exe/inno_setup.iss").read_text()
         config = (root / "windows/packaging/exe/make_config.yaml").read_text()
         self.assertIn("app_id: 346eafc3-85a2-4bbe-9f2b-5ee624666817", config)
@@ -280,7 +265,7 @@ class WindowsPackagingTest(unittest.TestCase):
             patch("app.windows.run_command") as run_command,
             patch("app.windows.package_with_vcore") as package_with_vcore,
         ):
-            self.builder.package_msix()
+            self.builder.build_app()
 
         run_command.assert_called_once_with(
             [

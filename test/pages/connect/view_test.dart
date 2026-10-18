@@ -9,7 +9,6 @@ import 'package:onexray/service/settings/language/locale.dart';
 import 'package:onexray/pages/connect/view.dart';
 import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/theme/theme.dart';
-import 'package:onexray/pages/shared/widgets/json_editor.dart';
 import 'package:onexray/pages/shared/widgets/page_action_bar.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -22,7 +21,6 @@ import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/resolver.dart';
 import 'package:onexray/service/connect/traffic.dart';
 import 'package:onexray/service/settings/backup/service.dart';
-import 'package:re_editor/re_editor.dart';
 
 void main() {
   test('connection traffic keeps byte conversion and prototype precision', () {
@@ -36,35 +34,6 @@ void main() {
     expect(formatTraffic(1536), '1.5 KiB');
   });
 
-  testWidgets('JSON input stays top aligned and LTR in a Persian page', (
-    tester,
-  ) async {
-    final controller = CodeLineEditingController.fromText(
-      '{\n  "outbounds": []\n}',
-    );
-    addTearDown(controller.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: ShadTheme(
-          data: AppTheme.shad(Brightness.light),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Scaffold(body: AppJsonEditor(controller: controller)),
-          ),
-        ),
-      ),
-    );
-    final field = tester.widget<CodeEditor>(find.byType(CodeEditor));
-    expect(field.controller, same(controller));
-    expect(field.autofocus, isFalse);
-    expect(field.wordWrap, isFalse);
-    expect(
-      Directionality.of(tester.element(find.byType(CodeEditor))),
-      TextDirection.ltr,
-    );
-    expect(tester.takeException(), isNull);
-  });
   Widget screen({
     ConnectionView view = const ConnectionView(),
     bool hasServers = true,

@@ -251,7 +251,7 @@ void main() {
       final coordinator = ConnectionCoordinator(
         database: db,
         readRuntime: () async => current,
-        inspect: (_) async => HostConnection(
+        inspect: (_, {observedStatus}) async => HostConnection(
           current == null ? VpnStatus.disconnected : VpnStatus.connected,
           runtime: current,
         ),

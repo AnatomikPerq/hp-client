@@ -13,7 +13,7 @@ from app.provenance import begin_build, finish_build, source_revision, sha256, v
 class ProvenanceTest(unittest.TestCase):
     def setUp(self):
         fixtures = (Path(__file__).resolve().parents[3] / "references" /
-                    "onexray-refactor-validation" / "build-provenance")
+                    "onexray-tests" / "build-provenance")
         fixtures.mkdir(parents=True, exist_ok=True)
         self.directory = tempfile.TemporaryDirectory(dir=fixtures, prefix="receipt-")
         self.addCleanup(self.directory.cleanup)
