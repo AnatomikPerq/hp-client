@@ -96,12 +96,13 @@ final class AdvancedRoutingProfile implements RoutingConfiguration {
     ];
     final routing =
         json['routing'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final selector = [for (final entry in entries) entry['tag'] as String];
     routing['balancers'] = [
       XrayBalancer(
         tag: 'proxy',
-        selector: [for (final entry in entries) entry['tag'] as String],
+        selector: selector,
         strategy: XrayBalancingStrategy(type: 'roundRobin'),
-        fallbackTag: 'direct',
+        fallbackTag: proxyFallbackTag(selector),
       ).toJson(),
     ];
     json['routing'] = routing;

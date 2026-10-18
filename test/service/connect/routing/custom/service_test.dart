@@ -86,7 +86,7 @@ void main() {
         'tag': 'proxy',
         'selector': ['app-entry-0', 'app-entry-1', 'app-entry-2'],
         'strategy': {'type': 'roundRobin'},
-        'fallbackTag': 'direct',
+        'fallbackTag': 'app-entry-0',
       });
       expect(config['observatory'], {'subjectSelector': []});
       return calls == 1 ? '' : 'Core rejected rule';

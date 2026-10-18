@@ -622,7 +622,9 @@ void main() {
           balancer['selector'],
           List.generate(count, (i) => 'app-entry-$i'),
         );
-        expect(balancer['fallbackTag'], 'direct');
+        // Never `direct`: a live switch briefly removes every node, and
+        // the fallback must not send traffic past the tunnel then.
+        expect(balancer['fallbackTag'], 'app-entry-0');
         expect(config['observatory']['subjectSelector'], isEmpty);
         final outbounds = (config['outbounds'] as List).cast<Map>();
         expect(

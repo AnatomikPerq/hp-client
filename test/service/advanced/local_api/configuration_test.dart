@@ -118,7 +118,7 @@ void main() {
           expect(config['env']['xray.location.asset'], VpnConstants.datDir);
           expect(
             config['routing']['balancers'].single['fallbackTag'],
-            'direct',
+            'app-entry-0',
           );
           return '';
         },

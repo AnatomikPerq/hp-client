@@ -10,6 +10,7 @@ import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/live_control.dart';
+import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
@@ -156,6 +157,50 @@ void main() {
       final rules = operations.last.routing!;
       expect((rules['rules'] as List).first['ruleTag'], 'app-control');
       expect(rules['balancers'], isNotEmpty);
+    });
+
+    test('a compiled switch never falls back to direct', () {
+      Map<String, dynamic> compiled(int node) {
+        final config = jsonDecode(
+          ConnectionCompiler.compile(
+            settings: ConnectionSettings(),
+            entries: [
+              ResolvedServer(
+                id: node,
+                sourceId: 1,
+                outbound: {
+                  'protocol': 'vless',
+                  'settings': {'address': 'node-$node.test'},
+                },
+              ),
+            ],
+            regions: const RegionCatalog.empty(),
+            options: RuntimeOptions(
+              platform: ConnectionPlatform.windows,
+              sessionDirectory: '/unused-session',
+              metricsPort: 18003,
+              socksPort: 10820,
+              interfaceName: 'Ethernet',
+            ),
+          ).xrayJson,
+        ) as Map<String, dynamic>;
+        _control.apply(config);
+        return config;
+      }
+
+      final operations = LiveControl.operations(compiled(1), compiled(2));
+      final removed = operations.indexWhere(
+        (op) => op.op == 'removeOutbound' && op.tag == 'app-entry-0',
+      );
+      final added = operations.indexWhere(
+        (op) => op.op == 'addOutbound' && op.outbound!['tag'] == 'app-entry-0',
+      );
+      expect(removed, lessThan(added));
+      // Between the two calls the balancer has no node. Its fallback names
+      // the node being replaced, which Xray drops while it is missing.
+      final balancer =
+          (operations.last.routing!['balancers'] as List).single as Map;
+      expect(balancer['fallbackTag'], 'app-entry-0');
     });
 
     test('an unchanged first outbound is still replaced', () {

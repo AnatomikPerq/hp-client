@@ -249,7 +249,10 @@ void main() {
               'app-entry-1',
               'app-entry-2',
             ]);
-            expect(runtime['routing']['balancers'][0]['fallbackTag'], 'direct');
+            expect(
+              runtime['routing']['balancers'][0]['fallbackTag'],
+              'app-entry-0',
+            );
             expect(
               runtime['inbounds'][0]['sniffing'],
               source['inbounds'][0]['sniffing'],

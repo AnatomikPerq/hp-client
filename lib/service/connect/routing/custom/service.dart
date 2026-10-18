@@ -73,7 +73,7 @@ class CustomRoutingService {
         tag: 'proxy',
         selector: tags,
         strategy: XrayBalancingStrategy(type: 'roundRobin'),
-        fallbackTag: 'direct',
+        fallbackTag: proxyFallbackTag(tags),
       ),
     ];
     // fallbackTag requires the same Observatory dependency as runtime routing.
