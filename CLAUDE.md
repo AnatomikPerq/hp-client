@@ -54,6 +54,10 @@ On Windows and Linux the Xray core is a **separate process** `HyperClientCore`, 
 
 TUN mode starts the Core elevated (`ShellExecuteEx runas`); system proxy mode starts it detached and unelevated. The installer is **per machine (Program Files)** so unprivileged processes cannot replace the binary that UAC elevates; the ZIP build does not have this protection.
 
+Exit watching is upstream's `CoreProcessMonitor` (`lib/core/ffi/core_process_monitor.dart`) on Windows and Linux. The fork hooks into it from the FFI APIs: a `disconnected` it reports (the Core exited on its own) and a start that finds no Core both restore the system proxy, and a stop restores it first, then writes `core.stop`, then terminates.
+
+Windows TUN inbounds carry `autoSystemWfpBlockLeak: ["dns"]` (upstream #209): the Core blocks DNS that leaves outside the TUN, except its own, with WFP filters. Not yet checked live together with minewire engines.
+
 ### Live node switch
 
 `LiveControl` (`lib/service/connect/live_control.dart`) adds to every desktop non-Raw config an `api` section **without `listen`**, a loopback SOCKS inbound `app-control` with a random per-session password, and a first routing rule `app-control → api`. `controlXray` in libXray dials the gRPC API through that inbound only; Xray's API has no authentication of its own.
@@ -88,13 +92,19 @@ The exception list is `systemProxyDefaultBypass` (local networks, `<local>` last
 
 `ConnectionPreparation` (`lib/service/connect/preparation.dart`) resolves, allocates ports and calls the pure `ConnectionCompiler`. After compiling it applies map transforms, in this order: the minewire bypass rules first in `routing.rules`, `MinewireRuntime.applyTcpDns` when a minewire engine is in the runtime, then `LiveControl.apply`, whose rule must end up above everything.
 
-In TUN mode `_applyOutboundPolicy` binds every outbound to the physical interface **except one whose servers are all on loopback** (a minewire engine): Windows rejects a dial to `127.0.0.1` bound to `Ethernet` ("not valid in its context"), which left TUN with minewire completely dead.
+In TUN mode `_applyOutboundPolicy` binds every outbound to the physical interface **except one whose servers are all on loopback** (`outboundDialsLoopback`, a minewire engine): Windows rejects a dial to `127.0.0.1` bound to `Ethernet` ("not valid in its context"), which left TUN with minewire completely dead. For the same reason Fragment (upstream #213, `XrayFragment.connectEntries`) never sets `dialerProxy: fragment` on a loopback entry.
+
+LAN proxy sharing (upstream #213, Settings → Advanced → Xray) is a SOCKS5/HTTP inbound on `0.0.0.0`. Upstream shares it without authentication; the fork requires an account (`lanProxy.user`/`password` in `PlatformPolicy`, made once when sharing is turned on, shown with copy buttons on the sharing page). `RuntimeOptions` and `createLanProxyInbound` refuse sharing without one.
 
 Fork deviations from the upstream Raw contract, enforced in `ConnectionCompiler._rawRuntimeMap` (Raw and Advanced templates):
 
 - an inbound without `listen` gets `127.0.0.1` (Xray's default is every interface); an explicit outside `listen` on socks/http/mixed requires accounts;
 - `env` keeps only `xray.*` keys (it becomes the Core's process environment);
 - on desktop a Raw `api` section, its rules and API-only inbounds are dropped.
+
+## JSON subscriptions
+
+Some providers serve a JSON array of full Xray client configs instead of links (v2rayN/Happ style, Remnawave's JSON format, the owner's home server for INCY). `xrayConfigOutbounds` (`lib/service/shared/share/xray_config_share.dart`), called first in `XrayShareReader.parseShareText`, turns each config's proxy outbound into an ordinary node named after its `remarks`, **keeping `mux`**, which VLESS links cannot carry. The provider's inbounds, DNS, routing and balancers are dropped, so the App's own routing, live switch and health check apply. Outbounds that need another one of their config (`dialerProxy`, `proxySettings`) are skipped. Each node is checked with `testXray` (`XrayValidation.nodes`), **not** `convertShareLinksToXrayJson`: libXray's projection drops `mux` and other fields. A bare `{"outbounds": [...]}` still goes to libXray; a single full config pasted into import is still a Raw configuration.
 
 ## Non-standard protocols
 
@@ -106,7 +116,7 @@ The engine itself is a patched copy of upstream's `src/core` in `libXray/third_p
 
 ## UI layout
 
-The fork reworked navigation for usability after tunnel clients like INCY; `docs/app-navigation.md` still describes upstream's four tabs.
+The fork reworked navigation for usability after tunnel clients like INCY; the navigation part of `docs/app.md` still describes upstream's four tabs.
 
 - **Window caption** (Windows, Linux): `DesktopCaption` (`lib/pages/main/desktop_caption.dart`) replaces window_manager's `WindowCaption`, like INCY: brand in `palette.brand`, version, thin Lucide buttons. It sits above the Navigator, so it wraps itself in a `Material` (otherwise text inherits `MaterialApp`'s debug style) and cannot use tooltips. On Windows 11 `WindowService.updateFrameColor` sets the DWM border color instead of the system accent. The sidebar hides its version where the caption shows it.
 - **Three tabs**: Home (`AppPrimaryDestination.connect`, path `/connect`), Servers, Settings. Advanced is no longer a tab: Settings → Advanced pushes `AppPageDestination.advanced` with `extra` 0 (VPN tunnel) or 1 (Xray). The desktop sidebar collapses to icons (`_sidebarCollapsed`, in memory only).
@@ -116,7 +126,7 @@ The fork reworked navigation for usability after tunnel clients like INCY; `docs
 - `ServerNodeTile` is the one node row. Node menus are popups at the `…` button on desktop and the existing bottom-sheet dialogs on mobile (`menus_test.dart` covers the latter); favorite moved into the menu (`ServerAction.favorite`).
 - **Node icons**: the first emoji of a server or subscription name is its icon (`splitNameEmoji`, `NameIcon`); names without one show the flag of the measured `countryCode`, then a globe. Grouping by location still uses only the measured code. The code comes from `pingBatch`'s `locationUrl` probe, which **upstream removed** (libXray #165, and app #220 drops the `country_code` column without a merge conflict): the fork keeps both, and any upstream merge must keep them. Images are Twemoji 15.1 (CC-BY 4.0, see `LICENSE-THIRD-PARTY.md`): `assets/emoji/<hex code points without FE0F>.png` and `assets/flags/<iso>.png`, built by `tool/twemoji.py`, which also writes the key table `twemoji_keys.dart`. Windows has no glyphs for regional-indicator flags and prints "NL", so flags are removed from the text; other emoji stay. Both folders are excluded from `flutter_gen`.
 - **New subscription name**: the add form fills the empty name with the provider's `Profile-Title` (`SubscriptionService.readTitle`, 500 ms after typing stops) and replaces it only while the user has not edited it. Widget tests that type a link into an empty form must stub `readSubscriptionTitle` and pump past the delay.
-- **Tray** (`lib/service/shared/menu/tray/service.dart`, tray_manager 0.5.3): its Windows `NOTIFYICONDATA` is uninitialized, so the first `setIcon` showed garbage as the tooltip; the tooltip ("HYPER CLIENT · state · node", or "No connection") is set right after the icon on Windows and macOS (Linux has no tooltip call). The popup passes the deprecated `bringAppToFront` on Windows, without which the menu did not close on an outside click. Icon and tooltip are set only when they change. Upstream moved to tray_manager 0.8 on nativeapi, which opens the menu from a hidden host window and zeroes the struct.
+- **Tray** (`lib/service/shared/menu/tray/service.dart`): upstream's `TrayPlatform` on tray_manager 0.8 (nativeapi), which opens the menu from a hidden host window and initializes the notify icon data; the 0.5.3 workarounds (`bringAppToFront`, a tooltip set right after the first icon against garbage text) are gone. The fork adds `TrayPlatform.setToolTip` for its tooltip ("HYPER CLIENT · state · node", or "No connection"); icon and tooltip are set only when they change. Tests drive a fake `TrayPlatform`, not the method channel.
 - **Rebuild costs**: `AppTheme.material`/`shad` return cached instances. A fresh `ThemeData` never equals the last (its `WidgetStateProperty` closures have no `==`), so `MaterialApp`'s `AnimatedTheme` animated 200 ms on every rebuild; the shell's `BlocBuilder<AppEventBus>` also rebuilds only on theme or language now. `ServerCatalog.copyWith` reuses parsed `ServerDisplay`s for rows whose data did not change (a ping only writes delay and location). libXray calls run on a worker isolate; `pingBatch` has its own so a batch does not hold up Connect, a live switch or minewire state.
 - Visual check without running the App or computer use: a throwaway widget test can load real fonts with `FontLoader` (Geist and Lucide from the pub cache, Segoe UI for Cyrillic), `precacheImage` the flags and emoji inside `tester.runAsync`, and write `RenderRepaintBoundary.toImage()` to PNG. Text in buttons inherits no family and still renders as Ahem boxes there. Do not leave such a test in `test/`: CI runs everything.
 
@@ -132,7 +142,9 @@ App state is faster to read from `%APPDATA%\HYPER CLIENT\HYPER CLIENT\db.sqlite`
 
 ## Git and releases
 
-Push straight to `main`; do not create branches. Every full version gets a GitHub release with binaries. Merging upstream: `git fetch upstream` in both repositories; in the app, resolve conflicts toward upstream's architecture and re-port fork behavior (this file lists it).
+Push straight to `main`; do not create branches. Every full version gets a GitHub release with binaries. Merging upstream: `git fetch upstream` in both repositories; in the app, resolve conflicts toward upstream's architecture and re-port fork behavior (this file lists it). Merge in stages (one merge commit per upstream PR group, tests between them); a detached worktree at an ASCII path (`git worktree add --detach C:\Users\BADAB\dev\hp-merge HEAD`, then fast-forward `main`) keeps the main tree free for builds and needs no branch.
+
+The app is merged up to upstream `b88e456` (#218). **Upstream #220 (Remnawave configurations) and everything after it wait** until the fork has its own resilient routing (switching away from a dead node) and a kill switch (`ROADMAP.md`), by the owner's decision of 18.10.2026: #220 runs the provider's whole config, which bypasses the App's routing, live switch and leak protections. What the fork needed from it, JSON subscriptions with mux, is done its own way (see above). Upstream's build scripts, workflows and installer are never taken: the fork's keep the wintun hash check and provenance receipts.
 
 Two GitHub quirks cost real time here:
 
