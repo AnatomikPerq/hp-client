@@ -94,6 +94,12 @@ final class PlatformPolicy {
         throw FormatException('Invalid system proxy exception: $host');
       }
     }
+
+    final sharing = policy['lanProxy'] as Map<String, dynamic>;
+    final lanPort = sharing['port'] as int;
+    if (lanPort < 1024 || lanPort > 65535) {
+      throw const FormatException('Proxy port must be between 1024 and 65535');
+    }
     return PlatformPolicy._(policy);
   }
 
@@ -106,6 +112,8 @@ final class PlatformPolicy {
   String get logLevel => toJson()['log']['level'] as String;
   bool get recordDns => toJson()['log']['recordDns'] as bool;
   String get maskAddress => toJson()['log']['maskIp'] == true ? 'full' : '';
+  bool get lanProxyEnabled => toJson()['lanProxy']['enabled'] as bool;
+  int get lanProxyPort => toJson()['lanProxy']['port'] as int;
 
   DesktopRunMode get desktopRunMode =>
       DesktopRunMode.fromName(toJson()['desktop']['runMode'] as String);
@@ -295,6 +303,7 @@ const _defaults = <String, dynamic>{
   'dnsIpv6Address': '2001:4860:4860::8888',
   'dnsServerName': 'dns.google',
   'xrayOutboundInterfaceName': '',
+  'lanProxy': {'enabled': false, 'port': 11024},
   'android': {
     'appScope': 'all',
     'includedAppPackageNames': <String>[],

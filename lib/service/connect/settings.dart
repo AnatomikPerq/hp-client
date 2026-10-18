@@ -62,6 +62,7 @@ class SmartRoutingSettings {
   final bool directDns;
   final String directDnsAddress;
   final bool fakeDns;
+  final bool fragment;
   final bool blockAds;
 
   SmartRoutingSettings({
@@ -74,6 +75,7 @@ class SmartRoutingSettings {
     this.directDns = true,
     this.directDnsAddress = RoutingDns.defaultAddress,
     this.fakeDns = false,
+    this.fragment = false,
     this.blockAds = false,
   }) : directRegions = List.unmodifiable(directRegions) {
     if (entryCount < 1 || entryCount > 3) {
@@ -94,6 +96,7 @@ class SmartRoutingSettings {
         directDnsAddress:
             value['directDnsAddress'] as String? ?? RoutingDns.defaultAddress,
         fakeDns: value['fakeDns'] as bool? ?? false,
+        fragment: value['fragment'] as bool? ?? false,
         blockAds: value['blockAds'] as bool? ?? false,
       );
 
@@ -107,6 +110,7 @@ class SmartRoutingSettings {
     'directDns': directDns,
     'directDnsAddress': directDnsAddress,
     'fakeDns': fakeDns,
+    'fragment': fragment,
     'blockAds': blockAds,
   };
 

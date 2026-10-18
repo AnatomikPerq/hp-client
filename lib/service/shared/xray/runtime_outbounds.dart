@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:onexray/core/model/xray_json.dart';
 
 XrayOutbound createFreedomOutbound({
@@ -40,3 +42,25 @@ XrayOutbound createDnsOutbound({
     sockopt: XraySockopt(dialerProxy: dialerProxy),
   ),
 );
+
+/// Every server [outbound] dials is on loopback, in either Xray layout:
+/// flat `address` or `servers`/`vnext` lists. minewire engines are such
+/// local servers.
+bool outboundDialsLoopback(Map<String, dynamic> outbound) {
+  final settings = outbound['settings'];
+  if (settings is! Map) return false;
+  final addresses = [
+    ?settings['address'],
+    for (final key in const ['servers', 'vnext'])
+      if (settings[key] case final List servers)
+        for (final server in servers)
+          if (server is Map) server['address'],
+  ];
+  return addresses.isNotEmpty &&
+      addresses.every((address) {
+        if (address is! String) return false;
+        final value = address.trim().toLowerCase();
+        return value == 'localhost' ||
+            (InternetAddress.tryParse(value)?.isLoopback ?? false);
+      });
+}

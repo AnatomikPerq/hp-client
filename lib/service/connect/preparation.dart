@@ -192,9 +192,21 @@ class ConnectionPreparation {
       await ensureSystemProxyPortFree(proxyPort);
     }
     final apiPort = await LocalApiService.instance.reservedPort();
+    final shareLanProxy = !settings.expert && policy.lanProxyEnabled;
+    if (shareLanProxy && policy.lanProxyPort == apiPort) {
+      throw const FormatException(
+        'LAN proxy port conflicts with the HTTP API port',
+      );
+    }
+    if (shareLanProxy && policy.lanProxyPort == proxyPort) {
+      throw const FormatException(
+        'LAN proxy port conflicts with the system proxy port',
+      );
+    }
+    final lanPort = shareLanProxy ? policy.lanProxyPort : null;
     final allocated = await allocateRuntimePorts(
       userInbounds.cast<Map<String, dynamic>>(),
-      excludePorts: [?apiPort, ?proxyPort],
+      excludePorts: [?apiPort, ?proxyPort, ?lanPort],
     );
     final ports = reuse == null
         ? [proxyPort ?? allocated[0], allocated[1]]
@@ -213,7 +225,7 @@ class ConnectionPreparation {
           LiveControl.create(
             (await allocateRuntimePorts(
               userInbounds.cast<Map<String, dynamic>>(),
-              excludePorts: [?apiPort, ...ports],
+              excludePorts: [?apiPort, ...ports, ?lanPort],
             ))[0],
           );
     }
@@ -285,6 +297,8 @@ class ConnectionPreparation {
         sessionDirectory: VpnConstants.runDir,
         socksPort: ports[0],
         metricsPort: ports[1],
+        lanProxyEnabled: !settings.expert && policy.lanProxyEnabled,
+        lanProxyPort: policy.lanProxyPort,
         ipv6: policy.ipv6Enabled,
         tunDnsIpv4Address: policy.dnsIpv4Address,
         tunDnsIpv6Address: policy.dnsIpv6Address,
