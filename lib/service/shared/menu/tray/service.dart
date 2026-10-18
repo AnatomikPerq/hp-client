@@ -180,7 +180,13 @@ final class TrayService with TrayListener {
           ConnectionPhase.connecting => l.prototypeConnecting,
           ConnectionPhase.connected => l.prototypeConnected,
           ConnectionPhase.disconnecting => l.prototypeDisconnecting,
-          ConnectionPhase.failed => l.prototypeConnectionFailed,
+          // The reason, as the failure notification gives it.
+          ConnectionPhase.failed => connectionFailureMessage(
+            l,
+            issue: view.issue,
+            error: view.error,
+            permission: view.permission,
+          ),
         },
       if (connected)
         ...?view.runtime?.entries
