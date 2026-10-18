@@ -3050,5 +3050,17 @@
       }
     }
   },
-  "subscriptionTitleLoading": "Getting the name from the provider…"
+  "subscriptionTitleLoading": "Getting the name from the provider…",
+  "connectionHealthLost": "No connection",
+  "connectionHealthLostDetail": "The tunnel is up, but nothing gets through. Checking again…",
+  "connectionHealthMinewireDetail": "The minewire engine lost its session with the server and is reconnecting…",
+  "connectionHealthLostNotice": "No connection through {node}",
+  "@connectionHealthLostNotice": {
+    "placeholders": {
+      "node": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionHealthRestoredNotice": "Connection restored"
 }

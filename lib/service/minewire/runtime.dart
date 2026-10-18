@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/routing/dns.dart';
@@ -61,6 +64,7 @@ abstract interface class MinewireHost {
     required String mode,
     int? localPort,
     String? interfaceName,
+    String? logFile,
   });
 
   Future<void> stop({int? localPort});
@@ -78,12 +82,14 @@ class _LibXrayMinewireHost implements MinewireHost {
     required String mode,
     int? localPort,
     String? interfaceName,
+    String? logFile,
   }) => AppHostApi().startMinewire(
     serverAddress: serverAddress,
     password: password,
     mode: mode,
     localPort: localPort,
     interfaceName: interfaceName,
+    logFile: logFile,
   );
 
   @override
@@ -100,10 +106,16 @@ class MinewireRuntime {
   static final instance = MinewireRuntime();
   static const bypassRulePrefix = 'app-minewire-';
   static const timeoutCause = 'The minewire server did not answer in time';
+  static const logFileName = 'minewire.log';
 
   final MinewireHost _host;
   final Future<List<String>> Function(String host) _resolve;
   final Duration _connectTimeout;
+
+  /// Where the engines of a running connection log their logins, drops and
+  /// errors; null for none. The GUI App has no stderr, so without the file
+  /// a session that keeps dropping leaves no trace.
+  final String? Function() _logFile;
 
   /// Engines started by this App session. Nothing else starts engines, so a
   /// session that never used minewire makes no libXray calls at all.
@@ -113,8 +125,18 @@ class MinewireRuntime {
     MinewireHost? host,
     Future<List<String>> Function(String host)? resolve,
     this._connectTimeout = const Duration(seconds: 12),
+    String? Function()? logFile,
   }) : _host = host ?? const _LibXrayMinewireHost(),
-       _resolve = resolve ?? _lookup;
+       _resolve = resolve ?? _lookup,
+       _logFile = logFile ?? _defaultLogFile;
+
+  static String? _defaultLogFile() {
+    final root = AppHostApi().tunFilesDir;
+    return root.isEmpty ? null : p.join(root, 'run', logFileName);
+  }
+
+  /// Engines of the running connection, by local port.
+  Set<int> get activePorts => Set.unmodifiable(_active);
 
   /// The interface engines bind their uplinks to. A desktop tunnel captures
   /// the default route, and the engines run in the App, outside the Core
@@ -175,10 +197,19 @@ class MinewireRuntime {
             mode: link.mode,
             localPort: reusePorts[server.id],
             interfaceName: interfaceName,
+            logFile: _logFile(),
           );
           started.add(port);
           _active.add(port);
-          await _waitConnected(port);
+          try {
+            await _waitConnected(port);
+          } on ConnectionHostException catch (error) {
+            AppLog.warning(
+              'minewire ${link.host}:${link.port} did not connect: '
+              '${error.cause ?? error.reason}',
+            );
+            rethrow;
+          }
           endpoint = MinewireEndpoint(
             nodeId: server.id,
             localPort: port,

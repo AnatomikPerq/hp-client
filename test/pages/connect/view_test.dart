@@ -13,7 +13,12 @@ import 'package:onexray/pages/shared/widgets/json_editor.dart';
 import 'package:onexray/pages/shared/widgets/page_action_bar.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/health.dart';
+import 'package:onexray/service/connect/runtime.dart';
+import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/resolver.dart';
 import 'package:onexray/service/connect/traffic.dart';
 import 'package:onexray/service/settings/backup/service.dart';
@@ -69,6 +74,7 @@ void main() {
     VoidCallback? onAddServers,
     VoidCallback? onExpert,
     Widget? servers,
+    ConnectionHealth health = ConnectionHealth.none,
   }) => ConnectView(
     view: view,
     hasServers: hasServers,
@@ -88,6 +94,7 @@ void main() {
     onRawSelect: (_) {},
     onRawActions: (_) {},
     servers: servers,
+    health: health,
   );
 
   Widget app(
@@ -420,6 +427,73 @@ void main() {
 
     expect(find.text(l.prototypeTemporarilyUnavailable), findsOneWidget);
     expect(find.text(l.prototypeVpnPermissionRequired), findsNothing);
+  });
+
+  testWidgets('a connection that carries nothing says so, not connected', (
+    tester,
+  ) async {
+    final runtime = ConnectionRuntime.create(
+      configuration: ConnectionConfiguration(),
+      compiled: CompiledConnection(
+        xrayJson: '{}',
+        entries: [
+          ResolvedServer(id: 1, sourceId: 1, outbound: {'tag': 'Main'}),
+        ],
+        finalExit: null,
+        nodeTags: const {'app-entry-0': 1},
+      ),
+      platform: ConnectionPlatform.windows,
+      request: StartVpnRequest(null, '10820', '18003', '{}'),
+      minewirePorts: const {1: 41000},
+    );
+    final view = ConnectionView(
+      phase: ConnectionPhase.connected,
+      runtime: runtime,
+    );
+    final key = ConnectionHealth.keyOf(runtime);
+    for (final (health, minewire) in [
+      (
+        ConnectionHealth(key: key, status: ConnectionHealthStatus.unreachable),
+        false,
+      ),
+      (
+        ConnectionHealth(
+          key: key,
+          status: ConnectionHealthStatus.unreachable,
+          minewireDown: true,
+        ),
+        true,
+      ),
+    ]) {
+      await tester.pumpWidget(app(screen(view: view, health: health)));
+      final l = AppLocalizations.of(tester.element(find.byType(ConnectView)))!;
+      expect(find.text(l.connectionHealthLost), findsOneWidget);
+      expect(find.text(l.prototypeConnected), findsNothing);
+      expect(
+        find.text(
+          minewire
+              ? l.connectionHealthMinewireDetail
+              : l.connectionHealthLostDetail,
+        ),
+        findsOneWidget,
+      );
+    }
+
+    // A verdict about another session or node does not apply.
+    await tester.pumpWidget(
+      app(
+        screen(
+          view: view,
+          health: const ConnectionHealth(
+            key: 'other',
+            status: ConnectionHealthStatus.unreachable,
+          ),
+        ),
+      ),
+    );
+    final l = AppLocalizations.of(tester.element(find.byType(ConnectView)))!;
+    expect(find.text(l.connectionHealthLost), findsNothing);
+    expect(find.text(l.prototypeConnected), findsOneWidget);
   });
 
   testWidgets('missing desktop interface shows the interface prompt', (

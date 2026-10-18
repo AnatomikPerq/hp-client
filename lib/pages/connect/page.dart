@@ -116,6 +116,7 @@ class _ConnectPageState extends State<ConnectPage> {
                 onRunMode: (mode) => controller.setRunMode(context, mode),
                 livePing: state.livePing,
                 onLivePing: controller.measureLivePing,
+                health: state.health,
                 activity: const AppActivityIndicator(),
               );
             },

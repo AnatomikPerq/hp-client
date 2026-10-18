@@ -174,6 +174,7 @@ StartMinewireRequest _$StartMinewireRequestFromJson(
   mode: json['mode'] as String?,
   localPort: (json['localPort'] as num?)?.toInt(),
   interfaceName: json['interface'] as String?,
+  logFile: json['logFile'] as String?,
 );
 
 Map<String, dynamic> _$StartMinewireRequestToJson(
@@ -184,6 +185,7 @@ Map<String, dynamic> _$StartMinewireRequestToJson(
   'mode': ?instance.mode,
   'localPort': ?instance.localPort,
   'interface': ?instance.interfaceName,
+  'logFile': ?instance.logFile,
 };
 
 StartMinewireResponse _$StartMinewireResponseFromJson(

@@ -532,6 +532,7 @@ class _Engines implements MinewireHost {
     required String mode,
     int? localPort,
     String? interfaceName,
+    String? logFile,
   }) async {
     final port = _next++;
     running[port] = password == 'wrong'

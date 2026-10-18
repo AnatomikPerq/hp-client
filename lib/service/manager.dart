@@ -9,6 +9,7 @@ import 'package:onexray/service/launch/app_startup.dart';
 import 'package:onexray/service/settings/app_update/service.dart';
 import 'package:onexray/service/advanced/xray/data_update/scheduler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/health.dart';
 import 'package:onexray/service/connect/platform_requirements.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
@@ -81,6 +82,10 @@ abstract final class ServiceManager {
       () => NotificationService().asyncInit(),
     );
     await _runInit("TrayService", () => TrayService().init());
+    await _runInit(
+      "ConnectionHealthMonitor",
+      () => ConnectionHealthMonitor.instance.start(),
+    );
     await _runInit("WindowService", () => WindowService().asyncInit());
     await _runInit("ShareService", () => ShareService().init());
     await _runInit(

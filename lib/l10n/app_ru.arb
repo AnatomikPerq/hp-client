@@ -844,5 +844,10 @@
   "systemProxyBypassNumber": "Исключение {number}",
   "systemProxyBypassRemove": "Удалить исключение {number}",
   "systemProxyBypassInvalid": "Это не домен и не адрес: {host}",
-  "subscriptionTitleLoading": "Получаем название от провайдера…"
+  "subscriptionTitleLoading": "Получаем название от провайдера…",
+  "connectionHealthLost": "Нет связи",
+  "connectionHealthLostDetail": "Туннель поднят, но трафик не проходит. Проверяем снова…",
+  "connectionHealthMinewireDetail": "Движок minewire потерял сессию с сервером и переподключается…",
+  "connectionHealthLostNotice": "Нет связи через {node}",
+  "connectionHealthRestoredNotice": "Связь восстановлена"
 }

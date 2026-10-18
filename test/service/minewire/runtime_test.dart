@@ -28,6 +28,7 @@ class _Host implements MinewireHost {
     required String mode,
     int? localPort,
     String? interfaceName,
+    String? logFile,
   }) async {
     starts.add(
       StartMinewireRequest(
@@ -36,6 +37,7 @@ class _Host implements MinewireHost {
         mode: mode,
         localPort: localPort,
         interfaceName: interfaceName,
+        logFile: logFile,
       ),
     );
     final port = localPort ?? nextPort++;
@@ -95,6 +97,7 @@ void main() {
       host: host,
       resolve: (name) async => name == 'mw.test' ? ['198.51.100.1'] : [name],
       connectTimeout: const Duration(seconds: 1),
+      logFile: () => '/run/minewire.log',
     );
   });
 
@@ -108,6 +111,9 @@ void main() {
     expect(result.ports, {2: 41000});
     // The engine gets the already resolved address.
     expect(host.starts.single.serverAddress, '203.0.113.7:25565');
+    // A running connection's engine keeps a log; see the ping test below.
+    expect(host.starts.single.logFile, '/run/minewire.log');
+    expect(runtime.activePorts, {41000});
   });
 
   test('bypass rules go first and replace stale ones', () async {
@@ -300,6 +306,8 @@ void main() {
     test('runs the usual probe through a throwaway engine', () async {
       final probe = await MinewirePingProbe.start(link, 3, runtime: runtime);
       expect(probe.failure, isNull);
+      // Throwaway engines would flood the log with logins and stops.
+      expect(host.starts.single.logFile, isNull);
       // Not part of any runtime: a disconnect or switch leaves it alone.
       await runtime.stopAll();
       expect(host.engines.keys, [41000]);

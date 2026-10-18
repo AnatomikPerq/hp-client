@@ -16,6 +16,7 @@ import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/minewire/runtime.dart';
 import 'package:onexray/service/connect/live_control.dart';
+import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
@@ -363,6 +364,11 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         state.value.issue != 'runtimeUnavailable') {
       return;
     }
+    if (status == VpnStatus.disconnected &&
+        state.value.phase == ConnectionPhase.connected &&
+        !_commandActive) {
+      AppLog.warning('the VPN stopped without a command');
+    }
     _pendingStatus = status;
     _trafficGeneration++;
     _resetSpeed = true;
@@ -684,6 +690,10 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         final issue = cancellation.isCompleted
             ? 'cancelled'
             : connectionFailureReason(error);
+        if (issue != 'cancelled') {
+          // The reason code only: causes may quote configs or links.
+          AppLog.warning('connection failed: $issue (${error.runtimeType})');
+        }
         if (touchedHost) {
           final status = failed?.status;
           _failureLatched = true;
@@ -764,6 +774,9 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     } catch (error) {
       // A half-configured tunnel is worse than an extra UAC prompt.
       ygLogger('live node switch failed, restarting instead: $error');
+      AppLog.warning(
+        'live node switch failed, restarting the Core (${error.runtimeType})',
+      );
       return null;
     } finally {
       final unused = prepared;
@@ -836,6 +849,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     } catch (_) {
       // Unknown host state stays an explicit failure; retry inspects it again.
     }
+    AppLog.warning('$issue (${error.runtimeType})');
     state.value = ConnectionView(
       phase: ConnectionPhase.failed,
       runtime: runtime,

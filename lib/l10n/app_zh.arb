@@ -844,5 +844,10 @@
   "systemProxyBypassNumber": "例外 {number}",
   "systemProxyBypassRemove": "删除例外 {number}",
   "systemProxyBypassInvalid": "不是域名或地址：{host}",
-  "subscriptionTitleLoading": "正在从服务商获取名称…"
+  "subscriptionTitleLoading": "正在从服务商获取名称…",
+  "connectionHealthLost": "无法连接",
+  "connectionHealthLostDetail": "隧道已建立，但流量无法通过。正在重新检查…",
+  "connectionHealthMinewireDetail": "minewire 引擎与服务器的会话已断开，正在重新连接…",
+  "connectionHealthLostNotice": "通过 {node} 无法连接",
+  "connectionHealthRestoredNotice": "连接已恢复"
 }

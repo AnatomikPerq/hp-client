@@ -250,12 +250,17 @@ class StartMinewireRequest {
   @JsonKey(name: 'interface')
   String? interfaceName;
 
+  /// The engine's diagnostics file (`run/minewire.log`); throwaway ping
+  /// engines leave it empty. Older libXray builds ignore it.
+  String? logFile;
+
   StartMinewireRequest(
     this.serverAddress,
     this.password, {
     this.mode,
     this.localPort,
     this.interfaceName,
+    this.logFile,
   });
 
   factory StartMinewireRequest.fromJson(Map<String, dynamic> json) =>

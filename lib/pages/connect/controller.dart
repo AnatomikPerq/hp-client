@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:collection/collection.dart';
 
 import 'package:material_ui/material_ui.dart';
@@ -21,6 +23,7 @@ import 'package:onexray/pages/theme/theme.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/raw/editor.dart';
 import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/health.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
@@ -48,6 +51,7 @@ class ConnectPageState {
     this.pendingChange,
     Set<int> deletingRawIds = const {},
     this.livePing = LivePingView.idle,
+    this.health = ConnectionHealth.none,
   }) : configuration = configuration ?? ConnectionConfiguration(),
        catalog = catalog ?? ServerCatalog(),
        raws = List.unmodifiable(raws),
@@ -69,6 +73,9 @@ class ConnectPageState {
   final Set<int> deletingRawIds;
   final LivePingView livePing;
 
+  /// The background check of the running connection.
+  final ConnectionHealth health;
+
   ConnectPageState copyWith({
     ConnectionConfiguration? configuration,
     ConnectionView? connectionView,
@@ -82,6 +89,7 @@ class ConnectPageState {
     Object? pendingChange = _unchanged,
     Set<int>? deletingRawIds,
     LivePingView? livePing,
+    ConnectionHealth? health,
   }) => ConnectPageState(
     configuration: configuration ?? this.configuration,
     connectionView: connectionView ?? this.connectionView,
@@ -97,6 +105,7 @@ class ConnectPageState {
         : pendingChange as String?,
     deletingRawIds: deletingRawIds ?? this.deletingRawIds,
     livePing: livePing ?? this.livePing,
+    health: health ?? this.health,
   );
   bool sameContentAs(ConnectPageState other) =>
       configuration == other.configuration &&
@@ -112,6 +121,7 @@ class ConnectPageState {
       failed == other.failed &&
       pendingChange == other.pendingChange &&
       livePing == other.livePing &&
+      health == other.health &&
       connectedMinutes == other.connectedMinutes &&
       connectionView.phase == other.connectionView.phase &&
       connectionView.runtime == other.connectionView.runtime &&
@@ -121,16 +131,23 @@ class ConnectPageState {
 }
 
 class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
-  ConnectController({AppDatabase? database, ConnectionCoordinator? coordinator})
-    : db = database ?? AppDatabase(),
-      coordinator = coordinator ?? ConnectionCoordinator.instance,
-      super(ConnectPageState()) {
+  ConnectController({
+    AppDatabase? database,
+    ConnectionCoordinator? coordinator,
+    ValueListenable<ConnectionHealth>? health,
+  }) : db = database ?? AppDatabase(),
+       coordinator = coordinator ?? ConnectionCoordinator.instance,
+       connectionHealth = health ?? ConnectionHealthMonitor.instance.state,
+       super(ConnectPageState()) {
     this.coordinator.state.addListener(_connectionChanged);
+    connectionHealth.addListener(_healthChanged);
     _connectionChanged();
+    _healthChanged();
   }
 
   final AppDatabase db;
   final ConnectionCoordinator coordinator;
+  final ValueListenable<ConnectionHealth> connectionHealth;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _viewInitialized = false;
   bool _pageVisible = false;
@@ -163,6 +180,10 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
   set pendingChange(String? value) =>
       emit(state.copyWith(pendingChange: value));
   Set<int> get deletingRawIds => state.deletingRawIds;
+
+  void _healthChanged() {
+    if (isPageActive) emit(state.copyWith(health: connectionHealth.value));
+  }
 
   void _connectionChanged() {
     if (isPageActive) {
@@ -835,6 +856,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
   Future<void> disposePageResources() async {
     _syncTrafficVisibility();
     coordinator.state.removeListener(_connectionChanged);
+    connectionHealth.removeListener(_healthChanged);
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

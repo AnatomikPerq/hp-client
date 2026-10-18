@@ -844,5 +844,10 @@
   "systemProxyBypassNumber": "استثنای {number}",
   "systemProxyBypassRemove": "حذف استثنای {number}",
   "systemProxyBypassInvalid": "دامنه یا نشانی نیست: {host}",
-  "subscriptionTitleLoading": "در حال دریافت نام از ارائه‌دهنده…"
+  "subscriptionTitleLoading": "در حال دریافت نام از ارائه‌دهنده…",
+  "connectionHealthLost": "اتصال برقرار نیست",
+  "connectionHealthLostDetail": "تونل برقرار است، اما ترافیکی عبور نمی‌کند. دوباره بررسی می‌کنیم…",
+  "connectionHealthMinewireDetail": "موتور minewire جلسه خود با سرور را از دست داد و در حال اتصال دوباره است…",
+  "connectionHealthLostNotice": "اتصال از طریق {node} برقرار نیست",
+  "connectionHealthRestoredNotice": "اتصال برقرار شد"
 }

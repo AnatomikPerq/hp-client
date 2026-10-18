@@ -17,6 +17,7 @@ import 'package:onexray/pages/connect/run_mode.dart';
 import 'package:onexray/pages/connect/hero.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/health.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -59,6 +60,7 @@ class ConnectView extends StatelessWidget {
     this.onRunMode,
     this.livePing = LivePingView.idle,
     this.onLivePing,
+    this.health = ConnectionHealth.none,
     this.activity,
   });
   final ConnectionView view;
@@ -98,6 +100,10 @@ class ConnectView extends StatelessWidget {
   /// "Check connection" below the orb; null hides it.
   final LivePingView livePing;
   final VoidCallback? onLivePing;
+
+  /// The background check: a connection that stopped carrying traffic
+  /// says so instead of "connected".
+  final ConnectionHealth health;
 
   /// Background work (tests, downloads) at the top end of the header.
   final Widget? activity;
@@ -163,29 +169,37 @@ class ConnectView extends StatelessWidget {
     final palette = ColorManager.palette(context);
     final connected = view.phase == ConnectionPhase.connected;
     final failed = view.failed && !connected;
+    final unreachable =
+        connected && health.unreachable && health.appliesTo(view.runtime);
     final presentationPhase = failed ? ConnectionPhase.failed : view.phase;
-    final title = switch (presentationPhase) {
-      ConnectionPhase.disconnected => l.prototypeDisconnected,
-      ConnectionPhase.preparing ||
-      ConnectionPhase.connecting => l.prototypeConnecting,
-      ConnectionPhase.connected => l.prototypeConnected,
-      ConnectionPhase.disconnecting => l.prototypeDisconnecting,
-      ConnectionPhase.failed => l.prototypeConnectionFailed,
-    };
-    final detail = switch (presentationPhase) {
-      ConnectionPhase.disconnected => l.prototypeReadyToProtectConnection,
-      ConnectionPhase.preparing ||
-      ConnectionPhase.connecting => l.prototypePreparingSecureConnection,
-      ConnectionPhase.connected => runningPath ?? locationDetail,
-      ConnectionPhase.disconnecting => l.prototypeFinishingConnection,
-      ConnectionPhase.failed => connectionFailureMessage(
-        l,
-        issue: view.issue,
-        error: view.error,
-        permission: view.permission,
-      ),
-    };
-    final color = failed
+    final title = unreachable
+        ? l.connectionHealthLost
+        : switch (presentationPhase) {
+            ConnectionPhase.disconnected => l.prototypeDisconnected,
+            ConnectionPhase.preparing ||
+            ConnectionPhase.connecting => l.prototypeConnecting,
+            ConnectionPhase.connected => l.prototypeConnected,
+            ConnectionPhase.disconnecting => l.prototypeDisconnecting,
+            ConnectionPhase.failed => l.prototypeConnectionFailed,
+          };
+    final detail = unreachable
+        ? health.minewireDown
+              ? l.connectionHealthMinewireDetail
+              : l.connectionHealthLostDetail
+        : switch (presentationPhase) {
+            ConnectionPhase.disconnected => l.prototypeReadyToProtectConnection,
+            ConnectionPhase.preparing ||
+            ConnectionPhase.connecting => l.prototypePreparingSecureConnection,
+            ConnectionPhase.connected => runningPath ?? locationDetail,
+            ConnectionPhase.disconnecting => l.prototypeFinishingConnection,
+            ConnectionPhase.failed => connectionFailureMessage(
+              l,
+              issue: view.issue,
+              error: view.error,
+              permission: view.permission,
+            ),
+          };
+    final color = failed || unreachable
         ? palette.destructive
         : connected
         ? palette.runningText
@@ -197,6 +211,8 @@ class ConnectView extends StatelessWidget {
         ? ConnectionHeroTone.failed
         : _busy
         ? ConnectionHeroTone.busy
+        : unreachable
+        ? ConnectionHeroTone.failed
         : connected
         ? ConnectionHeroTone.connected
         : ConnectionHeroTone.idle;

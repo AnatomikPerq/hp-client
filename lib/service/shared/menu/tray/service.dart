@@ -10,6 +10,7 @@ import 'package:onexray/service/settings/language/service.dart';
 import 'package:onexray/gen/assets.gen.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/failure.dart';
+import 'package:onexray/service/connect/health.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
@@ -33,6 +34,7 @@ final class TrayService with TrayListener {
   TrayService._internal()
     : _databaseOverride = null,
       _coordinatorOverride = null,
+      _healthOverride = null,
       _connect = (() => ConnectionCoordinator.instance.connect()),
       _notify = ((message) => NotificationService().pushNotification(message)),
       _showMainWindow = (() => AppStartupService().showMainWindow());
@@ -44,14 +46,19 @@ final class TrayService with TrayListener {
     required this._showMainWindow,
     AppDatabase? database,
     ConnectionCoordinator? coordinator,
+    ValueListenable<ConnectionHealth>? health,
   }) : _databaseOverride = database,
-       _coordinatorOverride = coordinator;
+       _coordinatorOverride = coordinator,
+       _healthOverride = health;
 
   final AppDatabase? _databaseOverride;
   final ConnectionCoordinator? _coordinatorOverride;
+  final ValueListenable<ConnectionHealth>? _healthOverride;
   AppDatabase get _db => _databaseOverride ?? AppDatabase();
   ConnectionCoordinator get _coordinator =>
       _coordinatorOverride ?? ConnectionCoordinator.instance;
+  ValueListenable<ConnectionHealth> get _health =>
+      _healthOverride ?? ConnectionHealthMonitor.instance.state;
 
   Future<void> Function(
     Map<String, dynamic> values,
@@ -91,6 +98,7 @@ final class TrayService with TrayListener {
 
     trayManager.addListener(this);
     _coordinator.state.addListener(_connectionChanged);
+    _health.addListener(_connectionChanged);
     _initialized = true;
     _listeners.add(
       TrayMenuData.watch(_db).listen(
@@ -117,6 +125,7 @@ final class TrayService with TrayListener {
     }
     trayManager.removeListener(this);
     _coordinator.state.removeListener(_connectionChanged);
+    _health.removeListener(_connectionChanged);
     for (final listener in _listeners) {
       unawaited(listener.cancel());
     }
@@ -157,9 +166,14 @@ final class TrayService with TrayListener {
     final phase = view.failed && !connected
         ? ConnectionPhase.failed
         : view.phase;
+    final health = _health.value;
+    final unreachable =
+        connected && health.unreachable && health.appliesTo(view.runtime);
     final parts = <String>[
       'HYPER CLIENT',
-      if (phase != ConnectionPhase.disconnected)
+      if (unreachable)
+        l.connectionHealthLost
+      else if (phase != ConnectionPhase.disconnected)
         switch (phase) {
           ConnectionPhase.disconnected => l.prototypeDisconnected,
           ConnectionPhase.preparing ||

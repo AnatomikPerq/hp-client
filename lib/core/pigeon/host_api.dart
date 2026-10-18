@@ -191,6 +191,7 @@ class AppHostApi {
     required String mode,
     int? localPort,
     String? interfaceName,
+    String? logFile,
   }) async {
     final response = await _invoke(
       LibXrayInvokeRequest(
@@ -201,6 +202,7 @@ class AppHostApi {
           mode: mode,
           localPort: localPort,
           interfaceName: interfaceName,
+          logFile: logFile,
         ).toJson(),
       ),
     );
