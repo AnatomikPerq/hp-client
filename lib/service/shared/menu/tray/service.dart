@@ -101,7 +101,11 @@ final class TrayService {
     }
 
     _platform.init(
-      onClick: () => unawaited(_openMenu()),
+      // On Windows the left button opens the App and only the right one the
+      // menu, as other tray apps do. Elsewhere either opens the menu.
+      onClick: () =>
+          unawaited(AppPlatform.isWindows ? _showWindow() : _openMenu()),
+      onRightClick: () => unawaited(_openMenu()),
       onMenuVisibility: (visible) {
         _menuOpen = visible;
         if (!visible && _refreshRequested) scheduleMicrotask(_requestRefresh);
@@ -345,13 +349,26 @@ final class TrayService {
     }
   }
 
+  Future<void> _showWindow() async {
+    try {
+      await _showMainWindow();
+    } catch (error, stackTrace) {
+      ygLogger('Show window from tray failed: $error\n$stackTrace');
+    }
+  }
+
+  /// A menu that pops up seconds after the click, under wherever the cursor
+  /// is by then, is worse than none.
+  static const _staleMenuRequest = Duration(seconds: 2);
+
   Future<void> _openMenu() async {
     if (!_initialized || _menuOpen) return;
     _menuOpen = true;
+    final requested = Stopwatch()..start();
     try {
       // Keep the active native menu and its callbacks alive until it closes.
       await _refreshing;
-      if (!_initialized) return;
+      if (!_initialized || requested.elapsed > _staleMenuRequest) return;
       await _platform.openMenu();
     } catch (error, stackTrace) {
       ygLogger('Open tray menu failed: $error\n$stackTrace');

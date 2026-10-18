@@ -51,15 +51,18 @@ final class _FakeTrayPlatform implements TrayPlatform {
   final Future<void> Function() beforeIcon;
   final Future<void> Function() popup;
   late void Function() _onClick;
+  late void Function() _onRightClick;
   late void Function(bool) _onMenuVisibility;
   late void Function(TrayMenuEntry) _onSelect;
 
   @override
   void init({
     required void Function() onClick,
+    required void Function() onRightClick,
     required void Function(bool) onMenuVisibility,
   }) {
     _onClick = onClick;
+    _onRightClick = onRightClick;
     _onMenuVisibility = onMenuVisibility;
     calls.add(const MethodCall('setToolTip', {'toolTip': 'HYPER CLIENT'}));
     if (AppPlatform.isMacOS) {
@@ -68,6 +71,7 @@ final class _FakeTrayPlatform implements TrayPlatform {
   }
 
   void click() => _onClick();
+  void rightClick() => _onRightClick();
   void select(TrayMenuEntry entry) => _onSelect(entry);
 
   @override
@@ -118,6 +122,7 @@ void main() {
   final choices = <Map<String, dynamic>>[];
   var popups = 0;
   var connections = 0;
+  var windows = 0;
 
   Future<void> click(TrayMenuEntry entry) async {
     platform.select(entry);
@@ -130,6 +135,7 @@ void main() {
     choices.clear();
     popups = 0;
     connections = 0;
+    windows = 0;
     iconReady = null;
     popupClosed = Completer<void>();
     final bus = AppEventBus();
@@ -154,7 +160,7 @@ void main() {
             platform: platform,
             connect: () async => connections++,
             notify: (_) async => fail('No notification is expected'),
-            showMainWindow: () async => fail('No window is needed'),
+            showMainWindow: () async => windows++,
           )
           ..onConfigurationChange = (values, _, validate) async {
             await validate();
@@ -223,6 +229,26 @@ void main() {
     expect(calls, hasLength(published));
   });
 
+  test(
+    'the left button opens the App on Windows, the right one the menu',
+    () async {
+      platform.click();
+      await pumpEventQueue();
+      // Elsewhere either button opens the menu, as upstream.
+      expect((windows, popups), AppPlatform.isWindows ? (1, 0) : (0, 1));
+      if (!AppPlatform.isWindows) {
+        popupClosed.complete();
+        await pumpEventQueue();
+        popupClosed = Completer<void>();
+      }
+
+      platform.rightClick();
+      await pumpEventQueue();
+      expect(popups, AppPlatform.isWindows ? 1 : 2);
+      expect(windows, AppPlatform.isWindows ? 1 : 0);
+    },
+  );
+
   test('tooltip names the state and the node without flags', () async {
     List<String> toolTips() => [
       for (final call in calls.where((call) => call.method == 'setToolTip'))
@@ -275,7 +301,7 @@ void main() {
           .singleWhere((item) => item.key == 'startVpn');
       final automatic = _items(oldMenu)
           .singleWhere((item) => item.key == 'automatic');
-      platform.click();
+      platform.rightClick();
       await pumpEventQueue();
       expect(popups, 1);
 
@@ -336,7 +362,7 @@ void main() {
     expect(await db.subscriptionDao.allRows, hasLength(12));
     final choice = _items(oldMenu)
         .singleWhere((item) => item.key == 'source:${ids[9]}');
-    platform.click();
+    platform.rightClick();
     await pumpEventQueue();
     expect(popups, 1);
 
@@ -370,7 +396,7 @@ void main() {
         phase: ConnectionPhase.connected,
       );
       final refresh = tray.refreshTrayManager();
-      platform.click();
+      platform.rightClick();
       await pumpEventQueue();
       expect(popups, 0);
       await tray.refreshTrayManager();
@@ -388,7 +414,7 @@ void main() {
   );
 
   test('popup failure releases queued refreshes', () async {
-    platform.click();
+    platform.rightClick();
     await pumpEventQueue();
     final published = menus.length;
     await tray.refreshTrayManager();

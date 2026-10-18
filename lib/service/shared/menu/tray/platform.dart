@@ -6,8 +6,10 @@ import 'package:onexray/service/shared/menu/tray/entry.dart';
 import 'package:tray_manager/tray_manager.dart' as native;
 
 abstract interface class TrayPlatform {
+  /// [onClick] is the left button, [onRightClick] the right one.
   void init({
     required void Function() onClick,
+    required void Function() onRightClick,
     required void Function(bool) onMenuVisibility,
   });
   Future<void> setIcon(String path);
@@ -22,6 +24,23 @@ abstract interface class TrayPlatform {
   void dispose();
 }
 
+/// Runs [handler] for a nativeapi event, then wakes the Dart event loop.
+///
+/// nativeapi calls its listeners synchronously from the Windows message
+/// loop, outside any Flutter engine task, and the engine drains the
+/// microtask queue only after its own tasks. Whatever a handler awaits
+/// therefore waited for the next engine task. With the window hidden and
+/// no VPN running nothing came: a tray click did nothing, and the queued
+/// menu popped up later, whenever something woke the App (a click on its
+/// taskbar button or Start menu entry). A zero timer is such a task.
+void _resume(void Function() handler) {
+  try {
+    handler();
+  } finally {
+    Timer.run(() {});
+  }
+}
+
 final class NativeTrayPlatform implements TrayPlatform {
   native.TrayIcon? _tray;
   native.ListenerId? _listener;
@@ -33,6 +52,7 @@ final class NativeTrayPlatform implements TrayPlatform {
   @override
   void init({
     required void Function() onClick,
+    required void Function() onRightClick,
     required void Function(bool) onMenuVisibility,
   }) {
     final tray = native.TrayIcon.create();
@@ -44,9 +64,10 @@ final class NativeTrayPlatform implements TrayPlatform {
     tray.setTooltip('HYPER CLIENT');
     if (AppPlatform.isMacOS) tray.setTitle('');
     _listener = tray.addListener((event) {
-      if (event is native.TrayIconClickedEvent ||
-          event is native.TrayIconRightClickedEvent) {
-        onClick();
+      if (event is native.TrayIconClickedEvent) {
+        _resume(onClick);
+      } else if (event is native.TrayIconRightClickedEvent) {
+        _resume(onRightClick);
       }
     });
   }
@@ -142,8 +163,10 @@ final class _NativeTrayMenu {
     try {
       menu = _build(entries, onSelect);
       _listener = menu.addListener((event) {
-        if (event is native.MenuOpenedEvent) onVisibility(true);
-        if (event is native.MenuClosedEvent) onVisibility(false);
+        if (event is native.MenuOpenedEvent) _resume(() => onVisibility(true));
+        if (event is native.MenuClosedEvent) {
+          _resume(() => onVisibility(false));
+        }
       });
     } catch (_) {
       dispose();
@@ -174,7 +197,7 @@ final class _NativeTrayMenu {
       }
       final listener = item.addListener((event) {
         if (event is native.MenuItemClickedEvent && !entry.disabled) {
-          onSelect(entry);
+          _resume(() => onSelect(entry));
         }
       });
       _items.add((item, listener));
