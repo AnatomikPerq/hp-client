@@ -7,6 +7,8 @@ import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
 abstract final class XrayFragment {
   static const tag = 'fragment';
 
+  static const _udpOnly = {'wireguard', 'amneziawg'};
+
   static bool matches(Map<String, dynamic> outbound) =>
       outbound['tag'] == tag && outbound['protocol'] == 'freedom';
 
@@ -28,6 +30,7 @@ abstract final class XrayFragment {
   /// Entries on loopback (minewire engines) stay direct: they have no TLS
   /// hello of their own to split, and the fragment outbound is bound to the
   /// physical interface, through which Windows refuses a loopback dial.
+  /// WireGuard and AmneziaWG stay direct too: they speak UDP with no TLS.
   static List<Map<String, dynamic>> connectEntries(
     Iterable<Map<String, dynamic>> entries,
     Iterable<Map<String, dynamic>> helpers,
@@ -35,7 +38,9 @@ abstract final class XrayFragment {
     final enabled = helpers.any(matches);
     return entries.map((source) {
       final outbound = JsonTool.copyMap(source);
-      if (enabled && !outboundDialsLoopback(outbound)) {
+      if (enabled &&
+          !_udpOnly.contains(outbound['protocol']) &&
+          !outboundDialsLoopback(outbound)) {
         setOutboundDialerProxy(outbound, tag);
       }
       return outbound;

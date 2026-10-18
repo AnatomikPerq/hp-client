@@ -43,19 +43,27 @@ XrayOutbound createDnsOutbound({
   ),
 );
 
-/// Every server [outbound] dials is on loopback, in either Xray layout:
-/// flat `address` or `servers`/`vnext` lists. minewire engines are such
-/// local servers.
+/// Every server [outbound] dials is on loopback, in any Xray layout: flat
+/// `address`, `servers`/`vnext` lists, or the `peers` endpoints of
+/// WireGuard and AmneziaWG (whose `address` is their own side of the
+/// tunnel, never a server). minewire engines are such local servers.
 bool outboundDialsLoopback(Map<String, dynamic> outbound) {
   final settings = outbound['settings'];
   if (settings is! Map) return false;
-  final addresses = [
-    ?settings['address'],
-    for (final key in const ['servers', 'vnext'])
-      if (settings[key] case final List servers)
-        for (final server in servers)
-          if (server is Map) server['address'],
-  ];
+  final addresses = switch (outbound['protocol']) {
+    'wireguard' || 'amneziawg' => [
+      if (settings['peers'] case final List peers)
+        for (final peer in peers)
+          if (peer is Map) _endpointHost(peer['endpoint']),
+    ],
+    _ => [
+      ?settings['address'],
+      for (final key in const ['servers', 'vnext'])
+        if (settings[key] case final List servers)
+          for (final server in servers)
+            if (server is Map) server['address'],
+    ],
+  };
   return addresses.isNotEmpty &&
       addresses.every((address) {
         if (address is! String) return false;
@@ -63,4 +71,15 @@ bool outboundDialsLoopback(Map<String, dynamic> outbound) {
         return value == 'localhost' ||
             (InternetAddress.tryParse(value)?.isLoopback ?? false);
       });
+}
+
+/// The host of a `host:port` or `[v6]:port` endpoint.
+Object? _endpointHost(Object? endpoint) {
+  if (endpoint is! String) return null;
+  final index = endpoint.lastIndexOf(':');
+  if (index <= 0) return null;
+  final host = endpoint.substring(0, index);
+  return host.startsWith('[') && host.endsWith(']')
+      ? host.substring(1, host.length - 1)
+      : host;
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:onexray/service/minewire/link.dart';
+import 'package:onexray/service/shared/share/share_text.dart';
 
 /// Share text with the minewire links taken out; [rest] goes to libXray.
 class MinewireShareSplit {
@@ -18,7 +19,7 @@ MinewireShareSplit splitMinewireLinks(String text) {
   if (text.contains('-----BEGIN AGE ENCRYPTED FILE-----')) {
     return MinewireShareSplit(const [], text);
   }
-  final plain = _decodeBase64Body(text) ?? text;
+  final plain = decodeBase64ShareBody(text) ?? text;
   final links = <MinewireLink>[];
   final rest = <String>[];
   for (final line in const LineSplitter().convert(plain)) {
@@ -31,19 +32,4 @@ MinewireShareSplit splitMinewireLinks(String text) {
   }
   if (links.isEmpty) return MinewireShareSplit(const [], text);
   return MinewireShareSplit(links, rest.join('\n'));
-}
-
-String? _decodeBase64Body(String text) {
-  final compact = text.replaceAll(RegExp(r'\s'), '');
-  if (compact.isEmpty || compact.contains('://')) return null;
-  try {
-    final decoded = utf8.decode(
-      base64.decode(
-        base64.normalize(compact.replaceAll('-', '+').replaceAll('_', '/')),
-      ),
-    );
-    return decoded.contains('://') ? decoded : null;
-  } on FormatException {
-    return null;
-  }
 }

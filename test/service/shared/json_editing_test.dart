@@ -120,6 +120,31 @@ void main() {
     );
   });
 
+  test('AmneziaWG suggests its keys and those of its peers', () {
+    final labels0 = labels(
+      '{"protocol":"amneziawg","settings":{"header|"}}',
+      JsonEditorKind.outbound,
+    );
+    expect(labels0, ['headerProtectionKey']);
+    expect(
+      labels(
+        '{"protocol":"amneziawg","settings":{"peers":[{"pre|"}]}}',
+        JsonEditorKind.outbound,
+      ),
+      ['preSharedKey'],
+    );
+    expect(
+      labels(
+        '{"protocol":"amneziawg","settings":{"domainStrategy":"U|"}}',
+        JsonEditorKind.outbound,
+      ),
+      isEmpty,
+    );
+    expect(labels('{"protocol":"amnez|"}', JsonEditorKind.outbound), [
+      'amneziawg',
+    ]);
+  });
+
   test(
     'MASQUE and XDrive suggestions preserve advanced template boundaries',
     () {

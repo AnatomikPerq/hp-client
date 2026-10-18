@@ -419,6 +419,38 @@ class JsonEditing {
           'reserved',
           'remoteDNS',
         ],
+        'amneziawg' => const [
+          'secretKey',
+          'address',
+          'peers',
+          'mtu',
+          'remoteDNS',
+          'jc',
+          'jmin',
+          'jmax',
+          's1',
+          's2',
+          's3',
+          's4',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'i1',
+          'i2',
+          'i3',
+          'i4',
+          'i5',
+          'headerProtectionKey',
+          'contentPaddingAddition',
+          'rekeyAfterTime',
+          'rekeyTimeout',
+          'rejectAfterTime',
+          'keepaliveTimeout',
+          'maxHandshakeAttempts',
+          'randomTrailers',
+          'disableCookies',
+        ],
         'masque' when !custom && !advanced => const [
           'address',
           'port',
@@ -433,6 +465,15 @@ class JsonEditing {
     }
     if (_endsWith(path, ['vnext', '*'])) {
       return const ['address', 'port', 'users'];
+    }
+    if (_endsWith(path, ['peers', '*']) && path.contains('settings')) {
+      return const [
+        'publicKey',
+        'preSharedKey',
+        'endpoint',
+        'keepAlive',
+        'allowedIPs',
+      ];
     }
     if (_endsWith(path, ['servers', '*']) && path.contains('settings')) {
       return const ['address', 'port', 'password', 'method', 'users', 'uot'];
@@ -520,6 +561,7 @@ class JsonEditing {
                 'blackhole',
                 'dns',
                 'wireguard',
+                'amneziawg',
                 'masque',
                 'loopback',
               ];
@@ -581,8 +623,9 @@ class JsonEditing {
     }
     if (field == 'domainStrategy') {
       if (parent.lastOrNull == 'settings' &&
-          shape.value([...parent.sublist(0, parent.length - 1), 'protocol']) ==
-              'wireguard') {
+          const {'wireguard', 'amneziawg'}.contains(
+            shape.value([...parent.sublist(0, parent.length - 1), 'protocol']),
+          )) {
         return const [];
       }
       if (kind == JsonEditorKind.customRouting) return const ['IPIfNonMatch'];

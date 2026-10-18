@@ -85,7 +85,7 @@ flutter test          # одно ожидаемое падение на Windows:
 flutter build windows --release
 ```
 
-В libXray: `go test ./control/ ./desktop_bin/ ./minewire/ .` (тест `dns`
+В libXray: `go test ./control/ ./desktop_bin/ ./minewire/ ./amneziawg/ .` (тест `dns`
 падает на машинах, где у первого интерфейса нет маршрута до 8.8.8.8, — это
 апстрим).
 

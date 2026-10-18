@@ -2,6 +2,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/service/amneziawg/link.dart';
 import 'package:onexray/service/minewire/link.dart';
 import 'package:onexray/service/shared/failure.dart';
 import 'package:image/image.dart' as img;
@@ -128,9 +129,11 @@ class ShareController extends PageCubit<SharePageState> {
       ),
     );
     final outbound = readOutboundFromDbData(config);
-    // libXray has no minewire link format; the node carries its own.
+    // libXray has no minewire, AmneziaWG or WireGuard link format; those
+    // nodes carry their own.
     final url =
         MinewireLink.fromOutbound(outbound)?.toShareLink() ??
+        AmneziaWGLinks.shareLink(outbound) ??
         await AppHostApi().convertXrayJsonToShareLinks({
           'outbounds': [outbound],
         });

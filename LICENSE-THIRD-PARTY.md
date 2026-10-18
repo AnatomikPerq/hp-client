@@ -39,6 +39,18 @@ MIT совместима с GPL-3.0 и разрешает распростран
 рядом, но и **встраивать в код клиента**: MIT не запрещает включение в
 GPL-работу.
 
+### amneziawg-go
+
+- **Что это:** реализация AmneziaWG (WireGuard с обфускацией) на Go, форк
+  wireguard-go.
+- **Где лежит:** скомпилирован в libXray модулем Go; выход `amneziawg` в
+  `libXray/amneziawg/` — перенос WireGuard-клиента Xray-core на него
+  (файлы из Xray-core остаются под MPL-2.0 и говорят об этом в заголовке)
+- **Версия модуля:** `github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828`
+- **Авторы:** WireGuard LLC, [Amnezia](https://github.com/amnezia-vpn)
+- **Исходники:** https://github.com/amnezia-vpn/amneziawg-go
+- **Лицензия:** **MIT**
+
 ## Основа клиента
 
 HYPER CLIENT — форк [OneXray](https://github.com/OneXray/OneXray),
@@ -47,7 +59,7 @@ GPL-3.0. Это производная работа, поэтому клиент
 исполняемых файлов.
 
 Встроенное ядро — [Xray-core](https://github.com/XTLS/Xray-core),
-MPL-2.0, и обёртка [libXray](https://github.com/XTLS/libXray), MPL-2.0.
+MPL-2.0, и обёртка [libXray](https://github.com/XTLS/libXray), MIT.
 Обе совместимы с GPL-3.0 при такой поставке.
 
 ## Графика

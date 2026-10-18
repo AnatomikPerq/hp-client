@@ -1,5 +1,6 @@
 import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/tools/json.dart';
+import 'package:onexray/service/amneziawg/conf.dart';
 
 Map<String, dynamic> copyOutboundMap(
   Map<String, dynamic> outbound, {
@@ -67,8 +68,12 @@ String outboundDisplayName(Map<String, dynamic> outbound) {
   );
 }
 
+/// An `amneziawg` outbound without AmneziaWG keys is plain WireGuard on the
+/// wire and is labeled so.
 String outboundTags(Map<String, dynamic> outbound) => [
-  outboundString(outbound, 'protocol') ?? '',
+  AmneziaWG.isOutbound(outbound) && !AmneziaWG.obfuscated(outbound)
+      ? 'wireguard'
+      : outboundString(outbound, 'protocol') ?? '',
   outboundNetwork(outbound) ?? '',
   outboundSecurity(outbound) ?? '',
 ].join(',');

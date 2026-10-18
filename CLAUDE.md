@@ -114,6 +114,19 @@ minewire carries **TCP only** (the engine refuses SOCKS UDP, the server has no U
 
 The engine itself is a patched copy of upstream's `src/core` in `libXray/third_party/minewire-cli` (`replace` in libXray's `go.mod`, changes in its `PATCHES.md`): whole frames per write, an injectable dialer, no process-killing panics on malformed frames. The wire protocol is unchanged.
 
+### AmneziaWG
+
+Unlike minewire, AmneziaWG is an outbound **inside the Core**: `"protocol": "amneziawg"` is `libXray/amneziawg`, Xray's WireGuard client ported onto `amneziawg-go/v3` (its README lists every difference). So UDP, live switch, balancers, ping, stats and the health check need nothing special. Only v3 knows the keys of current AmneziaWG 2.0 configs (S3/S4, H ranges, `HeaderProtectionKey`, timing ranges, `RandomTrailers`, `DisableCookies`); 1.x and `master` do not, and v3 dropped J1-J3/Itime. Things that cost time:
+
+- Xray's outbound JSON loader is unexported; `amneziawg.go` reaches `infra/conf.outboundConfigLoader` with `go:linkname` and its `cache` field with `reflect`/`unsafe`. `TestXrayLoadsTheAmneziawgProtocol` fails if an Xray bump changes them. `config.pb.go` is regenerated with `go run .` in `amneziawg/protogen` (own module, no protoc).
+- amneziawg-go's TUN reader computes the room for the S4 padding *before* it blocks in `Read`, and it starts with the device, before any keys: the first packet went out unpadded and the server dropped it (a first in-tunnel DNS query waited 5 s, a datagram was lost for good). `netTun.WakeReader` makes `Read` return nothing once after the keys are set.
+- The device keys are set in `NewClient`, so a bad I1 tag or overlapping headers fail `testXray`; peers are set on the first connection.
+- The server's domain goes to the system resolver (pinned to the physical interface in TUN). Xray's own `wireguard` asks Xray's DNS, which in the App routes through the proxy, into the tunnel that is not up yet; that is also why plain WireGuard from `.conf` and links without `reserved` is imported as `amneziawg` without keys (labeled WIREGUARD by `outboundTags`). WARP links with `reserved` stay Xray `wireguard`.
+- Links (`awg://` = base64 `.conf`, AmneziaVPN `vpn://` = Qt-compressed JSON, `wireguard://`/`wg://`) and pasted `.conf` blocks are parsed in Dart (`lib/service/amneziawg/`) before libXray, like `mw://`, and every node is checked with `testXray` like JSON subscription nodes. A picked `.conf` file becomes an `awg://` link named after the file.
+- Fragment skips WireGuard and AmneziaWG (UDP, no TLS hello); `outboundDialsLoopback` reads their `peers[].endpoint`, never `settings.address` (their own side of the tunnel).
+
+Checks: `go test ./amneziawg/` runs an AmneziaWG server device in the test process and carries UDP and TCP from a Core. A real node was checked with the isolated chain (unelevated Core, loopback SOCKS and a `tunnel` inbound to `1.1.1.1:53` for UDP) and with `pingBatch` from Python `ctypes`; TUN and system proxy remain the owner's.
+
 ## UI layout
 
 The fork reworked navigation for usability after tunnel clients like INCY; the navigation part of `docs/app.md` still describes upstream's four tabs.

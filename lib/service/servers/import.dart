@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/network/client.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
+import 'package:onexray/service/amneziawg/conf.dart';
+import 'package:onexray/service/amneziawg/link.dart';
 import 'package:onexray/service/shared/db/config_writer.dart';
 import 'package:onexray/service/connect/raw/editor.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
@@ -602,7 +604,7 @@ class ServerImportService {
       type: FileType.custom,
       allowedExtensions: jsonOnly
           ? ['json', 'txt']
-          : ['json', 'txt', 'png', 'jpg', 'jpeg', 'webp'],
+          : ['json', 'txt', 'conf', 'vpn', 'png', 'jpg', 'jpeg', 'webp'],
     );
     if (file == null) {
       return null;
@@ -627,7 +629,16 @@ class ServerImportService {
       _checkSize(text);
       return text;
     }
-    return input.readAsString();
+    final text = await input.readAsString();
+    // A .conf file is named after its tunnel, as wg-quick names interfaces.
+    if (p.extension(file.path!).toLowerCase() == '.conf' &&
+        AmneziaWG.looksLikeConf(text)) {
+      return AmneziaWGLinks.confLink(
+        text,
+        p.basenameWithoutExtension(file.path!),
+      );
+    }
+    return text;
   }
 
   static Future<String?> pickQrImage() async {
