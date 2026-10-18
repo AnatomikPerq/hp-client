@@ -782,7 +782,6 @@ void main() {
                 'gateway': ['198.18.0.1/15', if (ipv6) 'fc00::1/64'],
                 'dns': ['8.8.8.8', if (ipv6) '2001:4860:4860::8888'],
                 'autoSystemRoutingTable': ['0.0.0.0/0', if (ipv6) '::/0'],
-                'autoOutboundsInterface': 'Ethernet 2',
                 'autoSystemWfpBlockLeak': ['dns'],
               });
             }
@@ -1691,7 +1690,12 @@ void main() {
       );
       expect(plan.config['inbounds'].first['protocol'], 'tun');
       final settings = plan.config['inbounds'].first['settings'];
-      expect(settings['autoOutboundsInterface'], 'selected-interface');
+      // Windows binds through sockopt only: Xray's TUN binding breaks UDP
+      // on an interface without IPv6.
+      expect(
+        settings['autoOutboundsInterface'],
+        platform == ConnectionPlatform.linux ? 'selected-interface' : isNull,
+      );
       expect(settings['autoSystemRoutingTable'], ['0.0.0.0/0']);
       expect(XrayJson.fromJson(plan.config).toJson(), plan.config);
     }
