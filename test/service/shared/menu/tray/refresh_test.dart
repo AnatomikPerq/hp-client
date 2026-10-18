@@ -5,9 +5,28 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/tools/platform.dart';
+import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
+import 'package:onexray/service/connect/runtime.dart';
+import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/settings/language/service.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/menu/tray/service.dart';
+
+ConnectionRuntime _runtime(String node) => ConnectionRuntime.create(
+  configuration: ConnectionConfiguration(),
+  compiled: CompiledConnection(
+    xrayJson: '{}',
+    entries: [
+      ResolvedServer(id: 1, sourceId: 1, outbound: {'tag': node}),
+    ],
+    finalExit: null,
+    nodeTags: const {'app-entry-0': 1},
+  ),
+  platform: ConnectionPlatform.windows,
+  request: StartVpnRequest(null, '10820', '18003', '{}'),
+);
 
 Iterable<Map<dynamic, dynamic>> _items(Map<dynamic, dynamic> menu) sync* {
   for (final item in menu['items'] as List) {
@@ -102,6 +121,19 @@ void main() {
   });
 
   test('tray stays icon-only and ignores traffic-only updates', () async {
+    expect(calls.where((call) => call.method == 'setIcon'), hasLength(1));
+    int visualCalls() => calls
+        .where(
+          (call) =>
+              call.method == 'setIcon' ||
+              call.method == 'setTitle' ||
+              call.method == 'setToolTip',
+        )
+        .length;
+    final initialVisualCalls = visualCalls();
+    await tray.refreshTrayManager();
+    expect(visualCalls(), initialVisualCalls);
+
     coordinator.state.value = const ConnectionView(
       phase: ConnectionPhase.connected,
       metricsAvailable: true,
@@ -110,15 +142,16 @@ void main() {
     );
     await pumpEventQueue();
     final titles = calls.where((call) => call.method == 'setTitle');
-    expect(titles, AppPlatform.isMacOS ? isNotEmpty : isEmpty);
+    expect(titles, AppPlatform.isMacOS ? hasLength(1) : isEmpty);
     expect(titles.map((call) => call.arguments['title']), everyElement(''));
     expect(
       calls
           .where((call) => call.method == 'setToolTip')
           .map((call) => call.arguments['toolTip']),
-      everyElement('OneXray'),
+      everyElement(startsWith('HYPER CLIENT')),
     );
     expect(_items(menus.last).any((item) => item['key'] == 'stopVpn'), isTrue);
+    expect(calls.where((call) => call.method == 'setIcon'), hasLength(2));
 
     final published = calls.length;
     coordinator.state.value = const ConnectionView(
@@ -129,6 +162,50 @@ void main() {
     );
     await pumpEventQueue();
     expect(calls, hasLength(published));
+  });
+
+  test('tooltip names the state and the node without flags', () async {
+    List<String> toolTips() => [
+      for (final call in calls.where((call) => call.method == 'setToolTip'))
+        call.arguments['toolTip'] as String,
+    ];
+    final l = appLocalizationsNoContext();
+    final supported = AppPlatform.isWindows || AppPlatform.isMacOS;
+    // Set right after the first icon: tray_manager 0.5.3 otherwise shows
+    // uninitialized memory as the Windows tooltip.
+    expect(toolTips(), supported ? ['HYPER CLIENT'] : isEmpty);
+
+    coordinator.state.value = ConnectionView(
+      phase: ConnectionPhase.connected,
+      runtime: _runtime('\u{1F1F3}\u{1F1F1} Main'),
+    );
+    await pumpEventQueue();
+    expect(
+      toolTips(),
+      supported
+          ? ['HYPER CLIENT', 'HYPER CLIENT · ${l.prototypeConnected} · Main']
+          : isEmpty,
+    );
+
+    final published = calls.length;
+    coordinator.state.value = ConnectionView(
+      phase: ConnectionPhase.connected,
+      runtime: _runtime('\u{1F1F3}\u{1F1F1} Main'),
+      downloadSpeed: 4096,
+    );
+    await pumpEventQueue();
+    expect(calls, hasLength(published));
+
+    coordinator.state.value = ConnectionView(
+      phase: ConnectionPhase.connected,
+      runtime: _runtime('Reserve \u{1F600}${'x' * 200}'),
+    );
+    await pumpEventQueue();
+    if (supported) {
+      expect(toolTips().last, startsWith('HYPER CLIENT · '));
+      expect(toolTips().last.length, lessThanOrEqualTo(120));
+      expect(toolTips().last, endsWith('…'));
+    }
   });
 
   for (final rightClick in [false, true]) {
@@ -246,6 +323,10 @@ void main() {
     'opening waits for an in-flight publish and queues later refreshes',
     () async {
       iconReady = Completer<void>();
+      // A new state, so the publish really sets a new icon.
+      coordinator.state.value = const ConnectionView(
+        phase: ConnectionPhase.connected,
+      );
       final refresh = tray.refreshTrayManager();
       tray.onTrayIconMouseDown();
       await pumpEventQueue();

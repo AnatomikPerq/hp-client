@@ -75,6 +75,10 @@ final class TrayService with TrayListener {
   var _initialized = false;
   ConnectionPhase? _lastPhase;
   bool? _lastCanDisconnect;
+  String? _lastToolTip;
+  String? _trayIcon;
+  String? _toolTip;
+  bool _macTitleConfigured = false;
 
   bool get _canQuitWithoutStoppingVpn =>
       AppPlatform.isMacOS ||
@@ -120,18 +124,75 @@ final class TrayService with TrayListener {
     onConfigurationChange = null;
     _lastPhase = null;
     _lastCanDisconnect = null;
+    _lastToolTip = null;
+    _trayIcon = null;
+    _toolTip = null;
+    _macTitleConfigured = false;
     _initialized = false;
   }
 
   void _connectionChanged() {
     final view = _coordinator.state.value;
-    if (_lastPhase == view.phase && _lastCanDisconnect == view.canDisconnect) {
+    final toolTip = _toolTipFor(view);
+    if (_lastPhase == view.phase &&
+        _lastCanDisconnect == view.canDisconnect &&
+        _lastToolTip == toolTip) {
       return;
     }
     _lastPhase = view.phase;
     _lastCanDisconnect = view.canDisconnect;
+    _lastToolTip = toolTip;
     _requestRefresh();
   }
+
+  /// Windows shows at most 127 UTF-16 units in a tray tooltip.
+  static const _toolTipLimit = 120;
+
+  /// Hovering the icon tells the state and the node without opening the
+  /// window: "HYPER CLIENT · Connected · Main". Traffic is left out on
+  /// purpose, so speed samples never touch the tray.
+  String _toolTipFor(ConnectionView view) {
+    final l = appLocalizationsNoContext();
+    final connected = view.phase == ConnectionPhase.connected;
+    final phase = view.failed && !connected
+        ? ConnectionPhase.failed
+        : view.phase;
+    final parts = <String>[
+      'HYPER CLIENT',
+      if (phase != ConnectionPhase.disconnected)
+        switch (phase) {
+          ConnectionPhase.disconnected => l.prototypeDisconnected,
+          ConnectionPhase.preparing ||
+          ConnectionPhase.connecting => l.prototypeConnecting,
+          ConnectionPhase.connected => l.prototypeConnected,
+          ConnectionPhase.disconnecting => l.prototypeDisconnecting,
+          ConnectionPhase.failed => l.prototypeConnectionFailed,
+        },
+      if (connected)
+        ...?view.runtime?.entries
+            .map((entry) => _withoutFlags(entry.name))
+            .where((name) => name.isNotEmpty)
+            .take(1),
+    ];
+    final text = parts.join(' · ');
+    if (text.length <= _toolTipLimit) return text;
+    // Cut on a code point boundary, never inside a surrogate pair.
+    final runes = <int>[];
+    var length = 0;
+    for (final rune in text.runes) {
+      final width = rune > 0xFFFF ? 2 : 1;
+      if (length + width > _toolTipLimit - 1) break;
+      runes.add(rune);
+      length += width;
+    }
+    return '${String.fromCharCodes(runes)}…';
+  }
+
+  /// Windows has no glyphs for regional-indicator flags and prints their
+  /// letters ("NL"); the tooltip drops them like the node rows do.
+  static String _withoutFlags(String name) => String.fromCharCodes(
+    name.runes.where((rune) => rune < 0x1F1E6 || rune > 0x1F1FF),
+  ).trim();
 
   void _requestRefresh() {
     if (!_initialized) return;
@@ -163,7 +224,7 @@ final class TrayService with TrayListener {
   Future<void> _publishMenu() async {
     final view = _coordinator.state.value;
     final running = view.canDisconnect || view.busy;
-    await _setTrayIcon(running);
+    await _setTrayIcon(running, _toolTipFor(view));
 
     final items = <MenuItem>[];
     if (running) {
@@ -226,7 +287,7 @@ final class TrayService with TrayListener {
     await trayManager.setContextMenu(menu);
   }
 
-  Future<void> _setTrayIcon(bool running) async {
+  Future<void> _setTrayIcon(bool running, String toolTip) async {
     var icon = "";
     if (AppPlatform.isWindows) {
       if (running) {
@@ -241,10 +302,22 @@ final class TrayService with TrayListener {
         icon = Assets.icon.trayNotRunningPng.path;
       }
     }
-    await trayManager.setIcon(icon);
-    if (AppPlatform.isMacOS) {
+    // Every catalog change republishes the menu; reloading the same icon
+    // file each time is wasted work.
+    if (_trayIcon != icon) {
+      await trayManager.setIcon(icon);
+      _trayIcon = icon;
+    }
+    if (AppPlatform.isMacOS && !_macTitleConfigured) {
       await trayManager.setTitle('');
-      await trayManager.setToolTip('HYPER CLIENT');
+      _macTitleConfigured = true;
+    }
+    // tray_manager 0.5.3 leaves its Windows NOTIFYICONDATA uninitialized,
+    // and the first setIcon shows that memory as the tooltip (random CJK
+    // glyphs) until something sets one. Linux has no tooltip call.
+    if ((AppPlatform.isWindows || AppPlatform.isMacOS) && _toolTip != toolTip) {
+      await trayManager.setToolTip(toolTip);
+      _toolTip = toolTip;
     }
   }
 
@@ -268,7 +341,13 @@ final class TrayService with TrayListener {
       // menu until AppKit/Win32 finishes tracking it. Coalesce stream updates.
       await _refreshing;
       if (!_initialized) return;
-      await trayManager.popUpContextMenu();
+      // Windows closes a tray menu on an outside click only if its owner
+      // window was foreground when the menu opened (TrackPopupMenu docs).
+      // tray_manager 0.5.3 does that only with this flag.
+      await trayManager.popUpContextMenu(
+        // ignore: deprecated_member_use
+        bringAppToFront: AppPlatform.isWindows,
+      );
     } catch (error, stackTrace) {
       ygLogger('Open tray menu failed: $error\n$stackTrace');
     } finally {
