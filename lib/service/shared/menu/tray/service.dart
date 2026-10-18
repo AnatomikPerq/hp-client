@@ -18,15 +18,16 @@ import 'package:onexray/service/servers/subscription/failure.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/failure.dart' show appFailureMessage;
 import 'package:onexray/service/shared/menu/tray/menu.dart';
+import 'package:onexray/service/shared/menu/tray/entry.dart';
+import 'package:onexray/service/shared/menu/tray/platform.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/launch/app_startup.dart';
 import 'package:onexray/service/shared/notification/service.dart';
-import 'package:tray_manager/tray_manager.dart';
 import 'package:collection/collection.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:window_manager/window_manager.dart';
 
-final class TrayService with TrayListener {
+final class TrayService {
   static final TrayService _singleton = TrayService._internal();
 
   factory TrayService() => _singleton;
@@ -35,6 +36,7 @@ final class TrayService with TrayListener {
     : _databaseOverride = null,
       _coordinatorOverride = null,
       _healthOverride = null,
+      _platform = NativeTrayPlatform(),
       _connect = (() => ConnectionCoordinator.instance.connect()),
       _notify = ((message) => NotificationService().pushNotification(message)),
       _showMainWindow = (() => AppStartupService().showMainWindow());
@@ -47,13 +49,16 @@ final class TrayService with TrayListener {
     AppDatabase? database,
     ConnectionCoordinator? coordinator,
     ValueListenable<ConnectionHealth>? health,
+    TrayPlatform? platform,
   }) : _databaseOverride = database,
        _coordinatorOverride = coordinator,
-       _healthOverride = health;
+       _healthOverride = health,
+       _platform = platform ?? NativeTrayPlatform();
 
   final AppDatabase? _databaseOverride;
   final ConnectionCoordinator? _coordinatorOverride;
   final ValueListenable<ConnectionHealth>? _healthOverride;
+  final TrayPlatform _platform;
   AppDatabase get _db => _databaseOverride ?? AppDatabase();
   ConnectionCoordinator get _coordinator =>
       _coordinatorOverride ?? ConnectionCoordinator.instance;
@@ -85,7 +90,6 @@ final class TrayService with TrayListener {
   String? _lastToolTip;
   String? _trayIcon;
   String? _toolTip;
-  bool _macTitleConfigured = false;
 
   bool get _canQuitWithoutStoppingVpn =>
       AppPlatform.isMacOS ||
@@ -96,7 +100,13 @@ final class TrayService with TrayListener {
       return;
     }
 
-    trayManager.addListener(this);
+    _platform.init(
+      onClick: () => unawaited(_openMenu()),
+      onMenuVisibility: (visible) {
+        _menuOpen = visible;
+        if (!visible && _refreshRequested) scheduleMicrotask(_requestRefresh);
+      },
+    );
     _coordinator.state.addListener(_connectionChanged);
     _health.addListener(_connectionChanged);
     _initialized = true;
@@ -123,7 +133,8 @@ final class TrayService with TrayListener {
     if (!AppPlatform.isDesktop || !_initialized) {
       return;
     }
-    trayManager.removeListener(this);
+    _initialized = false;
+    _platform.dispose();
     _coordinator.state.removeListener(_connectionChanged);
     _health.removeListener(_connectionChanged);
     for (final listener in _listeners) {
@@ -136,8 +147,7 @@ final class TrayService with TrayListener {
     _lastToolTip = null;
     _trayIcon = null;
     _toolTip = null;
-    _macTitleConfigured = false;
-    _initialized = false;
+    _menuOpen = false;
   }
 
   void _connectionChanged() {
@@ -242,21 +252,23 @@ final class TrayService with TrayListener {
   }
 
   Future<void> _publishMenu() async {
+    if (!_initialized) return;
     final view = _coordinator.state.value;
     final running = view.canDisconnect || view.busy;
     await _setTrayIcon(running, _toolTipFor(view));
+    if (!_initialized) return;
 
-    final items = <MenuItem>[];
+    final items = <TrayMenuEntry>[];
     if (running) {
       items.add(
-        MenuItem(
+        TrayMenuEntry(
           key: _TrayMenuKey.stopVpn.name,
           label: appLocalizationsNoContext().menuBarStopVpn,
         ),
       );
     } else {
       items.add(
-        MenuItem(
+        TrayMenuEntry(
           key: _TrayMenuKey.startVpn.name,
           label: appLocalizationsNoContext().menuBarStartVpn,
           disabled: view.busy,
@@ -264,47 +276,46 @@ final class TrayService with TrayListener {
       );
     }
     items.add(
-      MenuItem(
+      TrayMenuEntry(
         key: _TrayMenuKey.reconnect.name,
         label: appLocalizationsNoContext().menuBarReconnect,
         disabled: view.phase != ConnectionPhase.connected || view.busy,
       ),
     );
-    items.add(MenuItem.separator());
+    items.add(TrayMenuEntry.separator());
     items.addAll(
       _data.selectionItems(
         appLocalizationsNoContext(),
         busy: view.busy || _changingConfiguration,
       ),
     );
-    items.add(MenuItem.separator());
+    items.add(TrayMenuEntry.separator());
     items.addAll(
       _data.updateItems(appLocalizationsNoContext(), _pendingUpdates),
     );
-    items.add(MenuItem.separator());
+    items.add(TrayMenuEntry.separator());
     items.add(
-      MenuItem(
+      TrayMenuEntry(
         key: _TrayMenuKey.showApp.name,
         label: appLocalizationsNoContext().menuBarShowApp,
       ),
     );
     items.add(
-      MenuItem(
+      TrayMenuEntry(
         key: _TrayMenuKey.quitApp.name,
         label: appLocalizationsNoContext().menuBarQuitApp,
       ),
     );
     if (_canQuitWithoutStoppingVpn) {
       items.add(
-        MenuItem(
+        TrayMenuEntry(
           key: _TrayMenuKey.quitAndStopVpn.name,
           label: appLocalizationsNoContext().menuBarQuitAndStopVpn,
         ),
       );
     }
 
-    final menu = Menu(items: items);
-    await trayManager.setContextMenu(menu);
+    _platform.setMenu(items, (entry) => unawaited(onMenuAction(entry)));
   }
 
   Future<void> _setTrayIcon(bool running, String toolTip) async {
@@ -325,59 +336,34 @@ final class TrayService with TrayListener {
     // Every catalog change republishes the menu; reloading the same icon
     // file each time is wasted work.
     if (_trayIcon != icon) {
-      await trayManager.setIcon(icon);
+      await _platform.setIcon(icon);
       _trayIcon = icon;
     }
-    if (AppPlatform.isMacOS && !_macTitleConfigured) {
-      await trayManager.setTitle('');
-      _macTitleConfigured = true;
-    }
-    // tray_manager 0.5.3 leaves its Windows NOTIFYICONDATA uninitialized,
-    // and the first setIcon shows that memory as the tooltip (random CJK
-    // glyphs) until something sets one. Linux has no tooltip call.
-    if ((AppPlatform.isWindows || AppPlatform.isMacOS) && _toolTip != toolTip) {
-      await trayManager.setToolTip(toolTip);
+    if (_toolTip != toolTip) {
+      await _platform.setToolTip(toolTip);
       _toolTip = toolTip;
     }
-  }
-
-  @override
-  void onTrayIconMouseDown() {
-    unawaited(_openMenu());
-    super.onTrayIconMouseDown();
-  }
-
-  @override
-  void onTrayIconRightMouseDown() {
-    unawaited(_openMenu());
-    super.onTrayIconRightMouseDown();
   }
 
   Future<void> _openMenu() async {
     if (!_initialized || _menuOpen) return;
     _menuOpen = true;
     try {
-      // Keep the native popup and tray_manager's Dart ID lookup on the same
-      // menu until AppKit/Win32 finishes tracking it. Coalesce stream updates.
+      // Keep the active native menu and its callbacks alive until it closes.
       await _refreshing;
       if (!_initialized) return;
-      // Windows closes a tray menu on an outside click only if its owner
-      // window was foreground when the menu opened (TrackPopupMenu docs).
-      // tray_manager 0.5.3 does that only with this flag.
-      await trayManager.popUpContextMenu(
-        // ignore: deprecated_member_use
-        bringAppToFront: AppPlatform.isWindows,
-      );
+      await _platform.openMenu();
     } catch (error, stackTrace) {
       ygLogger('Open tray menu failed: $error\n$stackTrace');
     } finally {
-      _menuOpen = false;
-      if (_refreshRequested) _requestRefresh();
+      if (_menuOpen) {
+        _menuOpen = false;
+        if (_refreshRequested) _requestRefresh();
+      }
     }
   }
 
-  @override
-  Future<void> onTrayMenuItemClick(MenuItem menuItem) async {
+  Future<void> onMenuAction(TrayMenuEntry menuItem) async {
     if (menuItem.key == null || menuItem.disabled) {
       return;
     }

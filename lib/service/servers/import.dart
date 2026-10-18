@@ -26,7 +26,6 @@ import 'package:onexray/service/shared/in_flight_operations.dart';
 import 'package:onexray/service/shared/share/xray_share_reader.dart';
 import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
-import 'package:onexray/service/servers/subscription/validator.dart';
 import 'package:onexray/service/servers/outbound/map.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
 import 'package:onexray/service/connect/raw/db.dart';
@@ -253,15 +252,6 @@ class ServerImportService {
     }
     // An unnamed link takes the provider's Profile-Title, then the host.
     final name = link.name.trim();
-    if (!(await SubscriptionValidator.validate(
-      name,
-      link.url,
-      allowEmptyName: true,
-    )).item1) {
-      return const SubscriptionInsertResult(
-        status: SubscriptionUpdateResult.invalidContent,
-      );
-    }
     return service.insertSubscription(
       SubscriptionInput(
         name: name,
@@ -451,11 +441,7 @@ class ServerImportService {
       if (draft == null) {
         for (final route in custom) {
           await CustomRoutingService.validate(
-            ConfigurationTransferService.routingDocument(
-              route.text,
-              route.kind,
-              allowMetadata: false,
-            ).state,
+            route.routing!,
             testXray: _validate,
           );
         }
@@ -498,11 +484,7 @@ class ServerImportService {
       if (preview._dependencies != null) {
         for (final route in preview.customRoutes) {
           await CustomRoutingService.validate(
-            ConfigurationTransferService.routingDocument(
-              route.text,
-              route.kind,
-              allowMetadata: false,
-            ).state,
+            route.routing!,
             testXray: _validate,
           );
         }
@@ -525,14 +507,8 @@ class ServerImportService {
           throw StateError('Incomplete asset write');
         }
         for (final custom in preview.customRoutes) {
-          await CustomRoutingService(db).save(
-            ConfigurationTransferService.routingDocument(
-              custom.text,
-              custom.kind,
-              name: custom.name,
-              allowMetadata: false,
-            ).state,
-          );
+          await CustomRoutingService(db)
+              .save(custom.routing!.copyWith(name: custom.name));
         }
         return result;
       }

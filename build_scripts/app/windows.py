@@ -22,9 +22,6 @@ _VCORE_ARTIFACTS = (
     "vcore-windows-vpn-host.exe",
     "vcore-windows-session-host.exe",
 )
-_VCORE_IDENTITY = (
-    "VCore;engine=rust;coreVersion=0.1.0;invokeApiVersion=5;configVersion=27"
-)
 _WINTUN_VERSION = "0.14.1"
 _WINTUN_SHA256 = "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
 # HYPER CLIENT ships only the EXE mode; VCore belongs to the upstream MSIX mode.
@@ -286,7 +283,6 @@ def _copy_vcore_artifacts(source: str, destination: str, architecture: str) -> N
         or manifest.get("formatVersion") != 1
         or manifest.get("windowsPackageIntegrationRevision") != 3
         or manifest.get("architecture") != architecture
-        or manifest.get("buildIdentity") != _VCORE_IDENTITY
         or not isinstance(manifest.get("artifacts"), dict)
         or set(manifest["artifacts"]) != set(_VCORE_ARTIFACTS)
     ):

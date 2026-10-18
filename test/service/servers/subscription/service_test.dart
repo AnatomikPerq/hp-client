@@ -23,6 +23,105 @@ void main() {
     addTearDown(database.close);
   });
 
+  test(
+    'insert and edit share input checks before any download or write',
+    () async {
+      var downloads = 0;
+      final service = _service(database, (_) async {
+        downloads++;
+        throw StateError('Invalid input must not download');
+      });
+      for (final (input, status) in [
+        (
+          const SubscriptionInput(name: ' ', url: 'https://example.com'),
+          SubscriptionUpdateResult.nameRequired,
+        ),
+        (
+          const SubscriptionInput(name: 'Name', url: ''),
+          SubscriptionUpdateResult.urlRequired,
+        ),
+        (
+          const SubscriptionInput(name: 'Name', url: 'http://example.com'),
+          SubscriptionUpdateResult.urlInvalid,
+        ),
+        (
+          const SubscriptionInput(
+            name: 'Name',
+            url: 'https://example.com',
+            ageSecretKey: 'secret',
+          ),
+          SubscriptionUpdateResult.incompleteAgeKeys,
+        ),
+      ]) {
+        // A new subscription may leave its name to the provider.
+        if (status != SubscriptionUpdateResult.nameRequired) {
+          expect((await service.insertSubscription(input)).status, status);
+        }
+        expect(await service.saveSubscriptionInput(1, input), status);
+      }
+      expect(downloads, 0);
+    },
+  );
+
+  test('an unnamed subscription takes the provider title, then the host', () {
+    return Future.forEach([('Provider', 'Provider'), (null, 'example.com')], (
+      pair,
+    ) async {
+      final (title, name) = pair;
+      final service = _service(
+        database,
+        (_) async => SubscriptionLoadResult(
+          status: SubscriptionUpdateResult.success,
+          rows: [_node('Node')],
+          title: title,
+        ),
+      );
+      final result = await service.insertSubscription(
+        SubscriptionInput(name: ' ', url: 'https://example.com/$name'),
+      );
+      expect(result.success, isTrue);
+      expect(
+        (await database.subscriptionDao.searchRow(result.subId))!.name,
+        name,
+      );
+    });
+  });
+
+  test('concurrent imports of one URL commit only one subscription', () async {
+    final completed = Completer<SubscriptionLoadResult>();
+    final bothStarted = Completer<void>();
+    var downloads = 0;
+    final service = _service(database, (_) {
+      if (++downloads == 2) bothStarted.complete();
+      return completed.future;
+    });
+    const input = SubscriptionInput(name: 'Name', url: 'https://example.com');
+    final first = service.insertSubscription(input);
+    final second = service.insertSubscription(input);
+    await bothStarted.future;
+    completed.complete(
+      SubscriptionLoadResult(
+        status: SubscriptionUpdateResult.success,
+        rows: [_node('Node')],
+      ),
+    );
+    final results = await Future.wait([first, second]);
+    expect(results.where((r) => r.success), hasLength(1));
+    expect(
+      results.where((r) => r.status == SubscriptionUpdateResult.duplicateUrl),
+      hasLength(1),
+    );
+    expect(
+      (await database.subscriptionDao.allRows).where((r) => r.url == input.url),
+      hasLength(1),
+    );
+    expect(
+      (await service.insertSubscription(input)).status,
+      SubscriptionUpdateResult.duplicateUrl,
+    );
+    expect(downloads, 2);
+  });
+
   test('new subscriptions default to no HWID and opted-in sources get distinct IDs', () async {
     final inputs = <SubscriptionInput>[];
     final service = _service(database, (input) async {

@@ -119,7 +119,9 @@ void main() {
   });
 
   test('log viewer controller reads the current file tail', () async {
-    final tempDir = await Directory.systemTemp.createTemp('onexray-log-test');
+    final fixtures = await Directory('../references/onexray-tests').absolute
+        .create(recursive: true);
+    final tempDir = await fixtures.createTemp('onexray-log-test');
     addTearDown(() => tempDir.delete(recursive: true));
     final logFile = File('${tempDir.path}/access.log');
     await logFile.writeAsString('first line\nsecond line\n');
@@ -128,11 +130,9 @@ void main() {
       LogFileViewerParams(title: 'access log', path: logFile.path),
     );
     addTearDown(controller.close);
-    // The first read is asynchronous; a fixed 100 ms lost the race under
-    // the load of a full test run.
-    for (var i = 0; i < 100 && !controller.state.fileExists; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
+    await controller.stream
+        .firstWhere((state) => state.fileExists || state.failure != null)
+        .timeout(const Duration(seconds: 5));
 
     expect(controller.state.lines, ['first line', 'second line']);
     expect(controller.state.fileExists, isTrue);

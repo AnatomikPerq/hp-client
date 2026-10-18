@@ -159,7 +159,7 @@ void main() {
         'EXAMPLE.com',
         '*.lan',
       ];
-      expect(service.validate(draft).systemProxyBypass, [
+      expect(service.prepare(draft).policy.systemProxyBypass, [
         'example.com',
         '*.lan',
       ]);

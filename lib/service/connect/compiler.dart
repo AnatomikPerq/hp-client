@@ -150,10 +150,10 @@ class ConnectionCompiler {
   /// Compare editor drafts through the same overrides as a real Raw runtime.
   /// The caller supplies identical options for both drafts; no files are written.
   static Map<String, dynamic> rawSemanticJson(
-    String text,
+    Map<String, dynamic> source,
     RuntimeOptions options,
   ) {
-    final value = parseRawJson(text)..remove('name');
+    final value = JsonTool.copyMap(source)..remove('name');
     return _rawRuntimeMap(value, options);
   }
 
@@ -456,6 +456,9 @@ class ConnectionCompiler {
           ? ['0.0.0.0/0', if (options.ipv6) '::/0']
           : null,
       autoOutboundsInterface: nativeTun ? options.interfaceName : null,
+      autoSystemWfpBlockLeak: options.platform == ConnectionPlatform.windows
+          ? ['dns']
+          : null,
     );
   }
 
@@ -545,6 +548,13 @@ class ConnectionCompiler {
             settings.remove(key);
           }
         }
+        // Raw may explicitly opt out or select additional core-side filters.
+        if (platform.containsKey('autoSystemWfpBlockLeak')) {
+          settings.putIfAbsent(
+            'autoSystemWfpBlockLeak',
+            () => platform['autoSystemWfpBlockLeak'],
+          );
+        }
       }
     }
     config['inbounds'] = inbounds;
@@ -605,18 +615,6 @@ class ConnectionCompiler {
         sockopt.remove('interface');
       } else {
         _applyInterfacePolicy(sockopt, options);
-      }
-      // UDP hopping redials with its own socket options, not the stream's.
-      if (stream['finalmask'] case final Map<String, dynamic> mask) {
-        for (final entry in _objects(mask, 'udp')) {
-          // Core resolves mask IDs case-insensitively; preserve the JSON value.
-          final type = entry['type'];
-          if (type is! String || type.toLowerCase() != 'udphop') continue;
-          final settings = _object(entry, 'settings');
-          final hopSocket = _object(settings, 'sockopt');
-          _applyInterfacePolicy(hopSocket, options);
-          if (hopSocket.isEmpty) settings.remove('sockopt');
-        }
       }
       if (!raw) {
         sockopt.remove('domainStrategy');

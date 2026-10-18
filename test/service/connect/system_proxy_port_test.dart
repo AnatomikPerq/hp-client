@@ -21,13 +21,17 @@ void main() {
   });
 
   test('runtime ports never reuse the fixed proxy port', () async {
-    var calls = 0;
+    // The host API refuses free ports that hit an excluded one.
+    List<int>? excluded;
     final ports = await allocateRuntimePorts(
       const [],
       excludePorts: [10820],
-      getFreePorts: (_, {excludePorts}) async =>
-          ++calls == 1 ? [10820, 40000] : [40001, 40002],
+      getFreePorts: (_, {excludePorts}) async {
+        excluded = excludePorts;
+        return [40001, 40002];
+      },
     );
     expect(ports, [40001, 40002]);
+    expect(excluded, [10820]);
   });
 }
