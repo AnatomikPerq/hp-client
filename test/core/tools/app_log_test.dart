@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/tools/app_log.dart';
+import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -46,6 +48,40 @@ void main() {
         .readAsLines();
     expect(current.single, contains('line 3'));
     expect(previous.last, contains('line 2'));
+  });
+
+  test('a reason keeps the diagnostic and cuts secrets out', () {
+    // What a live switch failed with on 19.10: the bare type said nothing.
+    expect(
+      AppLog.reason(
+        const LibXrayInvokeException(
+          'control operation 2 (addRules): common/geodata: failed to open '
+          r'geosite.dat > GetFileAttributesEx C:\App\geosite.dat',
+        ),
+      ),
+      'LibXrayInvokeException: control operation 2 (addRules): '
+      'common/geodata: failed to open geosite.dat > '
+      r'GetFileAttributesEx C:\App\geosite.dat',
+    );
+    final secret = AppLog.reason(
+      const LibXrayInvokeException(
+        'bad link vless://3e762061-e7cf-46a1-95a5-6dd9374a22a2@host:443?pbk=x '
+        'in {"outbounds":[{"settings":{"password":"hunter2"}}]} '
+        'id 3e762061-e7cf-46a1-95a5-6dd9374a22a2 '
+        'key AGT+DQBgAAAgACDgP5FmGxFQ2oQkXZun8pOSeo17aj3vvMwZ216',
+      ),
+    );
+    expect(secret, isNot(contains('3e762061')));
+    expect(secret, isNot(contains('hunter2')));
+    expect(secret, isNot(contains('AGT+DQ')));
+    expect(secret, contains('<link>'));
+    expect(secret, contains('{…}'));
+    // A host failure keeps its code.
+    expect(
+      AppLog.reason(const ConnectionHostException('swapUnavailable')),
+      'ConnectionHostException: swapUnavailable',
+    );
+    expect(AppLog.reason(StateError('x' * 1000)).length, lessThan(340));
   });
 
   test('no directory, no file', () async {

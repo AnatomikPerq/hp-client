@@ -3088,5 +3088,14 @@
       }
     }
   },
-  "connectionHealthRestoredNotice": "Connection restored"
+  "connectionHealthRestoredNotice": "Connection restored",
+  "connectionHealthProxyTakenNotice": "The system proxy was changed by another program: apps bypass HYPER CLIENT",
+  "connectionHealthProxyTakenDetail": "The system proxy now points to {proxy}, so apps bypass the connection. Reconnect to take it back.",
+  "@connectionHealthProxyTakenDetail": {
+    "placeholders": {
+      "proxy": {
+        "type": "String"
+      }
+    }
+  }
 }

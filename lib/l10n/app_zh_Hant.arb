@@ -875,5 +875,7 @@
   "connectionHealthLostDetail": "通道已建立，但流量無法通過。正在重新檢查…",
   "connectionHealthMinewireDetail": "minewire 引擎與伺服器的工作階段已中斷，正在重新連線…",
   "connectionHealthLostNotice": "透過 {node} 無法連線",
-  "connectionHealthRestoredNotice": "連線已恢復"
+  "connectionHealthRestoredNotice": "連線已恢復",
+  "connectionHealthProxyTakenNotice": "系統代理已被其他程式變更：應用程式繞過了 HYPER CLIENT",
+  "connectionHealthProxyTakenDetail": "系統代理現在指向 {proxy}，應用程式繞過了此連線。重新連線即可恢復。"
 }

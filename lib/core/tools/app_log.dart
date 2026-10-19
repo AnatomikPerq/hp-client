@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:path/path.dart' as p;
@@ -11,6 +12,7 @@ import 'package:path/path.dart' as p;
 /// [ygLogger] writes nothing in release, so a connection that silently
 /// stopped working left no trace. Only short, explicit messages belong here:
 /// never configs, links, keys or stack traces, which may carry secrets.
+/// Errors go through [reason], which keeps the diagnostic and cuts those out.
 abstract final class AppLog {
   static const fileName = 'app.log';
 
@@ -29,6 +31,38 @@ abstract final class AppLog {
   }
 
   static void info(String message) => _write('INFO', message);
+
+  /// [error] for the log: its type and a short diagnostic. A bare type
+  /// ("LibXrayInvokeException") said nothing about why a live switch failed;
+  /// causes may quote configs, so links, JSON, UUIDs and long tokens are cut.
+  static String reason(Object error) {
+    // An AppFailure's details drop its code, which is the useful part here.
+    var text = error is AppFailure ? '$error' : failureDetails(error);
+    for (var previous = ''; previous != text;) {
+      previous = text;
+      text = text.replaceAll(RegExp(r'\{[^{}]*\}'), '{…}');
+    }
+    text = text
+        .replaceAll(
+          RegExp(r'[a-z][a-z0-9+.-]*://\S+', caseSensitive: false),
+          '<link>',
+        )
+        .replaceAll(
+          RegExp(
+            r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+            caseSensitive: false,
+          ),
+          '<uuid>',
+        )
+        .replaceAll(RegExp(r'[A-Za-z0-9+/_=-]{32,}'), '<secret>')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (text.length > _maxReason) text = '${text.substring(0, _maxReason)}…';
+    final type = '${error.runtimeType}';
+    return text.isEmpty || text == type ? type : '$type: $text';
+  }
+
+  static const _maxReason = 300;
 
   static void warning(String message) => _write('WARN', message);
 

@@ -600,6 +600,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
             HostConnection(VpnStatus.connected, runtime: swapped),
             issue: swapped.notice,
           );
+          AppLog.info('switched live: ${_session(swapped)}');
           return;
         }
       }
@@ -654,6 +655,9 @@ class ConnectionCoordinator with WidgetsBindingObserver {
           },
         );
         _publish(running, issue: runtime?.notice);
+        AppLog.info(
+          runtime == null ? 'disconnected' : 'connected: ${_session(runtime)}',
+        );
       } catch (error, stack) {
         HostConnection? failed;
         if (touchedHost) {
@@ -674,8 +678,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
             ? 'cancelled'
             : connectionFailureReason(error);
         if (issue != 'cancelled') {
-          // The reason code only: causes may quote configs or links.
-          AppLog.warning('connection failed: $issue (${error.runtimeType})');
+          AppLog.warning('connection failed: $issue (${AppLog.reason(error)})');
         }
         if (touchedHost) {
           final status = failed?.status;
@@ -758,7 +761,8 @@ class ConnectionCoordinator with WidgetsBindingObserver {
       // A half-configured tunnel is worse than an extra UAC prompt.
       ygLogger('live node switch failed, restarting instead: $error');
       AppLog.warning(
-        'live node switch failed, restarting the Core (${error.runtimeType})',
+        'live node switch failed, restarting the Core '
+        '(${AppLog.reason(error)})',
       );
       return null;
     } finally {
@@ -775,6 +779,16 @@ class ConnectionCoordinator with WidgetsBindingObserver {
 
   void cancel() {
     if (_cancel?.isCompleted == false) _cancel!.complete();
+  }
+
+  /// For app.log: the mode and the nodes by name, never addresses or links.
+  static String _session(ConnectionRuntime runtime) {
+    final policy = runtime.configuration.policy;
+    final mode = policy.usesSystemProxy(runtime.platform)
+        ? 'system proxy on port ${policy.systemProxyPort}'
+        : 'tunnel';
+    final nodes = runtime.entries.map((entry) => '"${entry.name}"').join(', ');
+    return nodes.isEmpty ? mode : '$mode through $nodes';
   }
 
   void _checkCancelled(Completer<void> cancellation) {
@@ -808,6 +822,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         traffic: current.traffic,
       );
       _publish(await _stop());
+      AppLog.info('disconnected');
     } catch (error) {
       await _publishHostFailure('stopFailed', error: error);
       rethrow;
@@ -832,7 +847,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     } catch (_) {
       // Unknown host state stays an explicit failure; retry inspects it again.
     }
-    AppLog.warning('$issue (${error.runtimeType})');
+    AppLog.warning('$issue (${AppLog.reason(error)})');
     state.value = ConnectionView(
       phase: ConnectionPhase.failed,
       runtime: runtime,

@@ -61,6 +61,47 @@ void main() {
     },
   );
 
+  test('a takeover is reported while the App still holds the proxy', () async {
+    final backend = _FakeBackend(userProxy);
+    final proxy = manager(backend);
+    expect(await proxy.takenOver(), isNull, reason: 'nothing applied yet');
+
+    await proxy.apply(host: '127.0.0.1', port: 10820);
+    expect(await proxy.takenOver(), isNull);
+
+    // Auto-detection alone falls back to the manual proxy without WPAD.
+    backend.current = SystemProxySettings(
+      enabled: true,
+      server: '127.0.0.1:10820',
+      bypass: backend.current.bypass,
+      autoDetect: true,
+    );
+    expect(await proxy.takenOver(), isNull);
+
+    // A PAC script takes precedence over the manual proxy.
+    backend.current = SystemProxySettings(
+      enabled: true,
+      server: '127.0.0.1:10820',
+      bypass: backend.current.bypass,
+      autoConfigUrl: 'http://corp.invalid/proxy.pac',
+      autoConfigEnabled: true,
+    );
+    expect(
+      describeSystemProxy((await proxy.takenOver())!),
+      '127.0.0.1:10820, PAC script',
+    );
+
+    backend.current = userProxy;
+    expect(describeSystemProxy((await proxy.takenOver())!), '127.0.0.1:10808');
+
+    backend.current = const SystemProxySettings(enabled: false, server: '');
+    expect(describeSystemProxy((await proxy.takenOver())!), 'no proxy');
+
+    // Reading never changes anything.
+    expect(backend.writes, 1);
+    expect(await stateFile.exists(), isTrue);
+  });
+
   test('a proxy changed by someone else is never overwritten', () async {
     final backend = _FakeBackend(userProxy);
     final proxy = manager(backend);

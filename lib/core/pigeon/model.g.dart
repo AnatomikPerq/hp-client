@@ -263,6 +263,7 @@ ControlXrayRequest _$ControlXrayRequestFromJson(Map<String, dynamic> json) =>
           .map((e) => ControlXrayOperation.fromJson(e as Map<String, dynamic>))
           .toList(),
       timeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+      assetDir: json['assetDir'] as String?,
     );
 
 Map<String, dynamic> _$ControlXrayRequestToJson(ControlXrayRequest instance) =>
@@ -272,6 +273,7 @@ Map<String, dynamic> _$ControlXrayRequestToJson(ControlXrayRequest instance) =>
       'password': instance.password,
       'timeoutSeconds': ?instance.timeoutSeconds,
       'operations': instance.operations.map((e) => e.toJson()).toList(),
+      'assetDir': ?instance.assetDir,
     };
 
 LibXrayInvokeRequest _$LibXrayInvokeRequestFromJson(

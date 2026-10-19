@@ -290,11 +290,22 @@ class ConnectionRuntimeHost {
         control.password,
         operations,
         timeoutSeconds: 5,
+        assetDir: _assetDir(next),
       ),
     );
     if (_startVpn == null) await next.request.writeToStartFile();
     await MinewireRuntime.instance.keepOnly(next.minewirePorts.values.toSet());
     return HostConnection(VpnStatus.connected, runtime: next);
+  }
+
+  /// The directory the Core reads geosite.dat and geoip.dat from, as its
+  /// config's env tells it. Without it libXray looks next to the App's
+  /// executable, and every `geosite:` rule fails the swap.
+  static String? _assetDir(ConnectionRuntime runtime) {
+    final config = jsonDecode(runtime.xrayJson);
+    final env = config is Map<String, dynamic> ? config['env'] : null;
+    final dir = env is Map ? env['xray.location.asset'] : null;
+    return dir is String && dir.isNotEmpty ? dir : null;
   }
 
   Future<HostConnection> stop() async {

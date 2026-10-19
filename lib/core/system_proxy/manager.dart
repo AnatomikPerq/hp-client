@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:onexray/core/system_proxy/model.dart';
+import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/atomic_file.dart';
 
 enum SystemProxyRestore {
@@ -61,6 +62,7 @@ class SystemProxyManager {
         : current;
     await _writeState(_State(previous: previous, applied: applied));
     await backend.write(applied);
+    AppLog.info('system proxy set to ${applied.server}');
   });
 
   /// Writes the saved settings back if the system still uses the App's proxy.
@@ -71,7 +73,31 @@ class SystemProxyManager {
     final owned = _owns(current, saved);
     if (owned) await backend.write(saved.previous);
     await _deleteState();
+    if (owned) {
+      AppLog.info(
+        'system proxy handed back (${describeSystemProxy(saved.previous)})',
+      );
+    } else {
+      AppLog.warning(
+        'system proxy had been changed by other software '
+        '(${describeSystemProxy(current)}); left as is',
+      );
+    }
     return owned ? SystemProxyRestore.restored : SystemProxyRestore.keptForeign;
+  });
+
+  /// The system proxy as it is now, when it no longer sends traffic to the
+  /// App: another program pointed it elsewhere, switched it off or set a PAC
+  /// script, which takes precedence over a manual proxy. Null while the
+  /// App's proxy is in force, or when the App applied none.
+  ///
+  /// Auto-detection is not counted: without WPAD on the network it falls
+  /// back to the manual proxy, and Windows turns it back on by itself.
+  Future<SystemProxySettings?> takenOver() => _serial(() async {
+    final saved = await _readState();
+    if (saved == null) return null;
+    final current = await backend.read();
+    return _owns(current, saved) && !current.autoConfigEnabled ? null : current;
   });
 
   /// Whether the App currently holds saved settings to restore.
@@ -128,6 +154,13 @@ class SystemProxyManager {
     if (await stateFile.exists()) await stateFile.delete();
   }
 }
+
+/// For logs and notices: where the system proxy sends traffic, never more.
+String describeSystemProxy(SystemProxySettings settings) => [
+  settings.enabled && settings.server.isNotEmpty ? settings.server : 'no proxy',
+  if (settings.autoConfigEnabled) 'PAC script',
+  if (settings.autoDetect) 'auto-detect',
+].join(', ');
 
 class _State {
   final SystemProxySettings previous;

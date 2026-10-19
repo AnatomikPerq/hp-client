@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/core/system_proxy/manager.dart';
+import 'package:onexray/core/system_proxy/platform.dart';
 import 'package:onexray/core/tools/app_log.dart';
+import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/runtime.dart';
@@ -26,11 +30,16 @@ class ConnectionHealth {
   /// A minewire engine of this connection holds no session with its server.
   final bool minewireDown;
 
+  /// In proxy mode: where the system proxy sends traffic now that it no
+  /// longer points at the App; apps then bypass the connection entirely.
+  final String? proxyTakenOver;
+
   const ConnectionHealth({
     this.key,
     this.status = ConnectionHealthStatus.checking,
     this.milliseconds,
     this.minewireDown = false,
+    this.proxyTakenOver,
   });
 
   static const none = ConnectionHealth();
@@ -50,10 +59,12 @@ class ConnectionHealth {
       other.key == key &&
       other.status == status &&
       other.milliseconds == milliseconds &&
-      other.minewireDown == minewireDown;
+      other.minewireDown == minewireDown &&
+      other.proxyTakenOver == proxyTakenOver;
 
   @override
-  int get hashCode => Object.hash(key, status, milliseconds, minewireDown);
+  int get hashCode =>
+      Object.hash(key, status, milliseconds, minewireDown, proxyTakenOver);
 }
 
 /// Watches a desktop connection after it came up.
@@ -65,6 +76,11 @@ class ConnectionHealth {
 /// traffic takes and reads the minewire engines' state; a few failures in a
 /// row mark the connection unreachable on Home and in the tray and post one
 /// notification, the first success clears it.
+///
+/// In proxy mode the probe goes straight to the App's port, so it keeps
+/// passing when the system proxy no longer points there and every app goes
+/// around the connection. Each round therefore also checks the system proxy;
+/// a takeover marks the connection unreachable at once.
 final class ConnectionHealthMonitor {
   static final instance = ConnectionHealthMonitor();
 
@@ -73,6 +89,7 @@ final class ConnectionHealthMonitor {
     Future<LivePingResult> Function(ConnectionRuntime runtime)? probe,
     Future<List<MinewireEngineState>> Function()? minewireState,
     Future<void> Function(String message)? notify,
+    Future<String?> Function(ConnectionRuntime runtime)? proxyTakenOver,
     bool? enabled,
     this.interval = const Duration(seconds: 30),
     this.retry = const Duration(seconds: 10),
@@ -84,6 +101,7 @@ final class ConnectionHealthMonitor {
        _notify =
            notify ??
            ((message) => NotificationService().pushNotification(message)),
+       _proxyTakenOver = proxyTakenOver ?? _systemProxyTakenOver,
        _enabled = enabled ?? AppPlatform.isDesktop;
 
   final ConnectionCoordinator? _coordinatorOverride;
@@ -92,6 +110,7 @@ final class ConnectionHealthMonitor {
   final Future<LivePingResult> Function(ConnectionRuntime runtime) _probe;
   final Future<List<MinewireEngineState>> Function() _minewireState;
   final Future<void> Function(String message) _notify;
+  final Future<String?> Function(ConnectionRuntime runtime) _proxyTakenOver;
   final bool _enabled;
 
   final Duration interval;
@@ -164,13 +183,20 @@ final class ConnectionHealthMonitor {
       return;
     }
     final minewireDown = await _minewireLost(runtime);
+    String? proxyTakenOver;
+    try {
+      proxyTakenOver = await _proxyTakenOver(runtime);
+    } catch (error) {
+      // An unreadable proxy setting is no evidence of a takeover.
+      ygLogger('read system proxy failed: $error');
+    }
     LivePingResult result;
     try {
       result = await _probe(runtime);
     } catch (_) {
       result = const LivePingResult.failure();
     }
-    _finish(generation, key, runtime, result, minewireDown);
+    _finish(generation, key, runtime, result, minewireDown, proxyTakenOver);
   }
 
   void _finish(
@@ -179,11 +205,12 @@ final class ConnectionHealthMonitor {
     ConnectionRuntime runtime,
     LivePingResult result,
     bool minewireDown,
+    String? proxyTakenOver,
   ) {
     if (generation != _generation || !_started) return;
     final previous = state.value;
     final node = runtime.entries.isEmpty ? '' : runtime.entries.first.name;
-    if (result.reachable) {
+    if (result.reachable && proxyTakenOver == null) {
       _failures = 0;
       state.value = ConnectionHealth(
         key: key,
@@ -200,8 +227,10 @@ final class ConnectionHealthMonitor {
       _schedule(interval);
       return;
     }
-    _failures++;
-    final unreachable = _failures >= failuresBeforeUnreachable;
+    if (!result.reachable) _failures++;
+    // A takeover is read, not guessed from lost probes: no threshold.
+    final unreachable =
+        proxyTakenOver != null || _failures >= failuresBeforeUnreachable;
     state.value = ConnectionHealth(
       key: key,
       // Until the threshold the last verdict stands: one lost probe after
@@ -211,8 +240,17 @@ final class ConnectionHealthMonitor {
           : previous.status,
       milliseconds: previous.milliseconds,
       minewireDown: minewireDown,
+      proxyTakenOver: proxyTakenOver,
     );
-    if (unreachable && !previous.unreachable) {
+    if (proxyTakenOver != null && proxyTakenOver != previous.proxyTakenOver) {
+      AppLog.warning(
+        'the system proxy no longer points at the App '
+        '($proxyTakenOver); apps bypass "$node"',
+      );
+      unawaited(
+        _post(appLocalizationsNoContext().connectionHealthProxyTakenNotice),
+      );
+    } else if (unreachable && !previous.unreachable) {
       AppLog.warning(
         'no connection through "$node" after $_failures probes'
         '${minewireDown ? '; a minewire engine has no session' : ''}',
@@ -245,6 +283,17 @@ final class ConnectionHealthMonitor {
     } catch (error) {
       AppLog.warning('health notification failed: ${error.runtimeType}');
     }
+  }
+
+  static Future<String?> _systemProxyTakenOver(
+    ConnectionRuntime runtime,
+  ) async {
+    if (!runtime.configuration.policy.usesSystemProxy(runtime.platform)) {
+      return null;
+    }
+    final manager = await createSystemProxyManager(VpnConstants.runDir);
+    final current = await manager?.takenOver();
+    return current == null ? null : describeSystemProxy(current);
   }
 
   static Future<LivePingResult> _probeTunnel(ConnectionRuntime runtime) {

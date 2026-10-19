@@ -15,6 +15,7 @@ import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/pigeon/model_reader.dart';
 import 'package:onexray/core/system_proxy/manager.dart';
 import 'package:onexray/core/system_proxy/platform.dart';
+import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -165,7 +166,7 @@ class LinuxFfiApi extends BaseFfiApi {
     try {
       await (await _proxyManager())?.restore();
     } catch (error) {
-      ygLogger('restore system proxy failed: $error');
+      AppLog.warning('restore system proxy failed: ${AppLog.reason(error)}');
     }
   }
 

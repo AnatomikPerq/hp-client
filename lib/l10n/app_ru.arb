@@ -875,5 +875,7 @@
   "connectionHealthLostDetail": "Туннель поднят, но трафик не проходит. Проверяем снова…",
   "connectionHealthMinewireDetail": "Движок minewire потерял сессию с сервером и переподключается…",
   "connectionHealthLostNotice": "Нет связи через {node}",
-  "connectionHealthRestoredNotice": "Связь восстановлена"
+  "connectionHealthRestoredNotice": "Связь восстановлена",
+  "connectionHealthProxyTakenNotice": "Системный прокси сменила другая программа: приложения идут мимо HYPER CLIENT",
+  "connectionHealthProxyTakenDetail": "Системный прокси теперь указывает на {proxy}, и приложения идут мимо подключения. Переподключитесь, чтобы вернуть его."
 }

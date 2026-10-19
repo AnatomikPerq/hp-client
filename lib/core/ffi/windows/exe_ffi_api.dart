@@ -11,6 +11,7 @@ import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/pigeon/model_reader.dart';
 import 'package:onexray/core/system_proxy/manager.dart';
 import 'package:onexray/core/system_proxy/platform.dart';
+import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -90,12 +91,10 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   /// state stays on disk for the next attempt when the restore fails.
   Future<void> _restoreSystemProxy() async {
     try {
-      final result = await (await _proxyManager())?.restore();
-      if (result == SystemProxyRestore.keptForeign) {
-        ygLogger('system proxy was changed by other software; left as is');
-      }
+      // The manager logs what it handed back or found changed.
+      await (await _proxyManager())?.restore();
     } catch (error) {
-      ygLogger('restore system proxy failed: $error');
+      AppLog.warning('restore system proxy failed: ${AppLog.reason(error)}');
     }
   }
 

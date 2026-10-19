@@ -360,12 +360,17 @@ class ControlXrayRequest {
   int? timeoutSeconds;
   List<ControlXrayOperation> operations;
 
+  /// Where geosite.dat and geoip.dat are. The rules are built in the App's
+  /// process, which, unlike the Core, has no asset location of its own.
+  String? assetDir;
+
   ControlXrayRequest(
     this.server,
     this.username,
     this.password,
     this.operations, {
     this.timeoutSeconds,
+    this.assetDir,
   });
 
   factory ControlXrayRequest.fromJson(Map<String, dynamic> json) =>

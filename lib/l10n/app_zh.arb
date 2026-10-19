@@ -875,5 +875,7 @@
   "connectionHealthLostDetail": "隧道已建立，但流量无法通过。正在重新检查…",
   "connectionHealthMinewireDetail": "minewire 引擎与服务器的会话已断开，正在重新连接…",
   "connectionHealthLostNotice": "通过 {node} 无法连接",
-  "connectionHealthRestoredNotice": "连接已恢复"
+  "connectionHealthRestoredNotice": "连接已恢复",
+  "connectionHealthProxyTakenNotice": "系统代理已被其他程序更改：应用绕过了 HYPER CLIENT",
+  "connectionHealthProxyTakenDetail": "系统代理现在指向 {proxy}，应用绕过了此连接。重新连接即可恢复。"
 }

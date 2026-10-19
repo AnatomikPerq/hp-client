@@ -226,6 +226,25 @@ void main() {
     });
   });
 
+  test('the swap tells libXray where the Core reads geo assets', () async {
+    // geosite: rules are built in the App's process, which has no asset
+    // location of its own; without it every swap in Smart mode failed.
+    final requests = <ControlXrayRequest>[];
+    final host = ConnectionRuntimeHost(
+      startVpn: (_) async => throw StateError('no start during a swap'),
+      control: (request) async => requests.add(request),
+    );
+    final config = _config(2)
+      ..['env'] = {'xray.location.asset': r'C:\data\dat'};
+    await host.swap(_runtime(1), _runtime(2, config: config), const []);
+    await host.swap(_runtime(1), _runtime(2), const []);
+
+    expect(requests.first.assetDir, r'C:\data\dat');
+    expect(requests.first.toJson()['assetDir'], r'C:\data\dat');
+    expect(requests.last.assetDir, isNull);
+    expect(requests.last.toJson().containsKey('assetDir'), isFalse);
+  });
+
   group('coordinator', () {
     late AppDatabase db;
     late ConnectionRuntime running;

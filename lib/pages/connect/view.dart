@@ -183,7 +183,9 @@ class ConnectView extends StatelessWidget {
             ConnectionPhase.failed => l.prototypeConnectionFailed,
           };
     final detail = unreachable
-        ? health.minewireDown
+        ? health.proxyTakenOver != null
+              ? l.connectionHealthProxyTakenDetail(health.proxyTakenOver!)
+              : health.minewireDown
               ? l.connectionHealthMinewireDetail
               : l.connectionHealthLostDetail
         : switch (presentationPhase) {

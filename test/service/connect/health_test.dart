@@ -44,6 +44,7 @@ void main() {
   late List<String> notices;
   var engines = <MinewireEngineState>[];
   var probes = 0;
+  String? takenOver;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -52,6 +53,7 @@ void main() {
     notices = [];
     engines = [];
     probes = 0;
+    takenOver = null;
     monitor = ConnectionHealthMonitor(
       coordinator: coordinator,
       probe: (_) async {
@@ -60,6 +62,7 @@ void main() {
       },
       minewireState: () async => engines,
       notify: (message) async => notices.add(message),
+      proxyTakenOver: (_) async => takenOver,
       enabled: true,
       // The test drives every round itself.
       interval: const Duration(hours: 1),
@@ -111,6 +114,31 @@ void main() {
       expect(probes, 6);
     },
   );
+
+  test('a system proxy taken over is unreachable at once', () async {
+    // The probe goes straight to the App's port and keeps passing; apps
+    // follow the system proxy, which now points elsewhere.
+    final l = appLocalizationsNoContext();
+    connect(_runtime(1));
+    results.add(const LivePingResult.success(100));
+    await monitor.check();
+    expect(monitor.state.value.status, ConnectionHealthStatus.healthy);
+
+    takenOver = '127.0.0.1:10808';
+    results.addAll(List.filled(2, const LivePingResult.success(100)));
+    await monitor.check();
+    expect(monitor.state.value.unreachable, isTrue);
+    expect(monitor.state.value.proxyTakenOver, '127.0.0.1:10808');
+    await monitor.check();
+    expect(notices, [l.connectionHealthProxyTakenNotice], reason: 'once');
+
+    takenOver = null;
+    results.add(const LivePingResult.success(100));
+    await monitor.check();
+    expect(monitor.state.value.status, ConnectionHealthStatus.healthy);
+    expect(monitor.state.value.proxyTakenOver, isNull);
+    expect(notices.last, l.connectionHealthRestoredNotice);
+  });
 
   test('a node switch or a disconnect starts over', () async {
     connect(_runtime(1));

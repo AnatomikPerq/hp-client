@@ -875,5 +875,7 @@
   "connectionHealthLostDetail": "تونل برقرار است، اما ترافیکی عبور نمی‌کند. دوباره بررسی می‌کنیم…",
   "connectionHealthMinewireDetail": "موتور minewire جلسه خود با سرور را از دست داد و در حال اتصال دوباره است…",
   "connectionHealthLostNotice": "اتصال از طریق {node} برقرار نیست",
-  "connectionHealthRestoredNotice": "اتصال برقرار شد"
+  "connectionHealthRestoredNotice": "اتصال برقرار شد",
+  "connectionHealthProxyTakenNotice": "پروکسی سیستم را برنامه دیگری تغییر داد: برنامه‌ها از HYPER CLIENT عبور نمی‌کنند",
+  "connectionHealthProxyTakenDetail": "پروکسی سیستم اکنون به {proxy} اشاره می‌کند و برنامه‌ها از اتصال عبور نمی‌کنند. برای بازگرداندن آن دوباره وصل شوید."
 }
