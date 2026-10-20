@@ -106,6 +106,30 @@ void main() {
     );
   });
 
+  test('rolls only oversized regular Core logs over to *.1', () async {
+    final directory = await createTestDirectory('onexray-core-logs-');
+    addTearDown(() => directory.delete(recursive: true));
+    File log(String name) => File(p.join(directory.path, name));
+    await log('error.log').writeAsString('new session lines');
+    await log('error.log.1').writeAsString('older');
+    await log('access.log').writeAsString('small');
+    await rotateDesktopCoreLogs(directory.path, maxBytes: 8);
+    expect(await log('error.log').exists(), isFalse);
+    expect(await log('error.log.1').readAsString(), 'new session lines');
+    expect(await log('access.log').readAsString(), 'small');
+    expect(await log('access.log.1').exists(), isFalse);
+
+    // Something that is not a file in the way is never removed.
+    await log('access.log').writeAsString('grown past the limit');
+    await Directory(log('access.log.1').path).create();
+    await rotateDesktopCoreLogs(directory.path, maxBytes: 8);
+    expect(await log('access.log').readAsString(), 'grown past the limit');
+    expect(await Directory(log('access.log.1').path).exists(), isTrue);
+
+    // A missing directory or log is no error.
+    await rotateDesktopCoreLogs(p.join(directory.path, 'missing'));
+  });
+
   test(
     'replaces old inputs with one unique immutable runtime directory',
     () async {

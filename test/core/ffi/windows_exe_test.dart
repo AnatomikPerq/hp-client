@@ -175,6 +175,20 @@ void main() {
     expect(process.pids, {42});
   });
 
+  test('EXE rolls an oversized Core log over before starting', () async {
+    final run = Directory(p.join(directory.path, 'run'));
+    await run.create(recursive: true);
+    final log = File(p.join(run.path, 'error.log'));
+    await log.writeAsBytes(List.filled(desktopCoreLogMaxBytes + 1, 0x61));
+    final access = File(p.join(run.path, 'access.log'));
+    await access.writeAsString('small');
+    final api = create();
+    expect((await api.startVpn()).status, VpnStatus.connected);
+    expect(await log.exists(), isFalse);
+    expect(await File('${log.path}.1').length(), desktopCoreLogMaxBytes + 1);
+    expect(await access.readAsString(), 'small');
+  });
+
   test(
     'EXE starts with current CLI arguments and replaces old inputs',
     () async {

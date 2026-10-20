@@ -81,6 +81,8 @@ Release builds keep two logs in the run directory, rotated at 1 MiB to `*.1`:
 - `app.log` via `AppLog` (`lib/core/tools/app_log.dart`): connection failures by reason code and error type, a live switch falling back to a restart, a VPN that stopped without a command, health changes. **Only short explicit messages**: `ygLogger` output (which prints nothing in release) may carry configs, links and stack traces and must never be routed there.
 - `minewire.log`: runtime engines get `logFile` in `startMinewire`; libXray appends their logins, drops, errors and yamux keepalive failures, each line tagged with the engine's port. Ping engines pass none.
 
+The Core's own `error.log` and `access.log` (Settings → Advanced → Xray, level `warning` by default) sit next to them. The Core holds them open while it runs, so `rotateDesktopCoreLogs` (`lib/core/ffi/base_ffi_api.dart`) rolls one over 4 MiB to `*.1` only before a Core starts (Windows EXE and Linux, after the old Core is stopped; not MSIX, whose provider replaces the Core itself). Unrotated they grew to 43 MB in three days at `debug`.
+
 ## System proxy mode
 
 `PlatformPolicy.desktop` = `{runMode: tun|systemProxy, proxyPort: 10820}` (10808/10809 are the defaults of another common client, which runs on the owner's machine). A desktop `StartVpnRequest` **without `tun`** means proxy mode and its `socksPort` is the user-facing port; this keeps the native Kotlin/Swift model contract unchanged. The compiler turns `tunIn` into a loopback SOCKS/HTTP inbound (same tag, so traffic counters keep working) and drops `sockopt.interface`.

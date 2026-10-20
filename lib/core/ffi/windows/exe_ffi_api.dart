@@ -139,6 +139,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     try {
       await _notify(VpnStatus.connecting);
       await _stop();
+      await rotateDesktopCoreLogs(await _runDirectory());
       final request = await _readRequest();
       final proxyPort = desktopSystemProxyPort(request);
       final run = readRunXrayRequest(request);

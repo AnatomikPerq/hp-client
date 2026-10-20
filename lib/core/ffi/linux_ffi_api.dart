@@ -191,6 +191,7 @@ class LinuxFfiApi extends BaseFfiApi {
         _lastCoreError = 'The previous Core process is still running.';
         return false;
       }
+      await rotateDesktopCoreLogs(p.join(await getTunFilesDir(), 'run'));
       final inputs = await materializeRunXrayConfig(request);
       if (inputs == null) {
         _lastCoreError = 'The Xray configuration is empty.';

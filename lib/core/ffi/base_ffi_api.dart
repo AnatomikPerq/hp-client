@@ -10,6 +10,7 @@ import 'package:onexray/core/ffi/generated_bindings.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/core/tools/empty.dart';
+import 'package:onexray/core/tools/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:path/path.dart' as p;
@@ -82,6 +83,47 @@ Future<String> readDesktopCoreStartError(
     // A crash before the CLI starts may leave no diagnostic file.
   }
   return fallback;
+}
+
+/// The Core's own logs in the run directory, as `ConnectionCompiler` names
+/// them.
+const desktopCoreLogNames = ['error.log', 'access.log'];
+
+const desktopCoreLogMaxBytes = 4 << 20;
+
+/// Rolls each Core log in [runDirectory] that has grown past [maxBytes] to
+/// `*.1`, replacing the previous one. Xray only appends to them, session
+/// after session: at debug level error.log reached 43 MB in three days.
+///
+/// Only while no Core runs: one holds the files open (and Windows refuses
+/// the rename then). Only regular files are touched, and a failure never
+/// fails the start.
+Future<void> rotateDesktopCoreLogs(
+  String runDirectory, {
+  int maxBytes = desktopCoreLogMaxBytes,
+}) async {
+  for (final name in desktopCoreLogNames) {
+    final file = File(p.join(runDirectory, name));
+    final previous = File('${file.path}.1');
+    try {
+      if (await FileSystemEntity.type(file.path, followLinks: false) !=
+              FileSystemEntityType.file ||
+          await file.length() <= maxBytes) {
+        continue;
+      }
+      switch (await FileSystemEntity.type(previous.path, followLinks: false)) {
+        case FileSystemEntityType.file:
+          await previous.delete();
+        case FileSystemEntityType.notFound:
+          break;
+        default:
+          continue;
+      }
+      await file.rename(previous.path);
+    } on FileSystemException catch (error) {
+      ygLogger('rotate Core log $name failed: $error');
+    }
+  }
 }
 
 abstract class BaseFfiApi {
