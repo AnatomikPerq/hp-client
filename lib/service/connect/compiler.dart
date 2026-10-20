@@ -520,15 +520,18 @@ class ConnectionCompiler {
       autoSystemRoutingTable: nativeTun
           ? ['0.0.0.0/0', if (options.ipv6) '::/0']
           : null,
-      // Not on Windows: there Xray's own binding (proxy/tun setinterface)
+      // Off on Windows, and explicitly: a missing key means "auto" next to
+      // autoSystemRoutingTable. Xray's own binding (proxy/tun setinterface)
       // sets the IPv6 options on every dual-stack UDP socket and fails when
       // the interface has no IPv6, so no UDP left the Core at all (direct
-      // DNS, Hysteria2, AmneziaWG). Every outbound is bound by
-      // sockopt.interface instead (_applyOutboundPolicy), which picks the
+      // DNS, LAN discovery, Hysteria2, AmneziaWG). Every outbound is bound
+      // by sockopt.interface instead (_applyOutboundPolicy), which picks the
       // options by the destination's family.
-      autoOutboundsInterface: options.platform == ConnectionPlatform.linux
-          ? options.interfaceName
-          : null,
+      autoOutboundsInterface: switch (options.platform) {
+        ConnectionPlatform.linux => options.interfaceName,
+        ConnectionPlatform.windows => '',
+        _ => null,
+      },
       autoSystemWfpBlockLeak: options.platform == ConnectionPlatform.windows
           ? ['dns']
           : null,

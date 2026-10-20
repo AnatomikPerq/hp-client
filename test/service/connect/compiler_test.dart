@@ -317,6 +317,11 @@ void main() {
             ]) {
               expect(tun['settings'].containsKey(key), false);
             }
+          } else {
+            expect(
+              tun['settings']['autoOutboundsInterface'],
+              platform == ConnectionPlatform.linux ? 'Ethernet' : '',
+            );
           }
         }
         expect(jsonEncode(source), before);
@@ -782,6 +787,7 @@ void main() {
                 'gateway': ['198.18.0.1/15', if (ipv6) 'fc00::1/64'],
                 'dns': ['8.8.8.8', if (ipv6) '2001:4860:4860::8888'],
                 'autoSystemRoutingTable': ['0.0.0.0/0', if (ipv6) '::/0'],
+                'autoOutboundsInterface': '',
                 'autoSystemWfpBlockLeak': ['dns'],
               });
             }
@@ -1691,10 +1697,11 @@ void main() {
       expect(plan.config['inbounds'].first['protocol'], 'tun');
       final settings = plan.config['inbounds'].first['settings'];
       // Windows binds through sockopt only: Xray's TUN binding breaks UDP
-      // on an interface without IPv6.
+      // on an interface without IPv6. The key must be present and empty, a
+      // missing one means "auto".
       expect(
         settings['autoOutboundsInterface'],
-        platform == ConnectionPlatform.linux ? 'selected-interface' : isNull,
+        platform == ConnectionPlatform.linux ? 'selected-interface' : '',
       );
       expect(settings['autoSystemRoutingTable'], ['0.0.0.0/0']);
       expect(XrayJson.fromJson(plan.config).toJson(), plan.config);
