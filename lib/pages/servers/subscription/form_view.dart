@@ -23,6 +23,7 @@ class SubscriptionFormView extends StatelessWidget {
     this.nameLoadingHint,
     required this.urlLabel,
     required this.urlController,
+    required this.userAgentController,
     this.urlHint,
     this.urlHelper,
     required this.panel,
@@ -71,6 +72,7 @@ class SubscriptionFormView extends StatelessWidget {
   final String? nameLoadingHint;
   final String urlLabel;
   final TextEditingController urlController;
+  final TextEditingController userAgentController;
   final String? urlHint;
   final String? urlHelper;
   final SubscriptionPanel panel;
@@ -115,6 +117,14 @@ class SubscriptionFormView extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _fields(context),
+      const SizedBox(height: 12),
+      _editableField(
+        context,
+        label: AppLocalizations.of(context)!.subscriptionUserAgentTitle,
+        controller: userAgentController,
+        hintText: AppLocalizations.of(context)!.subscriptionUserAgentHint,
+        textDirection: TextDirection.ltr,
+      ),
       const SizedBox(height: 14),
       _configurationCard(context),
       const SizedBox(height: 14),

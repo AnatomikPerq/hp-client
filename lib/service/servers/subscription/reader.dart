@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/enum.dart';
@@ -17,10 +18,12 @@ import 'package:onexray/service/shared/xray/remnawave.dart';
 final class SubscriptionConfigurationResult {
   final List<CoreConfigCompanion> rows;
   final SubscriptionMode mode;
+  final bool convertedToOrdinary;
 
   SubscriptionConfigurationResult({
     required Iterable<CoreConfigCompanion> rows,
     required this.mode,
+    this.convertedToOrdinary = false,
   }) : rows = List.unmodifiable(rows);
 
   int get count => rows.where((row) => row.type.value == activeType).length;
@@ -50,8 +53,9 @@ class SubscriptionConfigurationReader {
 
   Future<SubscriptionConfigurationResult> read(
     String text,
-    SubscriptionInput input,
-  ) async {
+    SubscriptionInput input, {
+    SubscriptionFormatConfirmation? confirmOrdinary,
+  }) async {
     final plaintext = await _decode(
       text,
       ageSecretKey: input.normalizedAgeSecretKey,
@@ -60,30 +64,30 @@ class SubscriptionConfigurationReader {
     try {
       value = JsonTool.decoder.convert(plaintext);
     } on FormatException {
+      if (input.panel == SubscriptionPanel.remnawave) {
+        if (confirmOrdinary == null) {
+          throw const RemnawaveResponseFormatException();
+        }
+        if (!await confirmOrdinary(input.name)) {
+          throw const AppFailure(FailureCategory.conflict, 'cancelled');
+        }
+        return _readOrdinary(plaintext, convertedToOrdinary: true);
+      }
       final start = plaintext.trimLeft();
       if (start.startsWith('{') || start.startsWith('[')) rethrow;
     }
     final complete =
+        input.panel == SubscriptionPanel.remnawave ||
         value is List ||
         (value is Map<String, dynamic> &&
             value.keys.any((key) => key != 'outbounds'));
     if (!complete) {
-      if (input.panel == SubscriptionPanel.remnawave ||
-          input.mode == SubscriptionMode.providerManaged) {
+      if (input.mode == SubscriptionMode.providerManaged) {
         throw const FormatException(
           'The subscription must contain complete Xray JSON configurations',
         );
       }
-      final rows = await _nodes(plaintext);
-      if (rows.isEmpty) {
-        throw const FormatException(
-          'The subscription contains no usable nodes',
-        );
-      }
-      return SubscriptionConfigurationResult(
-        rows: rows,
-        mode: SubscriptionMode.appManaged,
-      );
+      return _readOrdinary(plaintext);
     }
 
     final values = value is List ? value : [value];
@@ -130,13 +134,14 @@ class SubscriptionConfigurationReader {
       (row) => row.type.value == CoreConfigType.outbound.name,
     );
     // App-managed by default: the provider's graph bypasses the App's
-    // routing, live switch and leak protections, so it is opt-in. A source
-    // whose configurations have no standalone node falls back to them.
+    // routing, live switch and leak protections, so it is opt-in. Choosing
+    // the Remnawave panel is that choice; a source whose configurations
+    // have no standalone node falls back to them too.
     final result = SubscriptionConfigurationResult(
       rows: rows,
       mode:
           input.mode ??
-          (nodes.isEmpty
+          (input.panel == SubscriptionPanel.remnawave || nodes.isEmpty
               ? SubscriptionMode.providerManaged
               : SubscriptionMode.appManaged),
     );
@@ -146,5 +151,20 @@ class SubscriptionConfigurationReader {
       );
     }
     return result;
+  }
+
+  Future<SubscriptionConfigurationResult> _readOrdinary(
+    String plaintext, {
+    bool convertedToOrdinary = false,
+  }) async {
+    final rows = await _nodes(plaintext);
+    if (rows.isEmpty) {
+      throw const FormatException('The subscription contains no usable nodes');
+    }
+    return SubscriptionConfigurationResult(
+      rows: rows,
+      mode: SubscriptionMode.appManaged,
+      convertedToOrdinary: convertedToOrdinary,
+    );
   }
 }

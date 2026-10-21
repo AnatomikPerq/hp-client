@@ -19,6 +19,7 @@ import 'package:onexray/service/connect/provider_mode.dart';
 import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
+import 'package:onexray/service/servers/subscription/model.dart';
 import 'package:onexray/service/servers/subscription/failure.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/failure.dart' show appFailureMessage;
@@ -76,6 +77,7 @@ final class TrayService {
     Future<void> Function() validate,
   )?
   onConfigurationChange;
+  SubscriptionFormatConfirmation? onSubscriptionFormatConfirmation;
   TrayMenuData _data = TrayMenuData();
   final _listeners = <StreamSubscription<dynamic>>[];
   final _pendingUpdates = <String>{};
@@ -155,6 +157,7 @@ final class TrayService {
     }
     _listeners.clear();
     onConfigurationChange = null;
+    onSubscriptionFormatConfirmation = null;
     _lastPhase = null;
     _lastCanDisconnect = null;
     _lastToolTip = null;
@@ -603,7 +606,9 @@ final class TrayService {
         await _notice(
           subscriptionRefreshMessage(
             l,
-            await SubscriptionService().refreshAll(),
+            await SubscriptionService().refreshAll(
+              confirmOrdinary: onSubscriptionFormatConfirmation,
+            ),
           ),
         );
       } else if (key.startsWith('updateSubscription:')) {
@@ -618,6 +623,7 @@ final class TrayService {
           subscriptionRefreshMessage(l, {
             source: await SubscriptionService().refreshSubscriptionResult(
               source,
+              confirmOrdinary: onSubscriptionFormatConfirmation,
             ),
           }),
         );
