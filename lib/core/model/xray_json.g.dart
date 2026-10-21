@@ -110,10 +110,16 @@ XrayDns _$XrayDnsFromJson(Map<String, dynamic> json) => XrayDns(
   servers: (json['servers'] as List<dynamic>?)
       ?.map((e) => XrayDnsServer.fromJson(e as Map<String, dynamic>))
       .toList(),
+  disableCache: json['disableCache'] as bool?,
+  disableFallback: json['disableFallback'] as bool?,
+  disableFallbackIfMatch: json['disableFallbackIfMatch'] as bool?,
 );
 
 Map<String, dynamic> _$XrayDnsToJson(XrayDns instance) => <String, dynamic>{
   'servers': ?instance.servers?.map((e) => e.toJson()).toList(),
+  'disableCache': ?instance.disableCache,
+  'disableFallback': ?instance.disableFallback,
+  'disableFallbackIfMatch': ?instance.disableFallbackIfMatch,
 };
 
 XrayFakeDns _$XrayFakeDnsFromJson(Map<String, dynamic> json) => XrayFakeDns(
@@ -136,6 +142,7 @@ XrayDnsServer _$XrayDnsServerFromJson(Map<String, dynamic> json) =>
       skipFallback: json['skipFallback'] as bool?,
       queryStrategy: json['queryStrategy'] as String?,
       tag: json['tag'] as String?,
+      finalQuery: json['finalQuery'] as bool?,
     );
 
 Map<String, dynamic> _$XrayDnsServerToJson(XrayDnsServer instance) =>
@@ -145,6 +152,7 @@ Map<String, dynamic> _$XrayDnsServerToJson(XrayDnsServer instance) =>
       'skipFallback': ?instance.skipFallback,
       'queryStrategy': ?instance.queryStrategy,
       'tag': ?instance.tag,
+      'finalQuery': ?instance.finalQuery,
     };
 
 XrayRouting _$XrayRoutingFromJson(Map<String, dynamic> json) => XrayRouting(
@@ -300,6 +308,7 @@ XrayInboundSniffing _$XrayInboundSniffingFromJson(Map<String, dynamic> json) =>
       destOverride: (json['destOverride'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      metadataOnly: json['metadataOnly'] as bool?,
     );
 
 Map<String, dynamic> _$XrayInboundSniffingToJson(
@@ -308,6 +317,7 @@ Map<String, dynamic> _$XrayInboundSniffingToJson(
   'enabled': ?instance.enabled,
   'routeOnly': ?instance.routeOnly,
   'destOverride': ?instance.destOverride,
+  'metadataOnly': ?instance.metadataOnly,
 };
 
 XrayPolicy _$XrayPolicyFromJson(Map<String, dynamic> json) => XrayPolicy(
@@ -351,10 +361,18 @@ XrayObservatory _$XrayObservatoryFromJson(Map<String, dynamic> json) =>
       subjectSelector: (json['subjectSelector'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      probeURL: json['probeURL'] as String?,
+      probeInterval: json['probeInterval'] as String?,
+      enableConcurrency: json['enableConcurrency'] as bool?,
     );
 
 Map<String, dynamic> _$XrayObservatoryToJson(XrayObservatory instance) =>
-    <String, dynamic>{'subjectSelector': ?instance.subjectSelector};
+    <String, dynamic>{
+      'subjectSelector': ?instance.subjectSelector,
+      'probeURL': ?instance.probeURL,
+      'probeInterval': ?instance.probeInterval,
+      'enableConcurrency': ?instance.enableConcurrency,
+    };
 
 XrayOutbound _$XrayOutboundFromJson(Map<String, dynamic> json) => XrayOutbound(
   tag: json['tag'] as String,

@@ -40,6 +40,7 @@ Future<ConnectionConfiguration?> applyConnectionChange(
   required String Function(ConnectionSettings) label,
   Future<void> Function()? writeAssets,
   Future<void> Function()? validateAssets,
+  bool assetsOnlyCheck = false,
   bool rethrowErrors = false,
   bool confirmReconnect = true,
 }) async {
@@ -69,6 +70,7 @@ Future<ConnectionConfiguration?> applyConnectionChange(
       next,
       writeAssets: writeAssets,
       validateAssets: validateAssets,
+      assetsOnlyCheck: assetsOnlyCheck,
       expectedConfiguration: current.encode(),
       allowReconnect: reconnect,
     );

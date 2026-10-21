@@ -323,6 +323,36 @@ void main() {
       expect(coordinator.state.value.runtime!.identity, running.identity);
     });
 
+    test(
+      'a node choice that only rechecks assets still switches live',
+      () async {
+        final coordinator = create();
+        await coordinator.initialize(observe: false, registerReferences: false);
+        final checks = <String>[];
+        await coordinator.apply(
+          _configuration(2),
+          allowReconnect: true,
+          validateAssets: () async => checks.add('before'),
+          writeAssets: () async => checks.add('commit'),
+          assetsOnlyCheck: true,
+        );
+        expect(calls, ['prepareSwap', 'swap']);
+        expect(checks, ['before', 'commit']);
+        expect((await coordinator.configuration).connection.selection.id, 2);
+      },
+    );
+
+    test('assets that write never take the live path', () async {
+      final coordinator = create();
+      await coordinator.initialize(observe: false, registerReferences: false);
+      await coordinator.apply(
+        _configuration(2),
+        allowReconnect: true,
+        writeAssets: () async {},
+      );
+      expect(calls, ['stop', 'prepare', 'start']);
+    });
+
     test('a failed live switch restarts the Core instead', () async {
       final coordinator = create(swapFails: true);
       await select(coordinator, 2);

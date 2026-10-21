@@ -6,12 +6,14 @@ import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/runtime.dart';
+import 'package:onexray/service/connect/provider_mode.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/geodata_suggestions.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/dns.dart';
 import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
+import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
 import 'package:onexray/service/shared/xray/validation.dart';
 import 'package:onexray/service/shared/xray/fake_dns.dart';
 import 'package:onexray/service/shared/xray/fragment.dart';
@@ -80,17 +82,20 @@ class SmartRoutingEditorService {
     required SmartRoutingSettings smart,
     required Future<bool> Function() confirmReconnect,
   }) async {
-    smart = SmartRoutingSettings.fromJson({
-      ...smart.toJson(),
-      'directDnsAddress': smart.directDnsAddress.trim(),
-    });
+    smart.validate();
     await coordinator.initialize();
     await coordinator.refresh();
     if ((await coordinator.configuration).encode() != original.encode()) {
       throw const ConnectionHostException('configurationChanged');
     }
     final connection = original.connection;
+    final providerActive = await usesProviderConfiguration(
+      db,
+      connection,
+      runtime: coordinator.state.value.runtime,
+    );
     final affectsRuntime =
+        !providerActive &&
         !connection.expert &&
         connection.trafficMode == TrafficMode.smart &&
         !sameRuntime(connection, smart, await regions());
@@ -115,10 +120,10 @@ class SmartRoutingEditorService {
       validateAssets:
           smart.fakeDns != connection.smart.fakeDns ||
               smart.fragment != connection.smart.fragment ||
-              (smart.directDns &&
-                  (!connection.smart.directDns ||
-                      smart.directDnsAddress !=
-                          connection.smart.directDnsAddress))
+              !const DeepCollectionEquality().equals(
+                _validationOptions(smart),
+                _validationOptions(connection.smart),
+              )
           ? () => _validateRouting(smart)
           : null,
       writeAssets: () async {
@@ -135,22 +140,33 @@ class SmartRoutingEditorService {
 
   Future<void> _validateRouting(SmartRoutingSettings smart) async {
     final dns = RoutingDns.compile(
-      directAddress: smart.effectiveDirectDnsAddress,
+      settings: smart.dns,
+      directEnabled: smart.directDns,
       fakeDns: smart.fakeDns,
     );
     final helpers = <Map<String, dynamic>>[
       if (smart.fragment) XrayFragment.defaultOutbound(),
     ];
+    final tags = [for (var i = 0; i < smart.entryCount; i++) 'app-entry-$i'];
+    final selection = smart.selection.compile(selector: tags);
     final error = await (testXray ?? AppHostApi().testXray)(
       XrayValidation.normal(
         XrayJson(
+          inbounds: [
+            createSocksInbound(
+              '1080',
+              fakeDns: smart.fakeDns,
+              sniffing: smart.sniffing,
+            ),
+          ],
           dns: dns,
           fakedns: FakeDns.poolsFor(dns),
+          routing: XrayRouting(balancers: [selection.balancer]),
+          observatory: selection.observatory,
           outbounds: [
-            if (smart.fragment)
-              ...XrayFragment.connectEntries([
-                createFreedomOutbound(tag: 'app-entry-0').toJson(),
-              ], helpers),
+            ...XrayFragment.connectEntries([
+              for (final tag in tags) createFreedomOutbound(tag: tag).toJson(),
+            ], helpers),
             ...helpers,
             createFreedomOutbound(tag: 'direct').toJson(),
           ],
@@ -165,6 +181,12 @@ class SmartRoutingEditorService {
       );
     }
   }
+
+  static Object _validationOptions(SmartRoutingSettings value) => {
+    'dns': value.dns.effectiveJson(directEnabled: value.directDns),
+    'sniffing': value.sniffing.effectiveJson(fakeDns: value.fakeDns),
+    'selection': value.selection.effectiveJson(),
+  };
 
   static bool sameRuntime(
     ConnectionSettings original,
@@ -186,7 +208,13 @@ class SmartRoutingEditorService {
                   if (rule.outboundTag == 'direct') ...?rule.domain,
               ]
             : <String>[],
-        'directDnsAddress': value.effectiveDirectDnsAddress,
+        'dns': value.dns.effectiveJson(directEnabled: value.directDns),
+        'sniffing': value.sniffing.effectiveJson(fakeDns: value.fakeDns),
+        'selection': value.selection.effectiveJson(
+          entryCount: original.selection.kind == SelectionKind.server
+              ? 1
+              : value.entryCount,
+        ),
         'fakeDns': value.fakeDns,
         'fragment': value.fragment,
         'entryCount': original.selection.kind == SelectionKind.server

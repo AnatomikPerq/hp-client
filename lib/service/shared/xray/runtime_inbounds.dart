@@ -1,4 +1,5 @@
 import 'package:onexray/core/model/xray_json.dart';
+import 'package:onexray/service/connect/routing/options.dart';
 import 'package:onexray/core/network/constants.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 
@@ -12,6 +13,7 @@ XrayInbound createTunInbound({
   String? autoOutboundsInterface,
   List<String>? autoSystemWfpBlockLeak,
   bool fakeDns = false,
+  RoutingSniffingSettings sniffing = const RoutingSniffingSettings(),
 }) => XrayInbound(
   listen: NetConstants.proxyHost,
   protocol: 'tun',
@@ -25,18 +27,21 @@ XrayInbound createTunInbound({
     autoSystemWfpBlockLeak: autoSystemWfpBlockLeak,
   ).toJson(),
   tag: 'tunIn',
-  sniffing: _createSniffing(fakeDns),
+  sniffing: sniffing.toXraySniffing(fakeDns: fakeDns),
 );
 
-XrayInbound createSocksInbound(String port, {bool fakeDns = false}) =>
-    XrayInbound(
-      listen: NetConstants.proxyHost,
-      port: port,
-      protocol: 'socks',
-      settings: XrayInboundSocksSettings(auth: 'noauth', udp: true).toJson(),
-      tag: 'tunIn',
-      sniffing: _createSniffing(fakeDns),
-    );
+XrayInbound createSocksInbound(
+  String port, {
+  bool fakeDns = false,
+  RoutingSniffingSettings sniffing = const RoutingSniffingSettings(),
+}) => XrayInbound(
+  listen: NetConstants.proxyHost,
+  port: port,
+  protocol: 'socks',
+  settings: XrayInboundSocksSettings(auth: 'noauth', udp: true).toJson(),
+  tag: 'tunIn',
+  sniffing: sniffing.toXraySniffing(fakeDns: fakeDns),
+);
 
 /// SOCKS5 and HTTP for other devices on the network, always with an
 /// account: an open proxy on every interface would serve anyone who finds it.
@@ -45,6 +50,7 @@ XrayInbound createLanProxyInbound(
   required String user,
   required String password,
   bool fakeDns = false,
+  RoutingSniffingSettings sniffing = const RoutingSniffingSettings(),
 }) {
   if (user.isEmpty || password.isEmpty) {
     throw const FormatException('LAN proxy sharing needs a login and password');
@@ -60,12 +66,6 @@ XrayInbound createLanProxyInbound(
       ],
     },
     tag: lanProxyInboundTag,
-    sniffing: _createSniffing(fakeDns),
+    sniffing: sniffing.toXraySniffing(fakeDns: fakeDns),
   );
 }
-
-XrayInboundSniffing _createSniffing(bool fakeDns) => XrayInboundSniffing(
-  enabled: true,
-  routeOnly: false,
-  destOverride: ['http', 'tls', 'quic', if (fakeDns) 'fakedns'],
-);

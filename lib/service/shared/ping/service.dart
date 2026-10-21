@@ -106,8 +106,12 @@ class PingService {
     }
     return _enqueuePing(() async {
       final db = _database;
+      // Only nodes of the sources' current modes: a provider-managed source
+      // keeps its standalone nodes for later, unused and unmeasured.
       final byId = {
-        for (final row in await db.coreConfigDao.searchRows(targetIds))
+        for (final row in await db.coreConfigDao.searchActiveOutboundRows(
+          targetIds,
+        ))
           row.id: row,
       };
       final rows = <CoreConfigData>[
@@ -204,7 +208,20 @@ class PingService {
       final sources = <PingBatchSource>[];
       final minewireRows = <CoreConfigData>[];
       final minewireLinks = <MinewireLink>[];
+      // A row edited or switched out of its source's mode while queued.
+      final currentRows = {
+        for (final row in await db.coreConfigDao.searchActiveOutboundRows(
+          rowSlice.map((row) => row.id),
+        ))
+          row.id: row,
+      };
       for (final row in rowSlice) {
+        final current = currentRows[row.id];
+        if (current == null ||
+            current.data != row.data ||
+            current.subId != row.subId) {
+          continue;
+        }
         final link = _minewireLink(row);
         if (link != null) {
           minewireRows.add(row);
@@ -217,6 +234,7 @@ class PingService {
           sources.add(source);
         }
       }
+      if (sources.isEmpty && minewireLinks.isEmpty) continue;
       // minewire nodes get a throwaway engine each and then the same probe
       // as every other node, so their delays compare (see MinewirePingProbe).
       final probes = await Future.wait([
@@ -306,7 +324,12 @@ class PingService {
               table.data.equals(row.data!),
         ))
         .write(
-          CoreConfigCompanion(delay: Value(delay), countryCode: Value(country)),
+          CoreConfigCompanion(
+            delay: Value(delay),
+            countryCode: country == null
+                ? const Value.absent()
+                : Value(country),
+          ),
         );
   }
 }

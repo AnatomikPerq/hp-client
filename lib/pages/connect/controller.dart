@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/core/db/database/constants.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/main/navigation.dart';
@@ -166,8 +167,24 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
   ServerCatalog get catalog => state.catalog;
 
   ConnectionConfiguration get configuration => state.configuration;
-  set configuration(ConnectionConfiguration value) =>
-      emit(state.copyWith(configuration: value));
+  set configuration(ConnectionConfiguration value) {
+    final previous = state.configuration.connection;
+    final next = value.connection;
+    final targetChanged =
+        previous.expert != next.expert ||
+        previous.rawId != next.rawId ||
+        previous.selection.kind != next.selection.kind ||
+        previous.selection.id != next.selection.id;
+    // Raw browsing is local until a target is selected. Other pages can replace
+    // that target, while unrelated settings must leave the browsing draft open.
+    emit(
+      state.copyWith(
+        configuration: value,
+        expertView: targetChanged ? next.expert : state.expertView,
+      ),
+    );
+  }
+
   ConnectionView get connectionView => state.connectionView;
   List<CoreConfigData> get servers => state.servers;
   set servers(List<CoreConfigData> value) =>
@@ -292,6 +309,8 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
   }
 
   String selectionTitle(AppLocalizations l10n) {
+    final providerName = runningProfile?.name ?? selectedProvider?.name;
+    if (providerName != null) return providerName;
     final settings = configuration.connection;
     if (settings.trafficMode != TrafficMode.allVpn &&
         settings.selection.kind != SelectionKind.server) {
@@ -357,15 +376,34 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     return profile?.entryCount;
   }
 
-  String? selectionDetail(AppLocalizations l10n) =>
-      runningRoute?.path ??
-      (configuration.connection.selection.kind == SelectionKind.server
-          ? null
-          : l10n.prototypeChooseBySpeedAvailability);
+  CoreConfigData? get selectedProvider =>
+      !configuration.connection.expert &&
+          configuration.connection.selection.kind == SelectionKind.server
+      ? servers
+            .where(
+              (row) =>
+                  row.id == configuration.connection.selection.id &&
+                  row.type == CoreConfigType.Remnawave.name &&
+                  catalog.selectable(row),
+            )
+            .firstOrNull
+      : null;
+
+  RuntimeProfile? get runningProfile => connectionView.runtime?.profile;
+  bool get providerConfiguration =>
+      runningProfile != null || selectedProvider != null;
+
+  String? selectionDetail(AppLocalizations l10n) => providerConfiguration
+      ? l10n.providerRoutingNotice
+      : runningRoute?.path ??
+            (configuration.connection.selection.kind == SelectionKind.server
+                ? null
+                : l10n.prototypeChooseBySpeedAvailability);
 
   // The runtime chooses the node identity; the badge shows that node's latest
   // successful probe, not a measurement of this session or a new selection.
   String? selectionHealth(AppLocalizations l10n) {
+    if (providerConfiguration) return null;
     final view = connectionView;
     if (view.phase != ConnectionPhase.connected) return null;
     final entries = view.runtime?.entries;
@@ -378,14 +416,16 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     return health(l10n, row);
   }
 
-  String homeMethodTitle(AppLocalizations l10n) =>
-      configuration.connection.trafficMode == TrafficMode.smart
+  String homeMethodTitle(AppLocalizations l10n) => providerConfiguration
+      ? l10n.providerConfigurationTitle
+      : configuration.connection.trafficMode == TrafficMode.smart
       ? l10n.prototypeSmartRoutingRecommended
       : methodTitle(l10n);
 
   int _ruleCount(RoutingConfiguration profile) => profile.ruleCount;
 
   String methodDescription(AppLocalizations l10n) {
+    if (providerConfiguration) return l10n.providerRoutingNotice;
     switch (configuration.connection.trafficMode) {
       case TrafficMode.smart:
         return l10n.prototypeSmartRoutingDescription;
@@ -409,7 +449,8 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     final runtime = view.runtime;
     if (view.phase != ConnectionPhase.connected ||
         runtime == null ||
-        runtime.configuration.connection.expert) {
+        runtime.configuration.connection.expert ||
+        runtime.profile != null) {
       return null;
     }
     final entries = runtime.entries;
@@ -429,17 +470,18 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     );
   }
 
-  String methodTitle(AppLocalizations l10n) =>
-      switch (configuration.connection.trafficMode) {
-        TrafficMode.smart => l10n.prototypeSmartRouting,
-        TrafficMode.allVpn => l10n.prototypeAllViaVpn,
-        TrafficMode.custom =>
-          customRoutes
-                  .where((row) => row.id == configuration.connection.customId)
-                  .firstOrNull
-                  ?.name ??
-              l10n.prototypeCustomRouting,
-      };
+  String methodTitle(AppLocalizations l10n) => providerConfiguration
+      ? l10n.providerConfigurationTitle
+      : switch (configuration.connection.trafficMode) {
+          TrafficMode.smart => l10n.prototypeSmartRouting,
+          TrafficMode.allVpn => l10n.prototypeAllViaVpn,
+          TrafficMode.custom =>
+            customRoutes
+                    .where((row) => row.id == configuration.connection.customId)
+                    .firstOrNull
+                    ?.name ??
+                l10n.prototypeCustomRouting,
+        };
 
   Future<void> connectionAction(BuildContext context) async {
     final view = connectionView;
@@ -553,6 +595,10 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     String? label,
   }) async {
     if (connectionView.busy || pendingChange != null) return false;
+    if (providerConfiguration &&
+        (values.containsKey('trafficMode') || values.containsKey('customId'))) {
+      return false;
+    }
     pendingChange = values.containsKey('rawId')
         ? 'raw:${values['rawId']}'
         : values.containsKey('selection')
@@ -716,6 +762,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
   }
 
   Future<void> chooseTrafficMethod(BuildContext context) async {
+    if (providerConfiguration) return;
     final selected = await showConnectDialog<ConnectTrafficChoice>(
       context,
       (context) => ConnectTrafficMethodDialog(
@@ -758,6 +805,28 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
 
   Future<void> showWhy(BuildContext context) async {
     final l = AppLocalizations.of(context)!;
+    if (providerConfiguration) {
+      await showConnectDialog<void>(
+        context,
+        (dialogContext) => ConnectDialog(
+          title: l.prototypeWhyConnectionTitle,
+          body: Padding(
+            padding: const EdgeInsets.all(22),
+            child: ConnectExplanation(
+              icon: LucideIcons.shieldCheck,
+              text: l.providerRoutingNotice,
+            ),
+          ),
+          actions: [
+            ConnectDialogButton(
+              label: l.prototypeDone,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final view = connectionView;
     final connected = view.phase == ConnectionPhase.connected;
     final runtime = connected ? view.runtime : null;
@@ -853,7 +922,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     if (count == null || settings.expert) return [];
     final rows =
         servers.where((row) {
-          if (row.type != 'outbound' ||
+          if (!catalog.outboundEligible(row) ||
               row.id <= 0 ||
               row.id == settings.finalExitId ||
               !PingDelayConstants.isSuccessful(row.delay)) {

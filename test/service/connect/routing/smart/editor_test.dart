@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/constants.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
@@ -13,6 +16,7 @@ import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/smart/editor.dart';
+import 'package:onexray/service/connect/routing/options.dart';
 
 RegionCatalog _regions() => RegionCatalog.fromJson(
   {
@@ -89,7 +93,7 @@ void main() {
         );
         final after = SmartRoutingSettings.fromJson({
           ...before.toJson(),
-          'directDnsAddress': '9.9.9.9',
+          'dns': before.dns.withDirectAddress('9.9.9.9').toJson(),
         });
         expect(after.directDnsAddress, '9.9.9.9');
         expect(
@@ -101,6 +105,54 @@ void main() {
           !enabled,
         );
       }
+    },
+  );
+
+  test(
+    'inactive sniffing and probe preferences persist without changing runtime',
+    () {
+      final before = SmartRoutingSettings(
+        sniffing: const RoutingSniffingSettings(enabled: false),
+      );
+      final after = SmartRoutingSettings.fromJson({
+        ...before.toJson(),
+        'sniffing': before.sniffing.copyWith(metadataOnly: true).toJson(),
+        'selection': before.selection
+            .copyWith(
+              probeURL: 'https://example.com/probe',
+              probeInterval: '30s',
+              enableConcurrency: false,
+            )
+            .toJson(),
+      });
+      expect(
+        SmartRoutingEditorService.sameRuntime(
+          ConnectionSettings(smart: before),
+          after,
+          _regions(),
+        ),
+        true,
+      );
+      expect(after.sniffing.metadataOnly, true);
+      expect(after.selection.probeInterval, '30s');
+      final automaticBefore = SmartRoutingSettings(
+        entryCount: 2,
+        selection: const RoutingSelectionSettings(type: 'leastPing'),
+      );
+      final automaticAfter = SmartRoutingSettings.fromJson({
+        ...automaticBefore.toJson(),
+        'selection': automaticBefore.selection
+            .copyWith(probeInterval: '1m')
+            .toJson(),
+      });
+      expect(
+        SmartRoutingEditorService.sameRuntime(
+          ConnectionSettings(smart: automaticBefore),
+          automaticAfter,
+          _regions(),
+        ),
+        true,
+      );
     },
   );
 
@@ -129,12 +181,23 @@ void main() {
         testXray: (text) async {
           validations++;
           final config = jsonDecode(text);
-          expect(config['dns']['servers'].first['address'], 'fakedns');
+          expect(
+            (config['dns']['servers'] as List).where(
+              (server) => server['address'] == 'fakedns',
+            ),
+            isNotEmpty,
+          );
           expect(config['fakedns'], [
             {'ipPool': '198.19.0.0/16', 'poolSize': 32768},
             {'ipPool': 'fc00:1::/64', 'poolSize': 32768},
           ]);
-          expect(config.containsKey('inbounds'), false);
+          expect(config['inbounds'].single['protocol'], 'socks');
+          expect(config['inbounds'].single['sniffing']['destOverride'], [
+            'http',
+            'tls',
+            'quic',
+            'fakedns',
+          ]);
           return '';
         },
       );
@@ -223,9 +286,11 @@ void main() {
         testXray: (text) async {
           calls++;
           final json = jsonDecode(text);
-          expect(json['dns']['servers'].last['tag'], 'app-dns-direct');
-          expect(json['dns']['servers'].last['address'], '1.1.1.1');
-          expect(json.containsKey('inbounds'), false);
+          final direct = (json['dns']['servers'] as List).singleWhere(
+            (server) => server['tag'] == 'app-dns-direct',
+          );
+          expect(direct['address'], '1.1.1.1');
+          expect(json['inbounds'].single['protocol'], 'socks');
           return coreError;
         },
       );
@@ -248,6 +313,64 @@ void main() {
       expect(calls, 2);
     },
   );
+
+  test('Smart saving validates multi-chain strategy and managed sniffing placeholders', () async {
+    final coordinator = await _initialize(
+      ConnectionCoordinator(
+        database: db,
+        inspect: (_, {observedStatus}) async =>
+            const HostConnection(VpnStatus.disconnected),
+      ),
+    );
+    final original = await coordinator.configuration;
+    var calls = 0;
+    final service = SmartRoutingEditorService(
+      database: db,
+      coordinator: coordinator,
+      loadRegions: () async => _regions(),
+      testXray: (text) async {
+        calls++;
+        final json = jsonDecode(text);
+        expect(
+          json['routing']['balancers'].single['strategy']['type'],
+          'leastPing',
+        );
+        expect(
+          json['routing']['balancers'].single['fallbackTag'],
+          'app-entry-0',
+        );
+        expect(json['observatory']['subjectSelector'], [
+          'app-entry-0',
+          'app-entry-1',
+        ]);
+        expect(json['observatory']['probeInterval'], '30s');
+        expect(json['inbounds'].single['protocol'], 'socks');
+        expect(json['inbounds'].single['sniffing']['metadataOnly'], true);
+        return '';
+      },
+    );
+    final smart = SmartRoutingSettings(
+      entryCount: 2,
+      selection: const RoutingSelectionSettings(
+        type: 'leastPing',
+        probeInterval: '30s',
+      ),
+      sniffing: const RoutingSniffingSettings(metadataOnly: true),
+    );
+    expect(
+      await service.save(
+        original: original,
+        smart: smart,
+        confirmReconnect: () async => throw StateError('No active VPN'),
+      ),
+      true,
+    );
+    expect(calls, 1);
+    expect(
+      (await coordinator.configuration).connection.smart.selection.toJson(),
+      smart.selection.toJson(),
+    );
+  });
 
   test('unselected Smart saves without activation or servers; stale settings are rejected', () async {
     final original = ConnectionConfiguration(
@@ -305,6 +428,117 @@ void main() {
     );
     expect((await coordinator.configuration).encode(), saved.encode());
   });
+
+  for (final connected in [false, true]) {
+    test(
+      'provider ${connected ? 'session' : 'selection'} saves Smart preferences without reconnecting',
+      () async {
+        final sourceId = await db.subscriptionDao.insertRow(
+          SubscriptionCompanion.insert(
+            name: 'Provider',
+            url: 'https://example.com/provider',
+            timestamp: DateTime(2026, 10, 12),
+            mode: Value(SubscriptionMode.providerManaged.name),
+          ),
+        );
+        final profileId = await db.coreConfigDao.insertRow(
+          CoreConfigCompanion.insert(
+            name: 'Provider profile',
+            type: CoreConfigType.Remnawave.name,
+            tags: '',
+            delay: PingDelayConstants.unknown,
+            subId: sourceId,
+            data: Value(
+              base64Encode(
+                utf8.encode('{"outbounds":[{"protocol":"freedom"}]}'),
+              ),
+            ),
+          ),
+        );
+        final profile = (await db.coreConfigDao.searchRow(profileId))!;
+        final original = ConnectionConfiguration(
+          connection: ConnectionSettings(
+            selection: ServerSelection.server(profileId),
+          ),
+        );
+        await db.connectionConfigDao.commit(
+          configurationJson: original.encode(),
+        );
+        final runtime = connected
+            ? _runtime(
+                'provider',
+                original,
+                profile: ResolvedProfile.fromRow(profile),
+              )
+            : null;
+        if (connected) {
+          // A mode-only edit keeps the current provider session running even
+          // though its old cache is no longer in the active server list.
+          final source = (await db.subscriptionDao.searchRow(sourceId))!;
+          await db.subscriptionDao.updateRow(
+            source.copyWith(mode: SubscriptionMode.appManaged.name),
+          );
+        }
+        final host = HostConnection(
+          connected ? VpnStatus.connected : VpnStatus.disconnected,
+          runtime: runtime,
+        );
+        final coordinator = await _initialize(
+          ConnectionCoordinator(
+            database: db,
+            readRuntime: () async => runtime,
+            inspect: (_, {observedStatus}) async => host,
+            prepare: (_, _) async => throw StateError(
+              'Smart preferences must not prepare a provider',
+            ),
+            start: (_) async =>
+                throw StateError('Smart preferences must not start a provider'),
+            stop: () async =>
+                throw StateError('Smart preferences must not stop a provider'),
+          ),
+        );
+        var validations = 0;
+        final service = SmartRoutingEditorService(
+          database: db,
+          coordinator: coordinator,
+          loadRegions: () async =>
+              throw StateError('Provider sessions do not use Smart rules'),
+          testXray: (_) async {
+            validations++;
+            return '';
+          },
+        );
+        final smart = SmartRoutingSettings(fragment: true, blockAds: true);
+        expect(
+          await service.save(
+            original: original,
+            smart: smart,
+            confirmReconnect: () async => throw StateError(
+              'Provider sessions do not require Smart reconnects',
+            ),
+          ),
+          isTrue,
+        );
+        expect(validations, 1);
+        final saved = await coordinator.configuration;
+        expect(saved.connection.smart.toJson(), smart.toJson());
+        expect(saved.connection.selection.id, profileId);
+        expect(saved.connection.expert, isFalse);
+        expect(coordinator.state.value.runtime, same(runtime));
+        expect(
+          coordinator.state.value.phase,
+          connected ? ConnectionPhase.connected : ConnectionPhase.disconnected,
+        );
+        expect(await db.coreConfigDao.searchRow(profileId), profile);
+        expect(
+          (await db.subscriptionDao.searchRow(sourceId))!.mode,
+          connected
+              ? SubscriptionMode.appManaged.name
+              : SubscriptionMode.providerManaged.name,
+        );
+      },
+    );
+  }
 
   test(
     'active save cancels without writes and failed reconnect is not restored',
@@ -491,8 +725,9 @@ Future<ConnectionCoordinator> _initialize(
 
 ConnectionRuntime _runtime(
   String digit,
-  ConnectionConfiguration configuration,
-) {
+  ConnectionConfiguration configuration, {
+  ResolvedProfile? profile,
+}) {
   const text = '{"outbounds":[{"protocol":"freedom"}]}';
   return ConnectionRuntime.create(
     configuration: configuration,
@@ -501,6 +736,7 @@ ConnectionRuntime _runtime(
       entries: [],
       finalExit: null,
       nodeTags: {},
+      profile: profile,
     ),
     platform: ConnectionPlatform.android,
     request: StartVpnRequest(

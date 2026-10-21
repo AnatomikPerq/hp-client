@@ -584,6 +584,26 @@ class $SubscriptionTable extends Subscription
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _panelMeta = const VerificationMeta('panel');
+  @override
+  late final GeneratedColumn<String> panel = GeneratedColumn<String>(
+    'panel',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('generic'),
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('appManaged'),
+  );
   static const VerificationMeta _ageSecretKeyMeta = const VerificationMeta(
     'ageSecretKey',
   );
@@ -702,6 +722,8 @@ class $SubscriptionTable extends Subscription
     id,
     name,
     url,
+    panel,
+    mode,
     ageSecretKey,
     agePublicKey,
     hwidEnabled,
@@ -743,6 +765,18 @@ class $SubscriptionTable extends Subscription
       );
     } else if (isInserting) {
       context.missing(_urlMeta);
+    }
+    if (data.containsKey('panel')) {
+      context.handle(
+        _panelMeta,
+        panel.isAcceptableOrUnknown(data['panel']!, _panelMeta),
+      );
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
     }
     if (data.containsKey('age_secret_key')) {
       context.handle(
@@ -848,6 +882,14 @@ class $SubscriptionTable extends Subscription
         DriftSqlType.string,
         data['${effectivePrefix}url'],
       )!,
+      panel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}panel'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
       ageSecretKey: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}age_secret_key'],
@@ -902,6 +944,8 @@ class SubscriptionData extends DataClass
   final int id;
   final String name;
   final String url;
+  final String panel;
+  final String mode;
   final String? ageSecretKey;
   final String? agePublicKey;
   final bool hwidEnabled;
@@ -916,6 +960,8 @@ class SubscriptionData extends DataClass
     required this.id,
     required this.name,
     required this.url,
+    required this.panel,
+    required this.mode,
     this.ageSecretKey,
     this.agePublicKey,
     required this.hwidEnabled,
@@ -933,6 +979,8 @@ class SubscriptionData extends DataClass
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['url'] = Variable<String>(url);
+    map['panel'] = Variable<String>(panel);
+    map['mode'] = Variable<String>(mode);
     if (!nullToAbsent || ageSecretKey != null) {
       map['age_secret_key'] = Variable<String>(ageSecretKey);
     }
@@ -967,6 +1015,8 @@ class SubscriptionData extends DataClass
       id: Value(id),
       name: Value(name),
       url: Value(url),
+      panel: Value(panel),
+      mode: Value(mode),
       ageSecretKey: ageSecretKey == null && nullToAbsent
           ? const Value.absent()
           : Value(ageSecretKey),
@@ -1003,6 +1053,8 @@ class SubscriptionData extends DataClass
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       url: serializer.fromJson<String>(json['url']),
+      panel: serializer.fromJson<String>(json['panel']),
+      mode: serializer.fromJson<String>(json['mode']),
       ageSecretKey: serializer.fromJson<String?>(json['ageSecretKey']),
       agePublicKey: serializer.fromJson<String?>(json['agePublicKey']),
       hwidEnabled: serializer.fromJson<bool>(json['hwidEnabled']),
@@ -1024,6 +1076,8 @@ class SubscriptionData extends DataClass
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'url': serializer.toJson<String>(url),
+      'panel': serializer.toJson<String>(panel),
+      'mode': serializer.toJson<String>(mode),
       'ageSecretKey': serializer.toJson<String?>(ageSecretKey),
       'agePublicKey': serializer.toJson<String?>(agePublicKey),
       'hwidEnabled': serializer.toJson<bool>(hwidEnabled),
@@ -1041,6 +1095,8 @@ class SubscriptionData extends DataClass
     int? id,
     String? name,
     String? url,
+    String? panel,
+    String? mode,
     Value<String?> ageSecretKey = const Value.absent(),
     Value<String?> agePublicKey = const Value.absent(),
     bool? hwidEnabled,
@@ -1055,6 +1111,8 @@ class SubscriptionData extends DataClass
     id: id ?? this.id,
     name: name ?? this.name,
     url: url ?? this.url,
+    panel: panel ?? this.panel,
+    mode: mode ?? this.mode,
     ageSecretKey: ageSecretKey.present ? ageSecretKey.value : this.ageSecretKey,
     agePublicKey: agePublicKey.present ? agePublicKey.value : this.agePublicKey,
     hwidEnabled: hwidEnabled ?? this.hwidEnabled,
@@ -1077,6 +1135,8 @@ class SubscriptionData extends DataClass
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       url: data.url.present ? data.url.value : this.url,
+      panel: data.panel.present ? data.panel.value : this.panel,
+      mode: data.mode.present ? data.mode.value : this.mode,
       ageSecretKey: data.ageSecretKey.present
           ? data.ageSecretKey.value
           : this.ageSecretKey,
@@ -1112,6 +1172,8 @@ class SubscriptionData extends DataClass
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('url: $url, ')
+          ..write('panel: $panel, ')
+          ..write('mode: $mode, ')
           ..write('ageSecretKey: $ageSecretKey, ')
           ..write('agePublicKey: $agePublicKey, ')
           ..write('hwidEnabled: $hwidEnabled, ')
@@ -1131,6 +1193,8 @@ class SubscriptionData extends DataClass
     id,
     name,
     url,
+    panel,
+    mode,
     ageSecretKey,
     agePublicKey,
     hwidEnabled,
@@ -1149,6 +1213,8 @@ class SubscriptionData extends DataClass
           other.id == this.id &&
           other.name == this.name &&
           other.url == this.url &&
+          other.panel == this.panel &&
+          other.mode == this.mode &&
           other.ageSecretKey == this.ageSecretKey &&
           other.agePublicKey == this.agePublicKey &&
           other.hwidEnabled == this.hwidEnabled &&
@@ -1165,6 +1231,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
   final Value<int> id;
   final Value<String> name;
   final Value<String> url;
+  final Value<String> panel;
+  final Value<String> mode;
   final Value<String?> ageSecretKey;
   final Value<String?> agePublicKey;
   final Value<bool> hwidEnabled;
@@ -1179,6 +1247,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.url = const Value.absent(),
+    this.panel = const Value.absent(),
+    this.mode = const Value.absent(),
     this.ageSecretKey = const Value.absent(),
     this.agePublicKey = const Value.absent(),
     this.hwidEnabled = const Value.absent(),
@@ -1194,6 +1264,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
     this.id = const Value.absent(),
     required String name,
     required String url,
+    this.panel = const Value.absent(),
+    this.mode = const Value.absent(),
     this.ageSecretKey = const Value.absent(),
     this.agePublicKey = const Value.absent(),
     this.hwidEnabled = const Value.absent(),
@@ -1211,6 +1283,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
     Expression<int>? id,
     Expression<String>? name,
     Expression<String>? url,
+    Expression<String>? panel,
+    Expression<String>? mode,
     Expression<String>? ageSecretKey,
     Expression<String>? agePublicKey,
     Expression<bool>? hwidEnabled,
@@ -1226,6 +1300,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (url != null) 'url': url,
+      if (panel != null) 'panel': panel,
+      if (mode != null) 'mode': mode,
       if (ageSecretKey != null) 'age_secret_key': ageSecretKey,
       if (agePublicKey != null) 'age_public_key': agePublicKey,
       if (hwidEnabled != null) 'hwid_enabled': hwidEnabled,
@@ -1243,6 +1319,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
     Value<int>? id,
     Value<String>? name,
     Value<String>? url,
+    Value<String>? panel,
+    Value<String>? mode,
     Value<String?>? ageSecretKey,
     Value<String?>? agePublicKey,
     Value<bool>? hwidEnabled,
@@ -1258,6 +1336,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
       id: id ?? this.id,
       name: name ?? this.name,
       url: url ?? this.url,
+      panel: panel ?? this.panel,
+      mode: mode ?? this.mode,
       ageSecretKey: ageSecretKey ?? this.ageSecretKey,
       agePublicKey: agePublicKey ?? this.agePublicKey,
       hwidEnabled: hwidEnabled ?? this.hwidEnabled,
@@ -1282,6 +1362,12 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
     }
     if (url.present) {
       map['url'] = Variable<String>(url.value);
+    }
+    if (panel.present) {
+      map['panel'] = Variable<String>(panel.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
     }
     if (ageSecretKey.present) {
       map['age_secret_key'] = Variable<String>(ageSecretKey.value);
@@ -1322,6 +1408,8 @@ class SubscriptionCompanion extends UpdateCompanion<SubscriptionData> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('url: $url, ')
+          ..write('panel: $panel, ')
+          ..write('mode: $mode, ')
           ..write('ageSecretKey: $ageSecretKey, ')
           ..write('agePublicKey: $agePublicKey, ')
           ..write('hwidEnabled: $hwidEnabled, ')
@@ -2663,6 +2751,8 @@ typedef $$SubscriptionTableCreateCompanionBuilder =
       Value<int> id,
       required String name,
       required String url,
+      Value<String> panel,
+      Value<String> mode,
       Value<String?> ageSecretKey,
       Value<String?> agePublicKey,
       Value<bool> hwidEnabled,
@@ -2679,6 +2769,8 @@ typedef $$SubscriptionTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> name,
       Value<String> url,
+      Value<String> panel,
+      Value<String> mode,
       Value<String?> ageSecretKey,
       Value<String?> agePublicKey,
       Value<bool> hwidEnabled,
@@ -2712,6 +2804,16 @@ class $$SubscriptionTableFilterComposer
 
   ColumnFilters<String> get url => $composableBuilder(
     column: $table.url,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get panel => $composableBuilder(
+    column: $table.panel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2790,6 +2892,16 @@ class $$SubscriptionTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get panel => $composableBuilder(
+    column: $table.panel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get ageSecretKey => $composableBuilder(
     column: $table.ageSecretKey,
     builder: (column) => ColumnOrderings(column),
@@ -2858,6 +2970,12 @@ class $$SubscriptionTableAnnotationComposer
 
   GeneratedColumn<String> get url =>
       $composableBuilder(column: $table.url, builder: (column) => column);
+
+  GeneratedColumn<String> get panel =>
+      $composableBuilder(column: $table.panel, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
 
   GeneratedColumn<String> get ageSecretKey => $composableBuilder(
     column: $table.ageSecretKey,
@@ -2940,6 +3058,8 @@ class $$SubscriptionTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> url = const Value.absent(),
+                Value<String> panel = const Value.absent(),
+                Value<String> mode = const Value.absent(),
                 Value<String?> ageSecretKey = const Value.absent(),
                 Value<String?> agePublicKey = const Value.absent(),
                 Value<bool> hwidEnabled = const Value.absent(),
@@ -2954,6 +3074,8 @@ class $$SubscriptionTableTableManager
                 id: id,
                 name: name,
                 url: url,
+                panel: panel,
+                mode: mode,
                 ageSecretKey: ageSecretKey,
                 agePublicKey: agePublicKey,
                 hwidEnabled: hwidEnabled,
@@ -2970,6 +3092,8 @@ class $$SubscriptionTableTableManager
                 Value<int> id = const Value.absent(),
                 required String name,
                 required String url,
+                Value<String> panel = const Value.absent(),
+                Value<String> mode = const Value.absent(),
                 Value<String?> ageSecretKey = const Value.absent(),
                 Value<String?> agePublicKey = const Value.absent(),
                 Value<bool> hwidEnabled = const Value.absent(),
@@ -2984,6 +3108,8 @@ class $$SubscriptionTableTableManager
                 id: id,
                 name: name,
                 url: url,
+                panel: panel,
+                mode: mode,
                 ageSecretKey: ageSecretKey,
                 agePublicKey: agePublicKey,
                 hwidEnabled: hwidEnabled,

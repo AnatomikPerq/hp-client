@@ -291,9 +291,9 @@ CoreConfigData _row(
   int id, {
   int delay = 10,
   int source = 0,
-  String region = 'US',
   String type = 'outbound',
   String name = 'Same name',
+  String? region,
 }) => CoreConfigData(
   id: id,
   name: name,

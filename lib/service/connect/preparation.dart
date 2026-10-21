@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
+import 'package:onexray/core/model/geo_data_type.dart';
 import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
@@ -60,23 +62,107 @@ Future<void> ensureSystemProxyPortFree(int port) async {
   }
 }
 
+bool _inboundConflictsWithHttpApi(Map<String, dynamic> inbound, int port) {
+  if (inbound['tag'] == 'tunIn' ||
+      !ConnectionCompiler.portIncludes(inbound['port'], port)) {
+    return false;
+  }
+  final protocol = '${inbound['protocol']}'.toLowerCase();
+  if (protocol == 'tun' || protocol == 'wireguard') return false;
+  final stream = inbound['streamSettings'];
+  final transport = stream is Map
+      ? '${stream['method'] ?? stream['network']}'.toLowerCase()
+      : null;
+  if (const ['kcp', 'mkcp', 'hysteria'].contains(transport)) {
+    return false;
+  }
+  if (stream is Map && '${stream['security']}'.toLowerCase() == 'tls') {
+    final tls = stream['tlsSettings'];
+    final configuredAlpn = tls is Map ? tls['alpn'] : null;
+    final alpn = configuredAlpn is String
+        ? configuredAlpn.split(',')
+        : configuredAlpn;
+    if (const ['xhttp', 'splithttp'].contains(transport) &&
+        alpn is List &&
+        alpn.length == 1 &&
+        alpn.single == 'h3') {
+      return false;
+    }
+    // MASQUE selects TCP only when its TLS ALPN includes HTTP/2.
+    if (transport == 'masque' &&
+        (alpn == null || (alpn is List && !alpn.contains('h2')))) {
+      return false;
+    }
+  }
+  final settings = inbound['settings'];
+  if (settings is Map &&
+      const ['tunnel', 'dokodemo-door', 'shadowsocks'].contains(protocol)) {
+    final network =
+        settings['network'] ??
+        (protocol == 'shadowsocks' ? null : settings['allowedNetwork']);
+    final networks = network is String ? network.split(',') : network;
+    if (networks is List &&
+        (protocol != 'shadowsocks' || networks.isNotEmpty) &&
+        !networks.any((value) => '$value'.toLowerCase() == 'tcp')) {
+      return false;
+    }
+  }
+  final listen = inbound['listen'];
+  if (listen == null) return true;
+  if (listen is! String) return false;
+  var listenAddress = listen;
+  if (listenAddress.startsWith('[') && listenAddress.endsWith(']')) {
+    listenAddress = listenAddress.substring(1, listenAddress.length - 1);
+  }
+  listenAddress = listenAddress.trim();
+  if (listenAddress.isEmpty || listenAddress == 'localhost') return true;
+  final address = InternetAddress.tryParse(listenAddress);
+  if (address == null) return false; // Unix sockets do not occupy the API port.
+  var bytes = address.rawAddress;
+  if (address.type == InternetAddressType.IPv6) {
+    if (bytes.every((value) => value == 0)) {
+      final sockopt = stream is Map ? stream['sockopt'] : null;
+      return sockopt is! Map || sockopt['v6only'] != true;
+    }
+    if (bytes.take(10).every((value) => value == 0) &&
+        bytes[10] == 255 &&
+        bytes[11] == 255) {
+      bytes = bytes.sublist(12);
+    } else {
+      return false;
+    }
+  }
+  return bytes.every((value) => value == 0) ||
+      (bytes[0] == 127 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 1);
+}
+
 /// Resolves and compiles without publishing settings or starting a VPN.
 class ConnectionPreparation {
   final AppDatabase db;
   final ConnectionResolver resolver;
+  final Future<List<int>> Function(int count, {List<int>? excludePorts})?
+  getFreePorts;
+  final LocalApiService _localApi;
+  final Future<void> Function(Map<String, GeoDataType>) _requireDependencies;
 
-  ConnectionPreparation({AppDatabase? db, ConnectionResolver? resolver})
-    : db = db ?? AppDatabase(),
-      resolver =
-          resolver ??
-          ConnectionResolver(
-            rows: () {
-              final database = db ?? AppDatabase();
-              return (database.select(
-                database.coreConfig,
-              )..where((row) => row.type.equals('outbound'))).watch();
-            },
-          );
+  ConnectionPreparation({
+    AppDatabase? db,
+    ConnectionResolver? resolver,
+    this.getFreePorts,
+    LocalApiService? localApi,
+    Future<void> Function(Map<String, GeoDataType>)? requireDependencies,
+  }) : db = db ?? AppDatabase(),
+       _localApi = localApi ?? LocalApiService.instance,
+       _requireDependencies =
+           requireDependencies ?? GeoDataService().requireDependencies,
+       resolver =
+           resolver ??
+           ConnectionResolver(
+             rows: () {
+               final database = db ?? AppDatabase();
+               return database.coreConfigDao.watchOutbounds();
+             },
+           );
 
   Future<ConnectionRuntime> prepare(
     ConnectionConfiguration input, {
@@ -91,6 +177,37 @@ class ConnectionPreparation {
     var settings = input.connection;
     final policy = input.policy;
     final platform = connectionPlatform;
+    ResolvedProfile? profile;
+    CoreConfigData? profileRow;
+    if (!settings.expert && settings.selection.kind == SelectionKind.server) {
+      final id = settings.selection.id!;
+      final selected = await db.coreConfigDao.searchRow(id);
+      if (selected == null) {
+        throw const ConnectionResolutionException(
+          ConnectionResolutionFailure.selectionUnavailable,
+        );
+      }
+      final active = await db.coreConfigDao.searchActiveServerRow(id);
+      if (active == null) {
+        throw const FormatException(
+          'The selected configuration is incompatible with the subscription mode',
+        );
+      }
+      if (selected.type == CoreConfigType.Remnawave.name) {
+        profileRow = active;
+        profile = ResolvedProfile.fromRow(active);
+        onResolved?.call({profile.id});
+      }
+    } else if (!settings.expert &&
+        settings.selection.kind == SelectionKind.source &&
+        settings.selection.id! > 0) {
+      final source = await db.subscriptionDao.searchRow(settings.selection.id!);
+      if (source == null || source.mode != SubscriptionMode.appManaged.name) {
+        throw const FormatException(
+          'Choose an individual provider configuration',
+        );
+      }
+    }
     final systemProxy = policy.usesSystemProxy(platform);
     // Proxy mode has no tunnel: no adapter settings, no interface binding.
     if (!systemProxy) {
@@ -111,7 +228,8 @@ class ConnectionPreparation {
         throw const FormatException('Raw configuration is empty');
       }
       raw = utf8.decode(base64Decode(row.data!));
-    } else if (!settings.expert &&
+    } else if (profile == null &&
+        !settings.expert &&
         settings.trafficMode == TrafficMode.custom &&
         custom == null) {
       final row = settings.customId == null
@@ -123,49 +241,72 @@ class ConnectionPreparation {
       custom = CustomRoutingService.readConfiguration(row);
     }
     String? notice;
-    List<ResolvedServer> entries;
-    try {
-      entries = await resolver.resolve(
-        settings,
-        custom: custom,
-        cancelled: cancelled,
-      );
-    } on ConnectionResolutionException catch (error) {
-      if (settings.selection.kind == SelectionKind.automatic ||
-          !{
-            ConnectionResolutionFailure.selectionUnavailable,
-            ConnectionResolutionFailure.insufficientHealthyServers,
-          }.contains(error.reason)) {
-        rethrow;
+    List<ResolvedServer> entries = const [];
+    if (profile == null) {
+      try {
+        entries = await resolver.resolve(
+          settings,
+          custom: custom,
+          cancelled: cancelled,
+        );
+      } on ConnectionResolutionException catch (error) {
+        if (settings.selection.kind == SelectionKind.server &&
+            await db.coreConfigDao.searchActiveOutboundRow(
+                  settings.selection.id!,
+                ) ==
+                null) {
+          throw const FormatException(
+            'The selected configuration is unavailable in the subscription mode',
+          );
+        }
+        if (settings.selection.kind == SelectionKind.source &&
+            settings.selection.id! > 0 &&
+            (await db.subscriptionDao.searchRow(settings.selection.id!))
+                    ?.mode !=
+                SubscriptionMode.appManaged.name) {
+          throw const FormatException('The selected subscription mode changed');
+        }
+        if (settings.selection.kind == SelectionKind.automatic ||
+            !{
+              ConnectionResolutionFailure.selectionUnavailable,
+              ConnectionResolutionFailure.insufficientHealthyServers,
+            }.contains(error.reason)) {
+          rethrow;
+        }
+        settings = ConnectionSettings.fromJson({
+          ...settings.toJson(),
+          'selection': const ServerSelection.automatic().toJson(),
+        });
+        entries = await resolver.resolve(
+          settings,
+          custom: custom,
+          cancelled: cancelled,
+        );
+        configuration = ConnectionConfiguration(
+          connection: settings,
+          policy: policy,
+        );
+        notice = 'selectionReset';
       }
-      settings = ConnectionSettings.fromJson({
-        ...settings.toJson(),
-        'selection': const ServerSelection.automatic().toJson(),
-      });
-      entries = await resolver.resolve(
-        settings,
-        custom: custom,
-        cancelled: cancelled,
-      );
-      configuration = ConnectionConfiguration(
-        connection: settings,
-        policy: policy,
-      );
-      notice = 'selectionReset';
     }
     entries = [for (final entry in entries) serverDrafts[entry.id] ?? entry];
     onResolved?.call({
       for (final entry in entries) entry.id,
-      if (settings.finalExitId != null) settings.finalExitId!,
+      if (profile != null) profile.id,
+      if (profile == null && settings.finalExitId != null)
+        settings.finalExitId!,
     });
     ResolvedServer? finalExit;
-    if (settings.finalExitId != null) {
-      final row = await db.coreConfigDao.searchRow(settings.finalExitId!);
+    if (profile == null && settings.finalExitId != null) {
+      final row = await db.coreConfigDao.searchActiveOutboundRow(
+        settings.finalExitId!,
+      );
       if (row == null) throw const FormatException('Final exit is unavailable');
       finalExit = serverDrafts[row.id] ?? ResolvedServer.fromRow(row);
     }
     var regions = const RegionCatalog.empty();
-    if (!settings.expert &&
+    if (profile == null &&
+        !settings.expert &&
         settings.trafficMode == TrafficMode.smart &&
         settings.smart.directRegions.isNotEmpty) {
       Future<Map<String, dynamic>> readIndex(String name) async => jsonDecode(
@@ -180,7 +321,10 @@ class ConnectionPreparation {
     }
     final rawConfig = raw == null ? null : ConnectionCompiler.parseRawJson(raw);
     final userInbounds =
-        rawConfig?['inbounds'] ?? custom?.toJson()['inbounds'] ?? [];
+        profile?.config['inbounds'] ??
+        rawConfig?['inbounds'] ??
+        custom?.toJson()['inbounds'] ??
+        [];
     if (userInbounds is! List ||
         userInbounds.any((entry) => entry is! Map<String, dynamic>)) {
       throw const FormatException('inbounds must be an object array');
@@ -191,8 +335,25 @@ class ConnectionPreparation {
     if (proxyPort != null && reuse == null) {
       await ensureSystemProxyPortFree(proxyPort);
     }
-    final apiPort = await LocalApiService.instance.reservedPort();
-    final shareLanProxy = !settings.expert && policy.lanProxyEnabled;
+    final apiPort = await _localApi.reservedPort();
+    if (apiPort != null) {
+      var apiEnabled = _localApi.listening;
+      try {
+        apiEnabled = apiEnabled || (await _localApi.load()).enabled;
+      } catch (_) {
+        // An unavailable optional API preference must not block VPN startup.
+      }
+      if (apiEnabled &&
+          userInbounds.cast<Map<String, dynamic>>().any(
+            (inbound) => _inboundConflictsWithHttpApi(inbound, apiPort),
+          )) {
+        throw const FormatException(
+          'Configuration inbound conflicts with the HTTP API port',
+        );
+      }
+    }
+    final shareLanProxy =
+        profile == null && !settings.expert && policy.lanProxyEnabled;
     if (shareLanProxy && policy.lanProxyPort == apiPort) {
       throw const FormatException(
         'LAN proxy port conflicts with the HTTP API port',
@@ -207,6 +368,7 @@ class ConnectionPreparation {
     final allocated = await allocateRuntimePorts(
       userInbounds.cast<Map<String, dynamic>>(),
       excludePorts: [?apiPort, ?proxyPort, ?lanPort],
+      getFreePorts: getFreePorts,
     );
     final ports = reuse == null
         ? [proxyPort ?? allocated[0], allocated[1]]
@@ -216,8 +378,10 @@ class ConnectionPreparation {
           ];
     // Desktop Cores outlive UAC prompts; switching nodes on them goes through
     // their API instead of a restart. Raw keeps its own API setup, if any.
+    // A provider configuration owns its graph like Raw does.
     LiveControl? control;
     if (!settings.expert &&
+        profile == null &&
         (platform == ConnectionPlatform.windows ||
             platform == ConnectionPlatform.linux)) {
       control =
@@ -226,6 +390,7 @@ class ConnectionPreparation {
             (await allocateRuntimePorts(
               userInbounds.cast<Map<String, dynamic>>(),
               excludePorts: [?apiPort, ...ports, ?lanPort],
+              getFreePorts: getFreePorts,
             ))[0],
           );
     }
@@ -252,8 +417,11 @@ class ConnectionPreparation {
         finalExit: finalExit,
         minewire: minewire,
         rawConfig: rawConfig,
+        profile: profile,
+        profileRow: profileRow,
         custom: custom,
         regions: regions,
+        shareLanProxy: shareLanProxy,
         serverDrafts: serverDrafts,
         notice: notice,
         control: control,
@@ -277,8 +445,11 @@ class ConnectionPreparation {
     required ResolvedServer? finalExit,
     required MinewireMaterialized minewire,
     required Map<String, dynamic>? rawConfig,
+    required ResolvedProfile? profile,
+    required CoreConfigData? profileRow,
     required RoutingConfiguration? custom,
     required RegionCatalog regions,
+    required bool shareLanProxy,
     required Map<int, ResolvedServer> serverDrafts,
     required String? notice,
     required LiveControl? control,
@@ -290,6 +461,7 @@ class ConnectionPreparation {
       entries: runtimeServers.take(entries.length).toList(),
       finalExit: finalExit == null ? null : runtimeServers.last,
       raw: rawConfig,
+      profile: profile,
       custom: custom,
       regions: regions,
       options: RuntimeOptions(
@@ -297,7 +469,7 @@ class ConnectionPreparation {
         sessionDirectory: VpnConstants.runDir,
         socksPort: ports[0],
         metricsPort: ports[1],
-        lanProxyEnabled: !settings.expert && policy.lanProxyEnabled,
+        lanProxyEnabled: shareLanProxy,
         lanProxyPort: policy.lanProxyPort,
         lanProxyUser: policy.lanProxyUser,
         lanProxyPassword: policy.lanProxyPassword,
@@ -323,13 +495,14 @@ class ConnectionPreparation {
         entries: compiled.entries,
         finalExit: compiled.finalExit,
         nodeTags: compiled.nodeTags,
+        profile: compiled.profile,
       );
     }
-    await GeoDataService().requireDependencies(
+    await _requireDependencies(
       geoDataReferences(jsonDecode(compiled.xrayJson) as Map<String, dynamic>),
     );
     for (final server in [...entries, ?finalExit]) {
-      final row = await db.coreConfigDao.searchRow(server.id);
+      final row = await db.coreConfigDao.searchActiveOutboundRow(server.id);
       if (row == null ||
           row.type != 'outbound' ||
           (!serverDrafts.containsKey(row.id) &&
@@ -337,6 +510,20 @@ class ConnectionPreparation {
                   server.outboundJson)) {
         throw const FormatException(
           'A selected server changed during preparation',
+        );
+      }
+    }
+    if (profileRow != null) {
+      final current = await db.coreConfigDao.searchActiveServerRow(
+        profileRow.id,
+      );
+      if (current == null ||
+          current.type != profileRow.type ||
+          current.subId != profileRow.subId ||
+          current.data != profileRow.data ||
+          current.name != profileRow.name) {
+        throw const FormatException(
+          'A selected provider configuration changed during preparation',
         );
       }
     }

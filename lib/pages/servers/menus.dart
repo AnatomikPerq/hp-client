@@ -12,15 +12,22 @@ Future<ServerAction?> showServerActionsMenu(
   required String name,
   required String source,
   bool favorite = false,
+  bool provider = false,
 }) => showAppDialog<ServerAction>(
   context,
-  (_) => ServerActionsMenu(name: name, source: source, favorite: favorite),
+  (_) => ServerActionsMenu(
+    name: name,
+    source: source,
+    favorite: favorite,
+    provider: provider,
+  ),
 );
 
 /// Desktop: the same actions as a popup next to the button that opened it.
 Future<ServerAction?> showServerActionsPopup(
   BuildContext anchor, {
   bool favorite = false,
+  bool provider = false,
 }) {
   final l = AppLocalizations.of(anchor)!;
   return _popup<ServerAction>(anchor, [
@@ -30,29 +37,30 @@ Future<ServerAction?> showServerActionsPopup(
       favorite ? LucideIcons.starOff : LucideIcons.star,
       favorite ? l.prototypeRemoveFavorite : l.prototypeAddFavorite,
     ),
-    _popupItem(
-      anchor,
-      ServerAction.test,
-      LucideIcons.gauge,
-      l.prototypeTestAgain,
-    ),
+    if (!provider)
+      _popupItem(
+        anchor,
+        ServerAction.test,
+        LucideIcons.gauge,
+        l.prototypeTestAgain,
+      ),
     _popupItem(
       anchor,
       ServerAction.edit,
-      LucideIcons.pencil,
-      l.prototypeEditServer,
+      provider ? LucideIcons.fileJson : LucideIcons.pencil,
+      provider ? l.providerViewConfiguration : l.prototypeEditServer,
     ),
     _popupItem(
       anchor,
       ServerAction.copy,
       LucideIcons.copy,
-      l.prototypeSaveAsLocalServer,
+      provider ? l.providerCopyAsRaw : l.prototypeSaveAsLocalServer,
     ),
     _popupItem(
       anchor,
       ServerAction.share,
       LucideIcons.share2,
-      l.prototypeShareServer,
+      provider ? l.prototypeShare : l.prototypeShareServer,
     ),
     const PopupMenuDivider(),
     _popupItem(
@@ -65,7 +73,10 @@ Future<ServerAction?> showServerActionsPopup(
   ]);
 }
 
-Future<SourceAction?> showSourceActionsPopup(BuildContext anchor) {
+Future<SourceAction?> showSourceActionsPopup(
+  BuildContext anchor, {
+  bool provider = false,
+}) {
   final l = AppLocalizations.of(anchor)!;
   return _popup<SourceAction>(anchor, [
     _popupItem(
@@ -74,12 +85,13 @@ Future<SourceAction?> showSourceActionsPopup(BuildContext anchor) {
       LucideIcons.refreshCw,
       l.prototypeCheckForUpdates,
     ),
-    _popupItem(
-      anchor,
-      SourceAction.test,
-      LucideIcons.gauge,
-      l.prototypeTestServers,
-    ),
+    if (!provider)
+      _popupItem(
+        anchor,
+        SourceAction.test,
+        LucideIcons.gauge,
+        l.prototypeTestServers,
+      ),
     _popupItem(
       anchor,
       SourceAction.edit,
@@ -168,9 +180,10 @@ Future<SourceAction?> showSourceActionsMenu(
   BuildContext context, {
   required String name,
   required int count,
+  bool provider = false,
 }) => showAppDialog<SourceAction>(
   context,
-  (_) => SourceActionsMenu(name: name, count: count),
+  (_) => SourceActionsMenu(name: name, count: count, provider: provider),
 );
 
 /// Selects an action only; the caller keeps the controller's existing workflow.
@@ -180,11 +193,13 @@ class ServerActionsMenu extends StatelessWidget {
     required this.name,
     required this.source,
     this.favorite = false,
+    this.provider = false,
   });
 
   final String name;
   final String source;
   final bool favorite;
+  final bool provider;
 
   @override
   Widget build(BuildContext context) {
@@ -203,30 +218,35 @@ class ServerActionsMenu extends StatelessWidget {
           _menuRow(
             context,
             ServerAction.edit,
-            LucideIcons.pencil,
-            l.prototypeEditServer,
-            hint: l.prototypeEditServerHint,
+            provider ? LucideIcons.fileJson : LucideIcons.pencil,
+            provider ? l.providerViewConfiguration : l.prototypeEditServer,
+            hint: provider
+                ? l.providerViewConfigurationHint
+                : l.prototypeEditServerHint,
           ),
-          _menuRow(
-            context,
-            ServerAction.test,
-            LucideIcons.refreshCw,
-            l.prototypeTestAgain,
-            hint: l.prototypeRetestHint,
-          ),
+          if (!provider)
+            _menuRow(
+              context,
+              ServerAction.test,
+              LucideIcons.refreshCw,
+              l.prototypeTestAgain,
+              hint: l.prototypeRetestHint,
+            ),
           _menuRow(
             context,
             ServerAction.copy,
             LucideIcons.copy,
-            l.prototypeSaveAsLocalServer,
-            hint: l.prototypeLocalCopyHint,
+            provider ? l.providerCopyAsRaw : l.prototypeSaveAsLocalServer,
+            hint: provider ? l.providerCopyAsRawHint : l.prototypeLocalCopyHint,
           ),
           _menuRow(
             context,
             ServerAction.share,
             LucideIcons.share2,
-            l.prototypeShareServer,
-            hint: l.prototypeShareServerHint,
+            provider ? l.prototypeShare : l.prototypeShareServer,
+            hint: provider
+                ? l.prototypeRawJsonShareWarning
+                : l.prototypeShareServerHint,
           ),
           _menuRow(
             context,
@@ -242,17 +262,25 @@ class ServerActionsMenu extends StatelessWidget {
 }
 
 class SourceActionsMenu extends StatelessWidget {
-  const SourceActionsMenu({super.key, required this.name, required this.count});
+  const SourceActionsMenu({
+    super.key,
+    required this.name,
+    required this.count,
+    this.provider = false,
+  });
 
   final String name;
   final int count;
+  final bool provider;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     return AppDialog(
       title: name,
-      subtitle: l.prototypeServerCount(count),
+      subtitle: provider
+          ? l.providerConfigurationCount(count)
+          : l.prototypeServerCount(count),
       body: Column(
         children: [
           _menuRow(
@@ -262,13 +290,14 @@ class SourceActionsMenu extends StatelessWidget {
             l.prototypeCheckForUpdates,
             hint: l.prototypeSourceUpdateHint,
           ),
-          _menuRow(
-            context,
-            SourceAction.test,
-            LucideIcons.refreshCw,
-            l.prototypeTestServers,
-            hint: l.prototypeRetestHint,
-          ),
+          if (!provider)
+            _menuRow(
+              context,
+              SourceAction.test,
+              LucideIcons.refreshCw,
+              l.prototypeTestServers,
+              hint: l.prototypeRetestHint,
+            ),
           _menuRow(
             context,
             SourceAction.edit,

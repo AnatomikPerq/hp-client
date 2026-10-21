@@ -3,9 +3,49 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
+import 'package:onexray/service/connect/routing/custom/advanced.dart';
+import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/shared/xray/validation.dart';
+import 'package:onexray/service/shared/xray/remnawave.dart';
 
 void main() {
+  test('provider validation retains adapted graph and replaces only the disposable tunnel', () {
+    final source = <String, dynamic>{
+      'inbounds': [
+        {'tag': 'provider', 'protocol': 'http', 'port': 1080},
+      ],
+      'outbounds': [
+        {'tag': 'first', 'protocol': 'freedom'},
+      ],
+      'dns': {
+        'servers': ['fakedns', '1.1.1.1'],
+      },
+      'fakedns': [
+        {'ipPool': '198.19.0.0/16', 'poolSize': 1024},
+      ],
+      'routing': {
+        'domainStrategy': 'IPIfNonMatch',
+        'rules': [
+          {
+            'inboundTag': ['provider'],
+            'outboundTag': 'first',
+          },
+        ],
+      },
+    };
+    final adapted = RemnawaveAdapter.adapt(source);
+    final validation = jsonDecode(XrayValidation.raw(adapted));
+    expect(validation['routing'], adapted['routing']);
+    expect(validation['outbounds'], adapted['outbounds']);
+    expect(validation['fakedns'], source['fakedns']);
+    final inbounds = validation['inbounds'] as List;
+    expect(inbounds.first['protocol'], 'socks');
+    expect(inbounds.first['tag'], 'tunIn');
+    expect(inbounds.first['sniffing']['destOverride'], contains('fakedns'));
+    expect((adapted['inbounds'] as List).first['protocol'], 'tun');
+    expect((source['inbounds'] as List).single['tag'], 'provider');
+  });
+
   test(
     'node validation preserves protocol fields without runtime resources',
     () {
@@ -61,7 +101,16 @@ void main() {
     final actual = jsonDecode(XrayValidation.normal(config));
     expect(actual['routing'], config.routing!.toJson());
     expect(actual['dns'], config.dns!.toJson());
-    expect(actual.keys.toSet(), {'env', 'log', 'outbounds', 'routing', 'dns'});
+    expect(actual['inbounds'].single['protocol'], 'socks');
+    expect(actual['inbounds'].single['listen'], '127.0.0.1');
+    expect(actual.keys.toSet(), {
+      'env',
+      'log',
+      'outbounds',
+      'routing',
+      'dns',
+      'inbounds',
+    });
     expect(jsonEncode(config.toJson()), before);
   });
 
@@ -79,6 +128,7 @@ void main() {
             'enabled': true,
             'routeOnly': true,
             'domainsExcluded': ['ext:missing.dat:cn'],
+            'ipsExcluded': ['ext:missing-ip.dat:private'],
           },
         },
         {'tag': 'local', 'protocol': 'socks', 'port': 1080},
@@ -206,5 +256,66 @@ void main() {
       expect(actual[entry.key], entry.value);
     }
     expect(jsonDecode(XrayValidation.nodes([false]))['outbounds'], [false]);
+  });
+
+  test('advanced and Raw validation preserve native DNS and sniffing maps after DTO reduction', () {
+    final dns = <String, dynamic>{
+      'serveStale': true,
+      'serveExpiredTTL': 300,
+      'enableParallelQuery': true,
+      'servers': [
+        {
+          'address': 'tcp://8.8.8.8',
+          'timeoutMs': 1200,
+          'disableCache': true,
+          'expectedIPs': ['geoip:CN'],
+          'unexpectedIPs': ['geoip:PRIVATE'],
+          'serveStale': false,
+          'serveExpiredTTL': 60,
+        },
+        {
+          'address': 'tcp://1.1.1.1',
+          'timeoutMs': 4000,
+          'disableCache': false,
+          'expectIPs': ['!geoip:PRIVATE'],
+        },
+      ],
+    };
+    final sniffing = <String, dynamic>{
+      'enabled': true,
+      'routeOnly': true,
+      'destOverride': ['http', 'tls', 'quic'],
+      'domainsExcluded': ['domain:private.example'],
+      'ipsExcluded': ['192.0.2.0/24'],
+    };
+    final raw = <String, dynamic>{
+      'dns': dns,
+      'outbounds': [
+        {'protocol': 'freedom'},
+      ],
+      'inbounds': [
+        {'tag': 'tunIn', 'protocol': 'tun', 'sniffing': sniffing},
+      ],
+    };
+    final before = jsonEncode(raw);
+    final rawProjection = jsonDecode(XrayValidation.raw(raw));
+    expect(rawProjection['dns'], dns);
+    expect(rawProjection['inbounds'].single['sniffing'], sniffing);
+    final advanced = AdvancedRoutingDocument.fromJson({
+      'name': 'Advanced DNS',
+      'outbounds': [<String, dynamic>{}],
+      'dns': dns,
+      'inbounds': [
+        {'tag': 'tunIn', 'sniffing': sniffing},
+      ],
+    }).state;
+    final projection = jsonDecode(
+      CustomRoutingService.validationJson(advanced),
+    );
+    expect(projection['dns'], dns);
+    expect(projection['inbounds'].single['sniffing'], sniffing);
+    expect(advanced.toJson()['dns'], dns);
+    expect(advanced.toJson()['inbounds'].single['sniffing'], sniffing);
+    expect(jsonEncode(raw), before);
   });
 }

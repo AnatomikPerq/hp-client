@@ -43,6 +43,18 @@ class ServerBrowser extends StatelessWidget {
     final l = AppLocalizations.of(context)!;
     final palette = ColorManager.palette(context);
     if (controller.servers.isEmpty) {
+      // Sources whose current mode has nothing cached yet.
+      if (controller.sources.isNotEmpty) {
+        return PageEmptyState(
+          title: l.subscriptionModeNoCacheTitle,
+          description: l.subscriptionModeNeedsRefresh,
+          primaryLabel: l.prototypeUpdatesAndSources,
+          onPrimary: () => controller.openSources(context),
+          secondaryLabel: l.prototypeAddServer,
+          onSecondary: () => controller.addServers(context),
+          scrollController: scroll,
+        );
+      }
       return PageEmptyState(
         title: l.prototypeNoServersYet,
         description: l.prototypeAddProviderSubscriptionHint,
@@ -543,16 +555,43 @@ class ServerGroupCard extends StatelessWidget {
     side: BorderSide(color: ColorManager.palette(context).border),
   );
 
-  Widget _empty(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-    child: Text(
-      AppLocalizations.of(context)!.prototypeNoServersYet,
-      textAlign: TextAlign.center,
-      style: AppTypography.rowValue.copyWith(
-        color: ColorManager.palette(context).mutedForeground,
-      ),
-    ),
-  );
+  Widget _empty(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final muted = ColorManager.palette(context).mutedForeground;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      child: group.source == null
+          ? Text(
+              l.prototypeNoServersYet,
+              textAlign: TextAlign.center,
+              style: AppTypography.rowValue.copyWith(color: muted),
+            )
+          // The source's current mode has no cached rows yet.
+          : Column(
+              children: [
+                Text(
+                  controller.providerGroup(group)
+                      ? l.subscriptionModeProviderManaged
+                      : l.subscriptionModeAppManaged,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.rowTitle,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l.subscriptionModeNoCacheTitle,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.rowValue.copyWith(color: muted),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l.subscriptionModeNeedsRefresh,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.serverDetail.copyWith(color: muted),
+                ),
+              ],
+            ),
+    );
+  }
 
   Widget _row(BuildContext context, CoreConfigData row) {
     final l = AppLocalizations.of(context)!;
@@ -726,6 +765,8 @@ class ServerGroupCard extends StatelessWidget {
     final cancelling = controller.cancellingGroup(group);
     // Narrow screens keep refresh in the subscription menu.
     final mobile = _mobile(context);
+    // Provider configurations are chosen one by one and never pinged.
+    final provider = controller.providerGroup(group);
     return [
       if (source != null && !mobile)
         _HeaderButton(
@@ -740,24 +781,25 @@ class ServerGroupCard extends StatelessWidget {
                   SourceAction.update,
                 ),
         ),
-      _HeaderButton(
-        tooltip: testing
-            ? cancelling
-                  ? l.prototypePleaseWait
-                  : l.prototypeCancel
-            : l.prototypeTestServers,
-        icon: LucideIcons.gauge,
-        // A running test spins; a tap cancels it.
-        busy: testing,
-        onPressed: testing
-            ? cancelling
-                  ? null
-                  : () => controller.cancelTest(group.id)
-            : group.rows.isEmpty || group.rows.any(controller.serverBusy)
-            ? null
-            : () => controller.test(context, group.rows, groupId: group.id),
-      ),
-      if (!favorites)
+      if (!provider)
+        _HeaderButton(
+          tooltip: testing
+              ? cancelling
+                    ? l.prototypePleaseWait
+                    : l.prototypeCancel
+              : l.prototypeTestServers,
+          icon: LucideIcons.gauge,
+          // A running test spins; a tap cancels it.
+          busy: testing,
+          onPressed: testing
+              ? cancelling
+                    ? null
+                    : () => controller.cancelTest(group.id)
+              : group.rows.isEmpty || group.rows.any(controller.serverBusy)
+              ? null
+              : () => controller.test(context, group.rows, groupId: group.id),
+        ),
+      if (!favorites && !provider)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3),
           child: ServerUseButton(
@@ -1052,7 +1094,10 @@ class ServerNodeRow extends StatelessWidget {
                 title: label.name,
                 emoji: label.emoji,
                 countryCode: label.code,
-                protocol: controller.protocol(row),
+                // A provider configuration is a whole config, not one protocol.
+                protocol: controller.providerRow(row)
+                    ? row.type
+                    : controller.protocol(row),
                 detail: detail,
                 delay: row.delay,
                 running: controller.runningEntries.contains(row.id),
@@ -1073,7 +1118,7 @@ class ServerNodeRow extends StatelessWidget {
                   child: ServerMenu(controller: controller, row: row),
                 ),
               ),
-              if (failure != null)
+              if (failure != null && !controller.providerRow(row))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(48, 2, 16, 8),
                   child: SelectableText(
@@ -1084,8 +1129,11 @@ class ServerNodeRow extends StatelessWidget {
                           ? l.prototypeByNodeLocation
                           : l.prototypeSpeedTest,
                     ),
+                    // A failed location probe is a note, not a failure.
                     style: AppTypography.settingsDetailNote.copyWith(
-                      color: ColorManager.palette(context).destructive,
+                      color: failure.success
+                          ? ColorManager.palette(context).mutedForeground
+                          : ColorManager.palette(context).destructive,
                     ),
                   ),
                 ),
@@ -1113,8 +1161,13 @@ class ServerMenu extends StatelessWidget {
             name: controller.serverName(row),
             source: controller.sourceName(l, row),
             favorite: row.favorite,
+            provider: controller.providerRow(row),
           )
-        : await showServerActionsPopup(context, favorite: row.favorite);
+        : await showServerActionsPopup(
+            context,
+            favorite: row.favorite,
+            provider: controller.providerRow(row),
+          );
     if (context.mounted && action != null) {
       await controller.serverAction(context, row, action);
     }
@@ -1157,8 +1210,12 @@ class SourceMenu extends StatelessWidget {
             context,
             name: source.name,
             count: controller.sourceCount(source.id),
+            provider: controller.providerSource(source),
           )
-        : await showSourceActionsPopup(context);
+        : await showSourceActionsPopup(
+            context,
+            provider: controller.providerSource(source),
+          );
     if (context.mounted && action != null) {
       await controller.sourceAction(context, source, action);
     }

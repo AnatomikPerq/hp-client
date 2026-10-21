@@ -548,6 +548,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     String? expectedConfiguration,
     Future<void> Function()? writeAssets,
     Future<void> Function()? validateAssets,
+    bool assetsOnlyCheck = false,
     ConfigurationImportDraft? imported,
     PrepareConnection? prepare,
   }) => _run(() async {
@@ -590,12 +591,15 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         throw const ConnectionHostException('runtimeMetadataUnavailable');
       }
       bool touchedHost = false;
+      // Assets that are only checked (a node choice rechecks its source's
+      // mode) leave the database as the live switch reads it.
       if (shouldStart &&
           old != null &&
           prepare == null &&
-          writeAssets == null &&
-          validateAssets == null &&
+          (assetsOnlyCheck ||
+              (writeAssets == null && validateAssets == null)) &&
           imported == null) {
+        if (assetsOnlyCheck) await validateAssets?.call();
         final swapped = await _trySwap(old, next, cancellation);
         if (swapped != null) {
           try {

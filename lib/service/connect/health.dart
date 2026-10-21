@@ -227,7 +227,7 @@ final class ConnectionHealthMonitor {
   ) {
     if (generation != _generation || !_started) return;
     final previous = state.value;
-    final node = runtime.entries.isEmpty ? '' : runtime.entries.first.name;
+    final node = runtime.nodeName;
     if (result.reachable && proxyTakenOver == null) {
       _failures = 0;
       state.value = ConnectionHealth(

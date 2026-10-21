@@ -15,6 +15,7 @@ import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:onexray/pages/connect/run_mode.dart';
 import 'package:onexray/pages/connect/hero.dart';
+import 'package:onexray/pages/connect/runtime_observatory.dart';
 import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/health.dart';
@@ -44,6 +45,7 @@ class ConnectView extends StatelessWidget {
     this.locationHealth,
     required this.method,
     this.methodDetail,
+    this.methodEnabled = true,
     required this.onConnection,
     required this.onAddServers,
     required this.onExpert,
@@ -81,6 +83,9 @@ class ConnectView extends StatelessWidget {
   final String? runningPath;
   final String? locationDetail, locationHealth, methodDetail;
   final String method;
+
+  /// False while a provider configuration runs: its routing is its own.
+  final bool methodEnabled;
   final VoidCallback onConnection,
       onAddServers,
       onServer,
@@ -463,53 +468,60 @@ class ConnectView extends StatelessWidget {
     final routing = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Tooltip(
-          message: methodDetail ?? l.prototypeTrafficMethod,
-          child: Material(
-            color: palette.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.pill),
-              side: BorderSide(color: palette.border),
-            ),
-            child: InkWell(
-              key: const ValueKey('home-routing'),
-              onTap: _busy ? null : onMethod,
-              borderRadius: BorderRadius.circular(AppRadii.pill),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (pendingChange == 'method')
-                      const ButtonProgressIndicator(size: 14)
-                    else
-                      Icon(
-                        LucideIcons.shieldCheck,
-                        size: 15,
-                        color: palette.primary,
-                      ),
-                    const SizedBox(width: 7),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
-                      child: Text(
-                        method,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.filterChip.copyWith(
-                          color: palette.foreground,
+        // Shrinks on phones: a provider configuration's title is long.
+        Flexible(
+          child: Tooltip(
+            message: methodDetail ?? l.prototypeTrafficMethod,
+            child: Material(
+              color: palette.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+                side: BorderSide(color: palette.border),
+              ),
+              child: InkWell(
+                key: const ValueKey('home-routing'),
+                onTap: _busy || !methodEnabled ? null : onMethod,
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (pendingChange == 'method')
+                        const ButtonProgressIndicator(size: 14)
+                      else
+                        Icon(
+                          LucideIcons.shieldCheck,
+                          size: 15,
+                          color: palette.primary,
+                        ),
+                      const SizedBox(width: 7),
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: Text(
+                            method,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.filterChip.copyWith(
+                              color: palette.foreground,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      LucideIcons.chevronDown,
-                      size: 14,
-                      color: palette.mutedForeground,
-                    ),
-                  ],
+                      if (methodEnabled) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          LucideIcons.chevronDown,
+                          size: 14,
+                          color: palette.mutedForeground,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -970,6 +982,7 @@ class TrafficReadout extends StatelessWidget {
             ),
           ),
         ],
+        RuntimeObservatoryReadout(view: view, desktop: desktop),
       ],
     );
   }

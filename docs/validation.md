@@ -11,9 +11,9 @@
 | 场景 | 主要结果 |
 | --- | --- |
 | 启动与恢复 | 服务就绪后首页可用；缺库或默认资源丢失可离线恢复 |
-| 导入与选择 | 导入入库、排队测速、列表 Stream 更新、节点选择与数量符合配置 |
-| 订阅更新 | 更新替换有效结果，保留正在使用的节点、收藏和稳定的来源身份 |
-| 配置与连接 | 普通/高级/Raw 保存、分享往返、编译与节点切换；先停止旧连接再启动 |
+| 导入与选择 | 普通节点与完整数组入库、活动方式计数、列表 Stream、普通测速与完整配置选择符合类型 |
+| 订阅更新 | 双缓存事务更新，保留准备/待启动/运行/固定/收藏原行与来源身份；切换不热重连 |
+| 配置与连接 | 普通/高级/Raw/提供方配置的保存、适配、分享与编译；先停止旧连接再启动 |
 | 数据操作 | Geodata 发布、备份恢复、自动周期、清理后的重新使用 |
 | 外部入口 | 页面、托盘、快捷入口、HTTP 和 Android 广播调用各自生产路径 |
 
@@ -31,6 +31,38 @@
   不降低高保真标准，也不全面交叉所有状态。
 - fixture 仅共享确实重复的数据库、文件和节点样本；不引入通用场景 DSL 或大型测试基类。
   先补齐等价行为覆盖再删除重复测试，不按正负比例或数量衡量完成。
+
+## 完整配置与模式边界
+
+以下是当前功能的验证合同，不记录某次构建或设备通过状态；执行结果保存在独立验收材料。
+
+- 在隔离库验证 schema 1–6 升至 7、新安装和重复打开：ID、JSON、Age/HWID、订阅及旧 Raw 保留，
+  旧地区列删除、panel/mode 缺省正确，未知选择统一回退，退休 full 不激活。
+- 同一脱敏完整数组含普通 host 与 chain/balancer 图：逐项保存全部 Map，名称与原图分离；
+  Age 解密先于分类，错误数组、Sing-box/资料 JSON、空结果和 native 校验失败不提交部分缓存。
+- 两种 mode 的活动列表、自动候选、最终出口、批测和计数统一过滤；离线切换不下载、重连或清套餐，
+  缺缓存与固定选择不兼容有明确反馈，旧菜单和迟到响应再次复查真实来源/模式。
+- 刷新保护 preparing/pending/running profile ID 及固定/最终出口/收藏原行，保留旧 JSON 并插新结果；
+  失败、来源删除和请求策略改变不覆盖缓存或套餐。删除来源清理两类缓存且按运行引用停机/重连。
+- 保存校验与编译使用同一纯配置适配，验证已有 TUN 的选取、tag 与入口规则同步、缺少时的新建入口，
+  以及显式 53 规则的保留、缺少时复用或新增 DNS 出站并前置有界 DNS 规则。
+  覆盖有无内置 DNS、FakeDNS、多个 SOCKS/HTTP 入站及显式嗅探关闭。已有 TUN 的设置和嗅探保留；
+  已有 DNS 出站不删除，提供方的条件规则和非 DNS 目标不被 App 改写。源对象不变，其余入站/出站相对顺序、
+  原业务规则、链式引用、balancer/observatory 和 domainStrategy 保留；配置有效性交由既有 libXray 流程验证。
+  验证缺少的 direct/block 补齐，已有同 tag 定义保留；缺少或为空的原始 outbounds 经导入验证后可列表展示和选择，
+  来源、资产与 JSON 可读取检查仍保留。
+  Raw 复制/分享补同一入口语义，个人 Raw 配额与原图查看不互相混淆。
+- 连接页显示 provider 名称快照与完整路由说明，不伪装成 App 多入口或单节点延迟；
+  App Smart/Custom/LAN 偏好保存不影响 provider 会话，平台策略有效变更保持原重连流程。
+- 备份 panel/mode 往返、旧文件缺省与未知字段容忍；订阅缓存排除，恢复不联网、不自动连接，正常刷新重新获取。
+
+目标测试分别位于 `test/core/db/subscription_migration_test.dart`、`test/service/servers/subscription/`、
+`test/service/shared/xray/remnawave_test.dart`、`test/service/connect/`、`test/pages/servers/`、
+`test/pages/connect/` 和 `test/service/shared/menu/tray/`，按负责层验证业务结果，不复制测试实现。
+
+原生 `testXray` 只构造并关闭，mock 和 JSON 对比不能证明 DNS、FakeDNS、IPIfNonMatch 第二轮匹配或网络链路。
+Android :native、Apple 真机 extension 与桌面 Core 的 UI 校验通道有进程隔离；同进程 managed Core 防线仍保留，
+iOS Simulator 不能通过绕过它来验证刷新。设备验收需要检查 VPN 持续运行、native Invoke 新入口、真实 DNS/路由/代理请求。
 
 ## 自动验证
 
@@ -56,7 +88,9 @@ Pigeon、FFI、Drift 或本地化变更先生成对应输出；只改测试时�
 - macOS SE 激活：`bash tool/test_system_extension_activation.sh` 编译生产 Swift，
   验证并发请求合并及完成后的重新激活；使用可控系统回复，不申请真实扩展授权或启动 VPN。
 - Android 原生：在 `android/` 执行 `./gradlew :app:testDebugUnitTest`，
-  Robolectric 调用正式 Receiver、保存配置和 Widget 资源；不替代真实 VPN 与桌面验收。
+  Robolectric 调用正式 Receiver、保存配置、Widget 资源与 VPN 状态桥；
+  状态桥回归使用真实 command/changed 与可控 Binder 重演停止确认后旧事件迟到，
+  并区分当前错误/退出、旧绑定回调和外部启动；不替代真实 VPN 与桌面验收。
 - Android Manifest/网络 XML 变更补跑 `./gradlew :app:lintVitalRelease`；
   发布相关修复还需本地 Release AAB 构建，不调用会上传商店的部署脚本。
 - 原生桥合同变更验证实际序列化/消费方与对应平台构建；

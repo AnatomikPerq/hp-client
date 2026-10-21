@@ -187,6 +187,8 @@ void main() {
               id: 1,
               name: 'Provider subscription with a long descriptive name',
               url: 'https://example.test/subscription',
+              panel: 'generic',
+              mode: 'appManaged',
               hwidEnabled: false,
               timestamp: DateTime(2026, 9, 1),
               uploadBytes: 1024,
@@ -239,6 +241,8 @@ void main() {
       id: 1,
       name: 'Provider',
       url: 'https://example.test/subscription',
+      panel: 'generic',
+      mode: 'appManaged',
       hwidEnabled: false,
       timestamp: DateTime(2026, 9, 1),
     );
@@ -350,6 +354,8 @@ void main() {
             SubscriptionData(
               id: 4,
               name: 'Source',
+              panel: 'generic',
+              mode: 'appManaged',
               hwidEnabled: false,
               url: 'https://example.test/sub',
               timestamp: DateTime(2026),

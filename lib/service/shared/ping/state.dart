@@ -39,6 +39,8 @@ class PingState {
   var timeout = PingTimeout.defaultValue;
   var url = PingUrl.cloudflare;
   var customUrl = "";
+  // On in the fork: node flags and grouping by location come from it.
+  var locationEnabled = true;
 
   String get realUrl => url == PingUrl.custom ? customUrl : url.url;
 
@@ -48,6 +50,7 @@ class PingState {
       return;
     }
     final pingJson = PingJson.fromJson(jsonMap!);
+    locationEnabled = pingJson.locationEnabled;
     if (pingJson.timeout != null) {
       var timeout = pingJson.timeout!;
       if (timeout < PingTimeout.min) {
@@ -72,7 +75,12 @@ class PingState {
   }
 
   Future<void> saveToPreferences() async {
-    final pingJson = PingJson(timeout, url.name, customUrl);
+    final pingJson = PingJson(
+      timeout,
+      url.name,
+      customUrl,
+      locationEnabled: locationEnabled,
+    );
     await PreferencesKey().savePingState(pingJson.toJson());
   }
 }

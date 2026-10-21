@@ -282,6 +282,8 @@ class ServerImportService {
         url: link.url,
         ageSecretKey: secretKey,
         agePublicKey: publicKey,
+        panel: link.panel,
+        mode: link.mode,
       ),
     );
   }

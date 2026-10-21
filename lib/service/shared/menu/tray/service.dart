@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:onexray/core/db/database/database.dart';
+import 'package:onexray/core/db/database/enum.dart';
 import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/ffi/windows/mode.dart';
 import 'package:onexray/service/settings/language/service.dart';
@@ -12,6 +14,9 @@ import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/failure.dart';
 import 'package:onexray/service/connect/health.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/connect/runtime.dart';
+import 'package:onexray/service/connect/provider_mode.dart';
+import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 import 'package:onexray/service/servers/subscription/failure.dart';
@@ -90,6 +95,8 @@ final class TrayService {
   String? _lastToolTip;
   String? _trayIcon;
   String? _toolTip;
+  // The menu marks the running provider configuration.
+  int? _lastProfileId;
 
   bool get _canQuitWithoutStoppingVpn =>
       AppPlatform.isMacOS ||
@@ -153,6 +160,7 @@ final class TrayService {
     _lastToolTip = null;
     _trayIcon = null;
     _toolTip = null;
+    _lastProfileId = null;
     _menuOpen = false;
   }
 
@@ -161,12 +169,14 @@ final class TrayService {
     final toolTip = _toolTipFor(view);
     if (_lastPhase == view.phase &&
         _lastCanDisconnect == view.canDisconnect &&
-        _lastToolTip == toolTip) {
+        _lastToolTip == toolTip &&
+        _lastProfileId == view.runtime?.profile?.id) {
       return;
     }
     _lastPhase = view.phase;
     _lastCanDisconnect = view.canDisconnect;
     _lastToolTip = toolTip;
+    _lastProfileId = view.runtime?.profile?.id;
     _requestRefresh();
   }
 
@@ -208,11 +218,10 @@ final class TrayService {
             permission: view.permission,
           ),
         },
-      if (connected)
-        ...?view.runtime?.entries
-            .map((entry) => _withoutFlags(entry.name))
-            .where((name) => name.isNotEmpty)
-            .take(1),
+      if (connected && view.runtime != null)
+        if (_withoutFlags(view.runtime!.nodeName) case final name
+            when name.isNotEmpty)
+          name,
     ];
     final text = parts.join(' · ');
     if (text.length <= _toolTipLimit) return text;
@@ -297,6 +306,7 @@ final class TrayService {
       _data.selectionItems(
         appLocalizationsNoContext(),
         busy: view.busy || _changingConfiguration,
+        runningProfile: view.runtime?.profile,
       ),
     );
     items.add(TrayMenuEntry.separator());
@@ -470,19 +480,49 @@ final class TrayService {
     final kind = separator < 0 ? key : key.substring(0, separator);
     final value = separator < 0 ? '' : key.substring(separator + 1);
     final id = int.tryParse(value);
+    Future<bool> trafficAvailable() async {
+      final current = ConnectionConfiguration.fromJson(
+        jsonDecode((await _db.connectionConfigDao.read()).configurationJson)
+            as Map<String, dynamic>,
+      ).connection;
+      return !current.expert &&
+          !await usesProviderConfiguration(
+            _db,
+            current,
+            runtime: _coordinator.state.value.runtime,
+          );
+    }
+
+    if ((kind == 'traffic' || kind == 'custom') && !await trafficAvailable()) {
+      return;
+    }
+    Future<bool> serverAvailable(int id) async {
+      final row = await _db.coreConfigDao.searchActiveServerRow(id);
+      if (row == null) return false;
+      final source = row.subId > 0
+          ? await _db.subscriptionDao.searchRow(row.subId)
+          : null;
+      return ServerCatalog(servers: [row], sources: [?source]).selectable(row);
+    }
+
     Map<String, dynamic> values;
     String label;
     Future<void> validate() async {
       final exists = switch (kind) {
-        'server' || 'raw' =>
+        'server' => await serverAvailable(id!),
+        'raw' =>
           (await _db.coreConfigDao.searchRow(id!))?.type ==
-              (kind == 'raw' ? 'raw' : 'outbound'),
+              CoreConfigType.raw.name,
         'source' =>
           id == 0
               ? (await _db.coreConfigDao.allOutboundRowsWithDataBySubId(0))
                     .isNotEmpty
-              : await _db.subscriptionDao.searchRow(id!) != null,
-        'custom' => await _db.routingProfileDao.searchRow(id!) != null,
+              : (await _db.subscriptionDao.searchRow(id!))?.mode ==
+                    SubscriptionMode.appManaged.name,
+        'custom' =>
+          await trafficAvailable() &&
+              await _db.routingProfileDao.searchRow(id!) != null,
+        'traffic' => await trafficAvailable(),
         _ => true,
       };
       if (!exists) throw const AppFailure(FailureCategory.conflict, 'notFound');
