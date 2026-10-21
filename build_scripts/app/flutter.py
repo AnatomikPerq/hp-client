@@ -90,7 +90,8 @@ class FlutterBuilder(Builder):
         run_command([flutter_command(), "pub", "get"], cwd=self.root_dir)
 
     def run_ffi_gen(self):
-        run_command([dart_command(), "run", "ffigen"], cwd=self.root_dir)
+        # ffigen is configured in tool/ffigen.dart since upstream #228.
+        run_command([dart_command(), "run", "tool/ffigen.dart"], cwd=self.root_dir)
 
     def build_app(self):
         if self.system in ("ios", "macos") or (
