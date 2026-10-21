@@ -27,6 +27,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   _createSystemProxy;
   Future<SystemProxyManager?>? _systemProxy;
   final Duration _gracefulStop;
+  final Duration _readyTimeout;
   final String _appPath;
   final DesktopKillSwitchControl? _injectedKillSwitch;
   late final DesktopKillSwitchControl _killSwitch =
@@ -47,6 +48,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     notifyError: _notifyError,
   );
   VpnStatus? _transition;
+  bool _startCancelled = false;
 
   WindowsExeFfiApi({
     WindowsCoreProcess? process,
@@ -57,6 +59,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     void Function(Object)? notifyError,
     Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
     this._gracefulStop = const Duration(seconds: 3),
+    this._readyTimeout = desktopCoreReadyTimeout,
     String? appPath,
     DesktopKillSwitchControl? killSwitch,
   }) : _process = process ?? WindowsCoreProcess(),
@@ -175,6 +178,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     ),
   }) async {
     _transition = VpnStatus.connecting;
+    _startCancelled = false;
     var launchAttempted = false;
     try {
       await _notify(VpnStatus.connecting);
@@ -193,6 +197,8 @@ class WindowsExeFfiApi extends WindowsFfiApi {
       // Create as the App user before Windows starts an elevated Core.
       final errorFile = desktopCoreErrorFile(config);
       await errorFile.writeAsString('', flush: true);
+      final readyFile = desktopCoreReadyFile(config);
+      await readyFile.writeAsString('', flush: true);
       final stopFile = desktopCoreStopFile(await _runDirectory());
       if (await stopFile.exists()) await stopFile.delete();
       await _killSwitch.arm(killSwitch);
@@ -205,6 +211,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
         errorFile: errorFile.path,
         configSha256: desktopCoreConfigSha256(xrayJson),
         stopFile: stopFile.path,
+        readyFile: readyFile.path,
         // In proxy mode the Core runs unelevated and cannot install filters;
         // the system proxy left at its closed port is the kill switch there.
         killSwitch: proxyPort == null ? killSwitch : null,
@@ -216,15 +223,16 @@ class WindowsExeFfiApi extends WindowsFfiApi {
       final pid = proxyPort == null
           ? await _process.start(_corePath, arguments)
           : await _process.startUnelevated(_corePath, arguments);
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!(await _monitor.readPids()).contains(pid)) {
-        throw StateError(
-          await readDesktopCoreStartError(
-            config,
-            'Windows Core exited during start',
-          ),
-        );
-      }
+      // Connecting until Xray runs: loading geodata and creating the TUN
+      // adapter may take a while, and the kill switch blocks meanwhile.
+      await waitForDesktopCoreReady(
+        readyFile: readyFile,
+        configPath: config,
+        running: () async => (await _monitor.readPids()).contains(pid),
+        cancelled: () => _startCancelled,
+        exited: 'Windows Core exited during start',
+        timeout: _readyTimeout,
+      );
       if (proxyPort != null) {
         final proxy = await _proxyManager();
         await proxy?.apply(
@@ -255,6 +263,11 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     } finally {
       _transition = null;
     }
+  }
+
+  @override
+  void cancelStart() {
+    if (_transition == VpnStatus.connecting) _startCancelled = true;
   }
 
   /// [restart] stops the Core for another one: what the kill switch holds

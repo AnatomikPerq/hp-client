@@ -454,6 +454,48 @@ void main() {
     expect(disposals, 1);
   });
 
+  test('cancel reaches a start still waiting for the Core', () async {
+    final runtime = _runtime('slow');
+    final release = Completer<HostConnection>();
+    final started = Completer<void>();
+    var cancels = 0;
+    final coordinator = await _initialize(
+      ConnectionCoordinator(
+        database: db,
+        readRuntime: () async => null,
+        inspect: (_, {observedStatus}) async =>
+            const HostConnection(VpnStatus.disconnected),
+        prepare: (_, _) async => runtime,
+        start: (_) {
+          started.complete();
+          return release.future;
+        },
+        stop: () async => const HostConnection(VpnStatus.disconnected),
+        cancelStart: () {
+          cancels++;
+          // The host's wait gives up and the start fails, as a real one does.
+          release.complete(const HostConnection(VpnStatus.disconnected));
+        },
+      ),
+    );
+    final connecting = coordinator.connect().then<void>(
+      (_) {},
+      onError: (_) {},
+    );
+    await started.future;
+    expect(coordinator.state.value.phase, ConnectionPhase.connecting);
+    coordinator.cancel();
+    await connecting;
+    expect(cancels, 1);
+    expect(coordinator.state.value.issue, 'cancelled');
+    // The user's own cancel is not a failed connection.
+    expect(coordinator.state.value.phase, ConnectionPhase.disconnected);
+    expect(coordinator.state.value.failed, isFalse);
+    // Nothing waits any more: a second cancel does not reach the host.
+    coordinator.cancel();
+    expect(cancels, 1);
+  });
+
   test('connect does not trust the displayed connected state', () async {
     var current = const HostConnection(VpnStatus.disconnected);
     final runtime = _runtime('fresh');

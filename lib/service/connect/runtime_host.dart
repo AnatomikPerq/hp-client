@@ -68,6 +68,7 @@ class ConnectionRuntimeHost {
   final Future<void> Function() _stopEngines;
   final Future<void> Function(ControlXrayRequest) _control;
   final Future<bool> Function() _killSwitchBlocking;
+  final void Function() _cancelStart;
 
   ConnectionRuntimeHost({
     String? runDirectory,
@@ -79,7 +80,11 @@ class ConnectionRuntimeHost {
     Future<void> Function()? stopEngines,
     Future<void> Function(ControlXrayRequest)? control,
     Future<bool> Function()? killSwitchBlocking,
-  }) : _stopEngines = stopEngines ?? MinewireRuntime.instance.stopAll,
+    void Function()? cancelStart,
+  }) : _cancelStart =
+           cancelStart ??
+           (startVpn != null ? () {} : AppHostApi().cancelStartVpn),
+       _stopEngines = stopEngines ?? MinewireRuntime.instance.stopAll,
        // A host with an injected status has no real kill switch to read.
        _killSwitchBlocking =
            killSwitchBlocking ??
@@ -274,6 +279,9 @@ class ConnectionRuntimeHost {
             ),
     );
   }
+
+  /// Ends a start that still waits for the Core to come up.
+  void cancelStart() => _cancelStart();
 
   Future<HostConnection> start(ConnectionRuntime runtime) async {
     final result = await _start(runtime);

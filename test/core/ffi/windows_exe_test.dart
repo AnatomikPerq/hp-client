@@ -235,6 +235,8 @@ void main() {
       expect(process.arguments!.sublist(11), [
         '-stop-file',
         p.join(directory.path, 'run', 'core.stop'),
+        '-ready-file',
+        '${process.arguments![6]}.ready',
       ]);
       expect(
         await File(p.join(directory.path, 'run', 'core-process.json')).exists(),
@@ -246,6 +248,76 @@ void main() {
       expect((await reopened.stopVpn()).status, VpnStatus.disconnected);
     },
   );
+
+  test('EXE stays connecting until the Core reports ready', () async {
+    process.markReady = false;
+    final api = create();
+    final starting = api.startVpn();
+    await process.launched.future;
+    // Far past the second the start used to wait before saying connected.
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    expect((await api.readVpnStatus()).status, VpnStatus.connecting);
+    expect(events, isNot(contains(VpnStatus.connected)));
+    final arguments = process.arguments!;
+    await File(arguments[arguments.indexOf('-ready-file') + 1])
+        .writeAsString('ready');
+    expect((await starting).status, VpnStatus.connected);
+    expect(events.last, VpnStatus.connected);
+  });
+
+  test('a start waiting for the Core can be cancelled', () async {
+    process.markReady = false;
+    final api = create();
+    final starting = api.startVpn();
+    await process.launched.future;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    api.cancelStart();
+    final result = await starting;
+    expect(result.state, NativeVpnCommandState.failed);
+    expect(result.message, contains('cancelled'));
+    expect(process.running, isFalse);
+    expect(events.last, VpnStatus.disconnected);
+  });
+
+  test('a cancel outside a start changes nothing', () async {
+    final api = create();
+    api.cancelStart();
+    expect((await api.startVpn()).status, VpnStatus.connected);
+  });
+
+  test('a Core that never reports ready fails the start', () async {
+    process.markReady = false;
+    final api = WindowsExeFfiApi(
+      filesDirectory: directory.path,
+      executable: p.join(directory.path, 'OneXrayCore.exe'),
+      process: process,
+      appPath: appPath(),
+      killSwitch: killSwitch.control(p.join(directory.path, 'run')),
+      readRequest: () async => StartVpnRequest(
+        TunJson.fromJson({
+          'tunDnsIPv4': '8.8.8.8',
+          'autoOutboundsInterface': 'Ethernet 2',
+        }),
+        '18187',
+        '18186',
+        jsonEncode(
+          LibXrayInvokeRequest(
+            method: LibXrayMethod.runXray,
+            payload: RunXrayRequest('{"inbounds":[]}').toJson(),
+          ).toJson(),
+        ),
+      ),
+      notify: (status) async => events.add(status),
+      notifyError: (error) => errors.add(error),
+      gracefulStop: Duration.zero,
+      readyTimeout: const Duration(milliseconds: 400),
+      systemProxy: (_) async => null,
+    );
+    final result = await api.startVpn();
+    expect(result.state, NativeVpnCommandState.failed);
+    expect(result.message, contains('did not start Xray'));
+    expect(process.running, isFalse);
+  });
 
   test(
     'UAC cancellation fails without leaving a running/connecting state',
@@ -797,6 +869,10 @@ class _Process extends WindowsCoreProcess {
   int elevatedStarts = 0;
   File? stopFile;
   bool ignoreStopFile = false;
+
+  /// Whether the started Core reports ready, as a real one does once Xray
+  /// runs. Shortly after the start, so that a Core can still exit first.
+  bool markReady = true;
   List<String>? arguments;
   final launched = Completer<void>();
   final exits = <int, Completer<bool>>{};
@@ -853,7 +929,21 @@ class _Process extends WindowsCoreProcess {
     this.arguments = arguments;
     running = true;
     launched.complete();
+    _markReadySoon(arguments);
     return 42;
+  }
+
+  void _markReadySoon(List<String> arguments) {
+    final index = arguments.indexOf('-ready-file');
+    if (!markReady || index < 0) return;
+    final file = File(arguments[index + 1]);
+    Timer(const Duration(milliseconds: 50), () {
+      try {
+        if (pids.contains(42)) file.writeAsStringSync('ready');
+      } on FileSystemException {
+        // The test is over and its directory gone.
+      }
+    });
   }
 
   @override
@@ -861,6 +951,7 @@ class _Process extends WindowsCoreProcess {
     this.arguments = arguments;
     running = true;
     if (!launched.isCompleted) launched.complete();
+    _markReadySoon(arguments);
     return 42;
   }
 }

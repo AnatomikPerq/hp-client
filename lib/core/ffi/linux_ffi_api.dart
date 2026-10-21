@@ -35,7 +35,8 @@ class LinuxFfiApi extends BaseFfiApi {
       _notify = AppFlutterApi().vpnStatusChanged,
       _notifyError = AppFlutterApi().vpnStatusController.addError,
       _createSystemProxy = createSystemProxyManager,
-      _injectedKillSwitch = null;
+      _injectedKillSwitch = null,
+      _readyTimeout = desktopCoreReadyTimeout;
 
   @visibleForTesting
   LinuxFfiApi.forTesting({
@@ -49,6 +50,7 @@ class LinuxFfiApi extends BaseFfiApi {
     void Function(Object)? notifyError,
     Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
     DesktopKillSwitchControl? killSwitch,
+    this._readyTimeout = desktopCoreReadyTimeout,
   }) : _createSystemProxy = systemProxy ?? ((_) async => null),
        // Tests have no libXray: a kill switch with no filters by default.
        _injectedKillSwitch =
@@ -78,6 +80,8 @@ class LinuxFfiApi extends BaseFfiApi {
   _createSystemProxy;
   Future<SystemProxyManager?>? _systemProxy;
   final DesktopKillSwitchControl? _injectedKillSwitch;
+  final Duration _readyTimeout;
+  bool _startCancelled = false;
 
   /// Linux has no TUN filters: the kill switch holds only the system proxy.
   late final DesktopKillSwitchControl _killSwitch =
@@ -117,6 +121,7 @@ class LinuxFfiApi extends BaseFfiApi {
   @override
   Future<NativeVpnCommandResult> startVpn() async {
     _transition = VpnStatus.connecting;
+    _startCancelled = false;
     try {
       await _notify(VpnStatus.connecting);
       final request = await _readRequest();
@@ -149,6 +154,11 @@ class LinuxFfiApi extends BaseFfiApi {
     } finally {
       _transition = null;
     }
+  }
+
+  @override
+  void cancelStart() {
+    if (_transition == VpnStatus.connecting) _startCancelled = true;
   }
 
   @override
@@ -249,6 +259,8 @@ class LinuxFfiApi extends BaseFfiApi {
       }
       final errorFile = desktopCoreErrorFile(inputs);
       await errorFile.writeAsString('', flush: true);
+      final readyFile = desktopCoreReadyFile(inputs);
+      await readyFile.writeAsString('', flush: true);
       final process = await _startProcess(
         corePath,
         // No TUN settings: system proxy mode, which needs no DNS pinning.
@@ -257,17 +269,24 @@ class LinuxFfiApi extends BaseFfiApi {
           interfaceName: tun?.autoOutboundsInterface ?? '',
           configPath: inputs,
           errorFile: errorFile.path,
+          readyFile: readyFile.path,
         ),
       );
       _coreProcess = process;
       _bindProcess(process);
       unawaited(_monitor.waitForExit(process.pid));
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!(await _monitor.readPids()).contains(process.pid)) {
-        _lastCoreError = await readDesktopCoreStartError(
-          inputs,
-          'The Core process exited during startup.',
+      try {
+        await waitForDesktopCoreReady(
+          readyFile: readyFile,
+          configPath: inputs,
+          running: () async =>
+              (await _monitor.readPids()).contains(process.pid),
+          cancelled: () => _startCancelled,
+          exited: 'The Core process exited during startup.',
+          timeout: _readyTimeout,
         );
+      } on StateError catch (error) {
+        _lastCoreError = error.message;
         return false;
       }
       return true;

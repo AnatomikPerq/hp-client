@@ -22,7 +22,8 @@ import 'package:path/path.dart' as p;
 /// [configSha256] lets an elevated Core refuse a config swapped after launch:
 /// the file lives in a directory every process of the user can write.
 /// [stopFile] lets the App end the Core without terminating it, which for an
-/// elevated Core would cost another UAC prompt.
+/// elevated Core would cost another UAC prompt. The Core writes `ready` to
+/// [readyFile] once Xray runs and its tunnel passes the kill switch.
 ///
 /// [killSwitch] makes a TUN Core block traffic outside the tunnel until the
 /// App disconnects; [killSwitchApp] (the App itself) may still pass. Only the
@@ -34,6 +35,7 @@ List<String> desktopCoreRunArguments({
   String? errorFile,
   String? configSha256,
   String? stopFile,
+  String? readyFile,
   DesktopKillSwitch? killSwitch,
   String? killSwitchApp,
 }) {
@@ -59,6 +61,7 @@ List<String> desktopCoreRunArguments({
     if (configSha256 != null) ...['-config-sha256', configSha256],
     if (errorFile != null) ...['-error-file', errorFile],
     if (stopFile != null) ...['-stop-file', stopFile],
+    if (readyFile != null) ...['-ready-file', readyFile],
   ];
 }
 
@@ -98,6 +101,56 @@ List<String> desktopSystemProxyBypass(StartVpnRequest request) =>
     request.systemProxyBypass ?? const [];
 
 File desktopCoreErrorFile(String configPath) => File('$configPath.error');
+
+File desktopCoreReadyFile(String configPath) => File('$configPath.ready');
+
+/// The user stopped a start that was still waiting for the Core.
+class DesktopCoreStartCancelled implements Exception {
+  const DesktopCoreStartCancelled();
+
+  @override
+  String toString() => 'cancelled';
+}
+
+/// How long a start waits for Xray. In a memory-starved test VM loading the
+/// geodata and creating the TUN adapter took over two minutes.
+const desktopCoreReadyTimeout = Duration(minutes: 3);
+
+/// Waits until the Core marks [readyFile] (created empty by the App before
+/// launch). A running process is not a working connection: Home said
+/// "connected" for two minutes while Xray was still starting, the TUN did not
+/// exist yet and the kill switch kept everything offline.
+///
+/// Throws a [StateError] with the Core's own error when it exits first or
+/// after [timeout], and [DesktopCoreStartCancelled] once [cancelled] says so.
+Future<void> waitForDesktopCoreReady({
+  required File readyFile,
+  required String configPath,
+  required Future<bool> Function() running,
+  bool Function()? cancelled,
+  String exited = 'The Core exited during start',
+  Duration timeout = desktopCoreReadyTimeout,
+  Duration poll = const Duration(milliseconds: 200),
+}) async {
+  final waiting = Stopwatch()..start();
+  while (true) {
+    try {
+      if ((await readyFile.readAsString()).trim() == 'ready') return;
+    } on FileSystemException {
+      // The Core recreates nothing; a missing file just never becomes ready.
+    }
+    if (!await running()) {
+      throw StateError(await readDesktopCoreStartError(configPath, exited));
+    }
+    if (cancelled?.call() ?? false) throw const DesktopCoreStartCancelled();
+    if (waiting.elapsed >= timeout) {
+      throw StateError(
+        'The Core did not start Xray within ${timeout.inSeconds} s',
+      );
+    }
+    await Future<void>.delayed(poll);
+  }
+}
 
 Future<String> readDesktopCoreStartError(
   String configPath,
@@ -169,6 +222,11 @@ abstract class BaseFfiApi {
   /// [restart] stops the Core for another one, where the desktop kill
   /// switch keeps what it holds; a plain stop is the user's disconnect.
   Future<NativeVpnCommandResult> stopVpn({bool restart = false});
+
+  /// Stops waiting for a desktop Core that has not reported ready; the start
+  /// then fails as cancelled and stops that Core.
+  void cancelStart() {}
+
   Future<void> observeVpnStatus();
   void disposeVpnStatus();
 

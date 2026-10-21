@@ -136,6 +136,16 @@ class AppHostApi {
     }
   }
 
+  /// Desktop: stop waiting for a Core that has not reported ready yet; the
+  /// pending start then fails as cancelled. Elsewhere nothing waits.
+  void cancelStartVpn() {
+    if (AppPlatform.isLinux) {
+      LinuxFfiApi().cancelStart();
+    } else if (AppPlatform.isWindows) {
+      WindowsFfiApi().cancelStart();
+    }
+  }
+
   /// [restart]: another start follows, so the desktop kill switch keeps
   /// what it holds. Mobile platforms have no such distinction.
   Future<NativeVpnCommandResult> stopVpn({bool restart = false}) async {

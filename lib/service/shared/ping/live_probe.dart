@@ -20,9 +20,15 @@ class LivePingResult {
 /// the same path as the rest of the system's traffic: straight into the TUN,
 /// or through the App's own system proxy in proxy mode. It never follows the
 /// HTTP_PROXY environment, which may point at another client.
+///
+/// In TUN mode [tunAddress] binds the probe to the tunnel's own address. The
+/// routes alone are not enough: while the TUN was still missing the probe
+/// left through the physical interface, which the kill switch lets the App
+/// use, and passed. Bound to an address that only the TUN carries it can
+/// neither do that nor pass without the tunnel.
 final class LivePingProbe {
   /// Empty 204 responses: minimal traffic, no dependency on page contents.
-  static const targets = <String>[
+  static const defaultTargets = <String>[
     'https://cp.cloudflare.com/generate_204',
     'https://www.gstatic.com/generate_204',
   ];
@@ -32,7 +38,17 @@ final class LivePingProbe {
   /// The App's local proxy in system proxy mode; null in TUN mode.
   final int? proxyPort;
 
-  const LivePingProbe({this.proxyPort});
+  /// The TUN adapter's IPv4 address in TUN mode.
+  final String? tunAddress;
+
+  /// Tried in order until one answers.
+  final List<String> targets;
+
+  const LivePingProbe({
+    this.proxyPort,
+    this.tunAddress,
+    this.targets = defaultTargets,
+  });
 
   Future<LivePingResult> measure() async {
     for (final target in targets) {
@@ -51,6 +67,10 @@ final class LivePingProbe {
       ..findProxy = ((_) => port == null ? 'DIRECT' : 'PROXY 127.0.0.1:$port')
       // A fresh connection: the whole path, not a reused socket.
       ..userAgent = null;
+    final source = tunAddress;
+    if (port == null && source != null) {
+      client.connectionFactory = (uri, _, _) => _connectFrom(uri, source);
+    }
     final stopwatch = Stopwatch()..start();
     try {
       final request = await client.getUrl(Uri.parse(target)).timeout(_timeout);
@@ -68,5 +88,33 @@ final class LivePingProbe {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// IPv4 only: the TUN's address is IPv4, and a socket bound to it cannot
+  /// reach an IPv6 target. HttpClient leaves TLS to the factory.
+  static Future<ConnectionTask<Socket>> _connectFrom(
+    Uri uri,
+    String source,
+  ) async {
+    final addresses = await InternetAddress.lookup(
+      uri.host,
+      type: InternetAddressType.IPv4,
+    );
+    if (addresses.isEmpty) {
+      throw SocketException('No IPv4 address for ${uri.host}');
+    }
+    final task = await Socket.startConnect(
+      addresses.first,
+      uri.port,
+      sourceAddress: source,
+    );
+    return ConnectionTask.fromSocket<Socket>(
+      task.socket.then<Socket>(
+        (socket) => uri.scheme == 'https'
+            ? SecureSocket.secure(socket, host: uri.host)
+            : socket,
+      ),
+      task.cancel,
+    );
   }
 }

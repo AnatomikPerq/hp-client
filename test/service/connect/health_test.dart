@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/health.dart';
@@ -17,8 +18,10 @@ ConnectionRuntime _runtime(
   int node, {
   Map<int, int> minewirePorts = const {},
   DateTime? startedAt,
+  PlatformPolicy? policy,
+  ConnectionPlatform platform = ConnectionPlatform.windows,
 }) => ConnectionRuntime.create(
-  configuration: ConnectionConfiguration(),
+  configuration: ConnectionConfiguration(policy: policy),
   compiled: CompiledConnection(
     xrayJson: '{}',
     entries: [
@@ -27,7 +30,7 @@ ConnectionRuntime _runtime(
     finalExit: null,
     nodeTags: {'app-entry-0': node},
   ),
-  platform: ConnectionPlatform.windows,
+  platform: platform,
   request: StartVpnRequest(null, '10820', '18003', '{}'),
   minewirePorts: minewirePorts,
   startedAt: startedAt ?? DateTime.fromMillisecondsSinceEpoch(1000),
@@ -35,6 +38,34 @@ ConnectionRuntime _runtime(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('the probe follows the path of the running mode', () {
+    final tun = ConnectionHealthMonitor.probeFor(
+      _runtime(1, policy: PlatformPolicy.defaults()),
+    );
+    expect(tun.proxyPort, isNull);
+    expect(tun.tunAddress, PlatformPolicy.tunIpv4Address);
+
+    final proxy = ConnectionHealthMonitor.probeFor(
+      _runtime(
+        1,
+        policy: PlatformPolicy.defaults().withDesktopRunMode(
+          DesktopRunMode.systemProxy,
+        ),
+      ),
+    );
+    expect(proxy.proxyPort, PlatformPolicy.defaults().systemProxyPort);
+    expect(proxy.tunAddress, isNull);
+
+    final mobile = ConnectionHealthMonitor.probeFor(
+      _runtime(
+        1,
+        policy: PlatformPolicy.defaults(),
+        platform: ConnectionPlatform.android,
+      ),
+    );
+    expect(mobile.tunAddress, isNull);
+  });
+
   // Localized notices read the language from the event bus.
   AppEventBus();
   late AppDatabase db;

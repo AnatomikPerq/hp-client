@@ -102,6 +102,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     List<ControlXrayOperation>,
   )
   _swap;
+  late final void Function() _cancelStart;
   final Stream<VpnStatus> _statusEvents;
   final Future<void> Function() _observeStatus;
   final void Function() _disposeStatus;
@@ -158,6 +159,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
       List<ControlXrayOperation>,
     )?
     swap,
+    void Function()? cancelStart,
   }) : db = database ?? AppDatabase(),
        _statusEvents =
            statusEvents ?? AppFlutterApi().vpnStatusController.stream,
@@ -173,6 +175,8 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     _readRuntime = readRuntime ?? host.readRuntime;
     _resumeRuntime = resumeRuntime ?? _resumeMinewire;
     _swap = swap ?? host.swap;
+    // An injected start has no Core to wait for.
+    _cancelStart = cancelStart ?? (start == null ? host.cancelStart : () {});
     _prepareSwap =
         prepareSwap ??
         ((configuration, cancelled, running) =>
@@ -702,7 +706,14 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         if (issue != 'cancelled') {
           AppLog.warning('connection failed: $issue (${AppLog.reason(error)})');
         }
-        if (touchedHost) {
+        if (touchedHost &&
+            issue == 'cancelled' &&
+            failed?.status == VpnStatus.disconnected) {
+          // The user stopped a start (it may wait minutes for a slow Core):
+          // back to disconnected, or to the kill switch's block, not a failure.
+          _publish(failed!, issue: issue);
+          _syncTrafficSampling();
+        } else if (touchedHost) {
           final status = failed?.status;
           if (failed != null) {
             killSwitchBlocking.value = failed.killSwitchBlocking;
@@ -802,8 +813,13 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     }
   }
 
+  /// A start may wait minutes for a slow Core (it says connecting all the
+  /// while); the host stops that wait, not just the steps after it.
   void cancel() {
-    if (_cancel?.isCompleted == false) _cancel!.complete();
+    if (_cancel?.isCompleted == false) {
+      _cancel!.complete();
+      _cancelStart();
+    }
   }
 
   /// For app.log: the mode and the nodes by name, never addresses or links.

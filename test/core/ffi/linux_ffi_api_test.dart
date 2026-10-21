@@ -355,6 +355,21 @@ void main() {
     });
   }
 
+  test('Linux fails a start whose Core never reports ready', () async {
+    final fixture = await _Fixture.create()
+      ..markReady = false;
+    final process = _OwnedProcess(42);
+    addTearDown(process.finish);
+    final api = fixture.api(
+      startProcess: (_, _) async {
+        fixture.pids.add(process.pid);
+        return process;
+      },
+      readyTimeout: const Duration(milliseconds: 300),
+    );
+    expect(await api.startCore(_runConfig(), _tunConfig()), isFalse);
+  });
+
   test('pkill exit 1 is not success while a Core still exists', () async {
     final fixture = await _Fixture.create();
     fixture.pids.add(42);
@@ -578,16 +593,30 @@ class _Fixture {
     return fixture;
   }
 
+  bool markReady = true;
+
   LinuxFfiApi api({
     Future<ProcessResult> Function(String, List<String>)? runCommand,
     Future<Process> Function(String, List<String>)? startProcess,
     Future<StartVpnRequest> Function()? readRequest,
+    Duration readyTimeout = const Duration(minutes: 3),
   }) {
     final api = LinuxFfiApi.forTesting(
       filesDirectory: directory.path,
       executablePath: p.join(directory.path, 'HyperClientCore'),
-      startProcess: startProcess,
+      // A Core that starts reports ready, as a real one does once Xray runs.
+      startProcess: startProcess == null
+          ? null
+          : (executable, arguments) async {
+              final process = await startProcess(executable, arguments);
+              final index = arguments.indexOf('-ready-file');
+              if (markReady && index >= 0 && process is! _ExitedProcess) {
+                await File(arguments[index + 1]).writeAsString('ready');
+              }
+              return process;
+            },
       readRequest: readRequest,
+      readyTimeout: readyTimeout,
       runCommand: (executable, arguments) async {
         commands.add([executable, ...arguments]);
         if (executable == 'pgrep') {

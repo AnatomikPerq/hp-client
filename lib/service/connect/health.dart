@@ -9,6 +9,7 @@ import 'package:onexray/core/system_proxy/platform.dart';
 import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/core/tools/platform.dart';
+import 'package:onexray/service/advanced/platform_policy.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/settings/language/service.dart';
@@ -314,12 +315,20 @@ final class ConnectionHealthMonitor {
     return current == null ? null : describeSystemProxy(current);
   }
 
-  static Future<LivePingResult> _probeTunnel(ConnectionRuntime runtime) {
+  static Future<LivePingResult> _probeTunnel(ConnectionRuntime runtime) =>
+      probeFor(runtime).measure();
+
+  /// The path [runtime]'s traffic takes: the App's port in proxy mode, the
+  /// tunnel's own address in desktop TUN mode (see [LivePingProbe]).
+  static LivePingProbe probeFor(ConnectionRuntime runtime) {
     final policy = runtime.configuration.policy;
+    final proxy = policy.usesSystemProxy(runtime.platform);
     return LivePingProbe(
-      proxyPort: policy.usesSystemProxy(runtime.platform)
-          ? policy.systemProxyPort
+      proxyPort: proxy ? policy.systemProxyPort : null,
+      tunAddress:
+          !proxy && PlatformPolicy.supportsDesktopRunMode(runtime.platform)
+          ? PlatformPolicy.tunIpv4Address
           : null,
-    ).measure();
+    );
   }
 }

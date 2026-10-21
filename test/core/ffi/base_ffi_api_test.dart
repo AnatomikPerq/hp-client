@@ -57,6 +57,7 @@ void main() {
         configSha256: 'ab' * 32,
         errorFile: r'C:\run\xray.json.error',
         stopFile: r'C:\run\core.stop',
+        readyFile: r'C:\run\xray.json.ready',
       ),
       <String>[
         'run',
@@ -68,6 +69,8 @@ void main() {
         r'C:\run\xray.json.error',
         '-stop-file',
         r'C:\run\core.stop',
+        '-ready-file',
+        r'C:\run\xray.json.ready',
       ],
     );
     expect(
@@ -107,6 +110,78 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+  group('waiting for the Core', () {
+    late Directory directory;
+    late String config;
+    late File ready;
+
+    setUp(() async {
+      directory = await createTestDirectory('core-ready-');
+      config = p.join(directory.path, 'xray.json');
+      ready = desktopCoreReadyFile(config);
+      await ready.writeAsString('');
+    });
+    tearDown(() => directory.delete(recursive: true));
+
+    Future<void> wait({
+      Future<bool> Function()? running,
+      bool Function()? cancelled,
+      Duration timeout = const Duration(seconds: 5),
+    }) => waitForDesktopCoreReady(
+      readyFile: ready,
+      configPath: config,
+      running: running ?? () async => true,
+      cancelled: cancelled,
+      timeout: timeout,
+      poll: const Duration(milliseconds: 20),
+    );
+
+    test('returns once the Core writes ready', () async {
+      var polls = 0;
+      await wait(
+        running: () async {
+          if (++polls == 3) await ready.writeAsString('ready');
+          return true;
+        },
+      );
+      expect(polls, 3);
+    });
+
+    test('reports the Core error when it exits first', () async {
+      await desktopCoreErrorFile(config).writeAsString('tun: access denied');
+      await expectLater(
+        wait(running: () async => false),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'tun: access denied',
+          ),
+        ),
+      );
+    });
+
+    test('stops when cancelled', () async {
+      var cancelled = false;
+      final waiting = wait(cancelled: () => cancelled);
+      cancelled = true;
+      await expectLater(waiting, throwsA(isA<DesktopCoreStartCancelled>()));
+    });
+
+    test('gives up after the timeout', () async {
+      await expectLater(
+        wait(timeout: const Duration(milliseconds: 100)),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('did not start Xray'),
+          ),
+        ),
+      );
+    });
   });
 
   test('a stop request tells a restart from a disconnect', () async {

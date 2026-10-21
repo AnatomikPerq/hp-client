@@ -19,7 +19,6 @@ import 'package:onexray/pages/connect/dialogs.dart';
 import 'package:onexray/pages/connect/routing/profiles/controller.dart';
 import 'package:onexray/service/connect/routing/profiles/catalog.dart';
 import 'package:onexray/pages/connect/hero.dart';
-import 'package:onexray/service/shared/ping/live_probe.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/theme.dart';
@@ -557,12 +556,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
       return;
     }
     emit(state.copyWith(livePing: const LivePingView(running: true)));
-    final policy = runtime.configuration.policy;
-    final result = await LivePingProbe(
-      proxyPort: policy.usesSystemProxy(runtime.platform)
-          ? policy.systemProxyPort
-          : null,
-    ).measure();
+    final result = await ConnectionHealthMonitor.probeFor(runtime).measure();
     if (!isPageActive || connectionView.runtime?.identity != runtime.identity) {
       return;
     }
