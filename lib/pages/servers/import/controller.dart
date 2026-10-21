@@ -211,7 +211,6 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   AgeKeyType? _linkAgeType;
   String? _hwid;
   String? _hwidUrl;
-  String? _autoFilledUserAgent;
   int _jsonRevision = 0;
   Timer? _titleTimer;
 
@@ -248,7 +247,6 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   }
 
   void _changed() {
-    if (userAgent.text != _autoFilledUserAgent) _autoFilledUserAgent = null;
     final jsonChanged = state.jsonInput != jsonText.text;
     if (jsonChanged) _jsonRevision++;
     var hwidEnabled = state.hwidEnabled;
@@ -368,7 +366,6 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
         row.ageSecretKey ?? '',
         row.agePublicKey ?? '',
       ];
-      _autoFilledUserAgent = null;
       for (var index = 0; index < fields.length; index++) {
         if (fields[index].text == initialValues[index]) {
           fields[index].text = loadedValues[index];
@@ -411,7 +408,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   }
 
   Future<void> open(BuildContext context, ServerImportAction action) async {
-    if (state.busy) return;
+    if (state.busy || state.activeAction != null) return;
     _closingFlow = false;
     emit(
       state.copyWith(error: null, committedResult: null, activeAction: action),
@@ -422,11 +419,14 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
       String? input;
       emit(state.copyWith(busy: true, openingAction: action));
       try {
-        input = action == ServerImportAction.file
-            ? await ServerImportService.pickTextFile()
-            : await _scan(context);
-        emit(state.copyWith(busy: false, openingAction: null));
-        if (input != null && isPageActive && context.mounted) {
+        try {
+          input = action == ServerImportAction.file
+              ? await ServerImportService.pickTextFile()
+              : await _scan(context);
+        } finally {
+          emit(state.copyWith(busy: false, openingAction: null));
+        }
+        if (input != null && isPageActive && context.mounted && !_closingFlow) {
           result = await _importText(context, input);
         }
       } catch (error) {
@@ -442,10 +442,17 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
             ),
           );
         }
-      } finally {
-        emit(state.copyWith(busy: false, openingAction: null));
       }
     } else {
+      if (action == ServerImportAction.subscription) {
+        emit(state.copyWith(busy: true, openingAction: action));
+        try {
+          await _fillDefaultUserAgent();
+        } finally {
+          emit(state.copyWith(busy: false, openingAction: null));
+        }
+        if (!isPageActive || !context.mounted || _closingFlow) return;
+      }
       if (action == ServerImportAction.json && jsonText.text.isEmpty) {
         jsonText.text = '{\n  "outbounds": []\n}';
       }
@@ -468,6 +475,7 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   }
 
   Future<void> openText(BuildContext context, String input) async {
+    if (state.busy || state.activeAction != null) return;
     _closingFlow = false;
     emit(state.copyWith(activeAction: ServerImportAction.paste));
     try {
@@ -507,25 +515,30 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
     if (detection.subscriptions.length == 1 &&
         detection.localText.trim().isEmpty) {
       final link = detection.subscriptions.single;
-      _hwid = null;
-      _hwidUrl = null;
       emit(
         state.copyWith(
+          busy: true,
+          openingAction: state.activeAction ?? ServerImportAction.subscription,
           subscriptionImports: const [],
           hwidEnabled: false,
           panel: link.panel,
           mode: link.mode,
         ),
       );
-      name.text = link.name;
-      url.text = link.url;
-      _autoFilledUserAgent = null;
-      userAgent.text = link.userAgent ?? '';
-      secretKey.clear();
-      publicKey.clear();
-      _linkAgeType = link.ageKeyType;
-      await _fillDefaultUserAgent();
-      if (!isPageActive || !context.mounted) return null;
+      try {
+        _hwid = null;
+        _hwidUrl = null;
+        name.text = link.name;
+        url.text = link.url;
+        userAgent.text = link.userAgent ?? '';
+        secretKey.clear();
+        publicKey.clear();
+        _linkAgeType = link.ageKeyType;
+        await _fillDefaultUserAgent();
+      } finally {
+        emit(state.copyWith(busy: false, openingAction: null));
+      }
+      if (!isPageActive || !context.mounted || _closingFlow) return null;
       return showAppDialog<ServerImportResult>(
         context,
         (dialogContext) => ServerImportFormPage(
@@ -975,23 +988,15 @@ class ServerImportController extends PageCubit<ServerImportPageState> {
   Future<void> setPanel(SubscriptionPanel panel) async {
     if (state.busy || state.loadFailed || state.generatingAgeKey) return;
     emit(state.copyWith(panel: panel));
-    if (panel != SubscriptionPanel.remnawave &&
-        userAgent.text == _autoFilledUserAgent) {
-      userAgent.clear();
-    }
     await _fillDefaultUserAgent();
   }
 
   Future<void> _fillDefaultUserAgent() async {
     if (userAgent.text.trim().isNotEmpty) return;
-    final panel = state.panel;
-    final value = await SubscriptionService.defaultUserAgent(panel);
-    if (isPageActive &&
-        state.panel == panel &&
-        userAgent.text.trim().isEmpty &&
-        value != null) {
-      _autoFilledUserAgent = value;
-      userAgent.text = value;
+    final client = NetClient();
+    await client.asyncInit();
+    if (isPageActive && userAgent.text.trim().isEmpty) {
+      userAgent.text = client.downloadUserAgent;
     }
   }
 

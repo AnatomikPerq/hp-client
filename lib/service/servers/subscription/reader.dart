@@ -91,43 +91,43 @@ class SubscriptionConfigurationReader {
     }
 
     final values = value is List ? value : [value];
-    if (values.isEmpty || values.any((item) => item is! Map<String, dynamic>)) {
+    if (values.isEmpty) {
       throw const FormatException(
         'The subscription must contain Xray configuration objects',
       );
     }
-    final configs = values.cast<Map<String, dynamic>>();
     final rows = <CoreConfigCompanion>[];
+    FormatException? firstFailure;
     await _withFiles(() async {
-      for (final (index, config) in configs.indexed) {
-        final error = await _validate(
-          XrayValidation.raw(RemnawaveAdapter.adapt(config)),
-        );
-        if (error.isNotEmpty) throw FormatException(error);
-        final name =
-            [config['remarks'], config['name']]
-                .whereType<String>()
-                .map((value) => value.trim())
-                .where((value) => value.isNotEmpty)
-                .firstOrNull ??
-            '${input.name} ${index + 1}';
-        rows.add(
-          CoreConfigCompanion.insert(
-            name: name,
-            type: CoreConfigType.Remnawave.name,
-            tags: '',
-            data: Value(base64Encode(utf8.encode(jsonEncode(config)))),
-            delay: PingDelayConstants.unknown,
-            subId: DBConstants.defaultId,
-          ),
-        );
-        // The same configuration's proxies as ordinary nodes, for the App's
-        // own routing: named after its `remarks`, mux kept, chained ones
-        // skipped (see xrayConfigOutbounds).
-        for (final outbound
-            in xrayConfigOutbounds(jsonEncode(config)) ?? const []) {
-          rows.add(outboundCompanion(outbound));
+      for (final (index, config) in values.indexed) {
+        if (config is! Map<String, dynamic>) {
+          firstFailure ??= const FormatException(
+            'The subscription must contain Xray configuration objects',
+          );
+          continue;
         }
+        final String validation;
+        final List<CoreConfigCompanion> configRows;
+        try {
+          validation = XrayValidation.raw(RemnawaveAdapter.adapt(config));
+          configRows = _configurationRows(config, '${input.name} ${index + 1}');
+        } on FormatException catch (error) {
+          firstFailure ??= error;
+          continue;
+        } on TypeError {
+          firstFailure ??= const FormatException(
+            'The subscription contains an invalid Xray configuration structure',
+          );
+          continue;
+        }
+        // A native channel failure aborts the refresh; only a completed Core
+        // validation can reject an individual configuration.
+        final error = await _validate(validation);
+        if (error.isNotEmpty) {
+          firstFailure ??= FormatException(error);
+          continue;
+        }
+        rows.addAll(configRows);
       }
     });
     final nodes = rows.where(
@@ -146,11 +146,43 @@ class SubscriptionConfigurationReader {
               : SubscriptionMode.appManaged),
     );
     if (result.count == 0) {
+      if (rows.isEmpty && firstFailure != null) throw firstFailure!;
       throw const FormatException(
         'The selected mode contains no usable configurations',
       );
     }
     return result;
+  }
+
+  List<CoreConfigCompanion> _configurationRows(
+    Map<String, dynamic> config,
+    String fallbackName,
+  ) {
+    final name =
+        [config['remarks'], config['name']]
+            .whereType<String>()
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .firstOrNull ??
+        fallbackName;
+    final rows = [
+      CoreConfigCompanion.insert(
+        name: name,
+        type: CoreConfigType.Remnawave.name,
+        tags: '',
+        data: Value(base64Encode(utf8.encode(jsonEncode(config)))),
+        delay: PingDelayConstants.unknown,
+        subId: DBConstants.defaultId,
+      ),
+    ];
+    // The same configuration's proxies as ordinary nodes, for the App's own
+    // routing: named after its `remarks`, mux kept, chained ones skipped
+    // (see xrayConfigOutbounds).
+    for (final outbound
+        in xrayConfigOutbounds(jsonEncode([config])) ?? const []) {
+      rows.add(outboundCompanion(outbound));
+    }
+    return rows;
   }
 
   Future<SubscriptionConfigurationResult> _readOrdinary(
