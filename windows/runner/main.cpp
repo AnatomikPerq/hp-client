@@ -6,11 +6,40 @@
 #include "utils.h"
 #include "app_links/app_links_plugin_c_api.h"
 
+#include <sddl.h>
+
+namespace {
+
+// Also in AppMutex of windows/packaging/exe/inno_setup.iss.
+constexpr wchar_t kRunningMutex[] = L"HyperClientAppRunning";
+constexpr wchar_t kGlobalRunningMutex[] = L"Global\\HyperClientAppRunning";
+
+void CreateRunningMutexes() {
+  ::CreateMutexW(nullptr, FALSE, kRunningMutex);
+  // The uninstaller may run elevated as another user or from another
+  // session: everyone may wait on the global one (SYNCHRONIZE), nothing else.
+  PSECURITY_DESCRIPTOR descriptor = nullptr;
+  if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+          L"D:(A;;0x00100000;;;WD)", SDDL_REVISION_1, &descriptor, nullptr)) {
+    SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor, FALSE};
+    ::CreateMutexW(&attributes, FALSE, kGlobalRunningMutex);
+    ::LocalFree(descriptor);
+  }
+}
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   if (SendAppLinkToInstance()) {
     return EXIT_SUCCESS;
   }
+
+  // The installer and uninstaller wait while these exist (Inno Setup
+  // AppMutex) and ask the user to quit the App, which disconnects and hands
+  // the system proxy back; otherwise they left its files in place under a
+  // running App. Released when the process exits.
+  CreateRunningMutexes();
 
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.

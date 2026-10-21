@@ -26,6 +26,11 @@ ArchitecturesInstallIn64BitMode={{ARCHITECTURES_INSTALL_IN_64BIT_MODE}}
 MinVersion=10.0.19042
 CloseApplications=yes
 RestartApplications=no
+; Created by windows/runner/main.cpp. Restart Manager cannot close the App
+; (closing its window only hides it to the tray) and never reaches another
+; session, so both setup and uninstall left files under a running App; this
+; asks the user to quit it first, which also disconnects cleanly.
+AppMutex=HyperClientAppRunning,Global\HyperClientAppRunning
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

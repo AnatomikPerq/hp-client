@@ -31,6 +31,9 @@ abstract final class XrayFragment {
   /// hello of their own to split, and the fragment outbound is bound to the
   /// physical interface, through which Windows refuses a loopback dial.
   /// WireGuard and AmneziaWG stay direct too: they speak UDP with no TLS.
+  /// So does REALITY: its server does not recognize a split hello and
+  /// answers with the real site's certificate, so the node connected only
+  /// now and then.
   static List<Map<String, dynamic>> connectEntries(
     Iterable<Map<String, dynamic>> entries,
     Iterable<Map<String, dynamic>> helpers,
@@ -40,10 +43,16 @@ abstract final class XrayFragment {
       final outbound = JsonTool.copyMap(source);
       if (enabled &&
           !_udpOnly.contains(outbound['protocol']) &&
+          !_reality(outbound) &&
           !outboundDialsLoopback(outbound)) {
         setOutboundDialerProxy(outbound, tag);
       }
       return outbound;
     }).toList();
+  }
+
+  static bool _reality(Map<String, dynamic> outbound) {
+    final stream = outbound['streamSettings'];
+    return stream is Map && stream['security'] == 'reality';
   }
 }

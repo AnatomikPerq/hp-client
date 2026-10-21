@@ -312,7 +312,11 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
 
   String selectionTitle(AppLocalizations l10n) {
     final providerName = runningProfile?.name ?? selectedProvider?.name;
-    if (providerName != null) return providerName;
+    if (providerName != null) {
+      // Emoji flags print as letters on Windows; the flag is drawn instead.
+      final split = splitFlagEmoji(providerName).name;
+      return split.isEmpty ? providerName : split;
+    }
     final settings = configuration.connection;
     if (settings.trafficMode != TrafficMode.allVpn &&
         settings.selection.kind != SelectionKind.server) {

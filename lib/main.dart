@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/core/network/windows_trust.dart';
 import 'package:onexray/core/pigeon/flutter_api.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
@@ -14,6 +17,7 @@ const _minimumDesktopWindowSize = Size(480, 600);
 
 Future<void> main(List<String> _) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isWindows) HttpOverrides.global = WindowsTrustOverrides();
 
   await ShortCutService().initialize();
   ShareService().startAppLinks();
