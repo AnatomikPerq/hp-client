@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/pages/shared/widgets/page_help.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
@@ -107,6 +108,10 @@ class VpnTunnelPane extends StatelessWidget {
                   _section(
                     icon: LucideIcons.globe2,
                     title: l.prototypeTunnelDns,
+                    action: PageHelpButton(
+                      title: l.prototypeTunnelDns,
+                      messages: [l.tunnelDnsServerNameHint],
+                    ),
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(14),
@@ -134,7 +139,6 @@ class VpnTunnelPane extends StatelessWidget {
                               value:
                                   controller.value['dnsServerName'] as String,
                               enabled: !controller.blocked,
-                              hint: l.tunnelDnsServerNameHint,
                               onChanged: (value) =>
                                   controller.update('dnsServerName', value),
                             ),
@@ -191,7 +195,10 @@ class VpnTunnelPane extends StatelessWidget {
                     _section(
                       icon: LucideIcons.network,
                       title: l.prototypeXrayOutboundInterface,
-                      description: l.prototypeManagedInterfaceNotice,
+                      action: PageHelpButton(
+                        title: l.prototypeXrayOutboundInterface,
+                        messages: [l.prototypeManagedInterfaceNotice],
+                      ),
                       children: [
                         SettingRow(
                           title: l.prototypeXrayOutboundInterface,
@@ -355,11 +362,13 @@ class VpnTunnelPane extends StatelessWidget {
     required String title,
     required IconData icon,
     String? description,
+    Widget? action,
     required List<Widget> children,
   }) => SettingSection(
     title: title,
     icon: icon,
     description: description,
+    action: action,
     descriptionBelow: true,
     padding: EdgeInsets.zero,
     dividerIndent: 0,

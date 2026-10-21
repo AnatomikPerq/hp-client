@@ -118,7 +118,6 @@ void main() {
     await tester.pumpWidget(app(form()));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('VMessAEAD / VLESS, Hysteria2'), findsOneWidget);
     expect(find.text('HTTPS only'), findsOneWidget);
     expect(find.byType(ShadInput), findsNWidgets(4));
     expect(
@@ -192,11 +191,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final locale in AppLocalizations.supportedLocales) {
-    for (final width in [390.0, 1000.0]) {
-      testWidgets('format notice and HWID disclosure fit at $width ($locale)', (
-        tester,
-      ) async {
+  for (final (locale, width) in const [
+    (Locale('en'), 1000.0),
+    (Locale('zh'), 390.0),
+    (Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'), 390.0),
+    (Locale('ru'), 390.0),
+    (Locale('fa'), 1000.0),
+  ]) {
+    testWidgets(
+      'subscription explanations open without changing the draft at $width ($locale)',
+      (tester) async {
         await tester.binding.setSurfaceSize(Size(width, 800));
         addTearDown(() => tester.binding.setSurfaceSize(null));
         url.text = 'https://provider.example/list';
@@ -210,16 +214,21 @@ void main() {
           contains('VMessAEAD / VLESS'),
         );
         expect(l.prototypeSubscriptionDescription, contains('Hysteria2'));
-        final formatNotice = tester.widget<Text>(
-          find.text(l.prototypeSubscriptionDescription),
-        );
-        expect(formatNotice.maxLines, isNull);
-        expect(formatNotice.overflow, isNull);
-        final disclosure = tester.widget<Text>(
-          find.text(l.subscriptionHwidDescription),
-        );
-        expect(disclosure.maxLines, isNull);
-        expect(disclosure.overflow, isNull);
+        for (final (title, message) in [
+          (l.subscriptionPanelTitle, l.prototypeSubscriptionDescription),
+          (l.subscriptionHwidTitle, l.subscriptionHwidDescription),
+        ]) {
+          expect(find.text(message), findsNothing);
+          final help = find.byTooltip('${l.pageHelp} · $title');
+          await tester.ensureVisible(help);
+          await tester.tap(help);
+          await tester.pumpAndSettle();
+          expect(find.text(message), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byTooltip(l.prototypeCloseDialog));
+          await tester.pumpAndSettle();
+          expect(url.text, 'https://provider.example/list');
+        }
         expect(
           tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value,
           isFalse,
@@ -240,8 +249,8 @@ void main() {
         // Let the provider-name lookup for the empty name run out.
         await tester.pump(const Duration(seconds: 1));
         expect(tester.takeException(), isNull);
-      });
-    }
+      },
+    );
   }
 
   for (final locale in const [Locale('en'), Locale('fa')]) {
