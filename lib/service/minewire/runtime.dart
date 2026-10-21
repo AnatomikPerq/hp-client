@@ -423,6 +423,18 @@ class MinewireRuntime {
   static Future<List<String>> _lookup(String host) async {
     final literal = InternetAddress.tryParse(host);
     if (literal != null) return [literal.address];
+    // From the App process, which the kill switch lets through: a reconnect
+    // resolves while the old tunnel is gone and the block still stands, and
+    // the system resolver's DNS Client service is blocked then.
+    try {
+      final addresses = await AppHostApi().resolveHost(
+        host,
+        timeout: const Duration(seconds: 6),
+      );
+      if (addresses.isNotEmpty) return addresses;
+    } catch (error) {
+      ygLogger('resolve minewire host in libXray failed: $error');
+    }
     try {
       final records = await InternetAddress.lookup(host)
           .timeout(const Duration(seconds: 6));

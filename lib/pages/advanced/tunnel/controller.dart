@@ -174,6 +174,9 @@ class PolicyEditorController extends PageCubit<PolicyEditorPageState> {
 
   int get systemProxyPort => group('desktop')['proxyPort'] as int;
 
+  /// Its other switches only mean something while the kill switch is on.
+  bool get killSwitchEnabled => group('desktop')['killSwitch'] as bool;
+
   void updateSystemProxyPort(int port) =>
       update('proxyPort', port, section: 'desktop');
 

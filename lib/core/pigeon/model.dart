@@ -17,6 +17,10 @@ class StartVpnRequest {
   /// Absent elsewhere, so the native start request contract is unchanged.
   List<String>? systemProxyBypass;
 
+  /// Desktop only: keep apps offline when the Core dies, until the user
+  /// disconnects. Absent when the kill switch is off and on other platforms.
+  DesktopKillSwitch? killSwitch;
+
   StartVpnRequest(
     this.tun,
     this.socksPort,
@@ -25,12 +29,31 @@ class StartVpnRequest {
     this.snapshotToken,
     this.metadataJson,
     this.systemProxyBypass,
+    this.killSwitch,
   });
 
   factory StartVpnRequest.fromJson(Map<String, dynamic> json) =>
       _$StartVpnRequestFromJson(json);
 
   Map<String, dynamic> toJson() => _$StartVpnRequestToJson(this);
+}
+
+/// What the desktop kill switch lets through and how long it holds.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class DesktopKillSwitch {
+  /// TUN mode: the local network stays reachable while traffic is blocked.
+  final bool allowLan;
+
+  /// The block survives the end of the Windows session (log off, shutdown,
+  /// restart). Otherwise a new session starts unblocked.
+  final bool strict;
+
+  const DesktopKillSwitch({required this.allowLan, required this.strict});
+
+  factory DesktopKillSwitch.fromJson(Map<String, dynamic> json) =>
+      _$DesktopKillSwitchFromJson(json);
+
+  Map<String, dynamic> toJson() => _$DesktopKillSwitchToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)
@@ -234,6 +257,12 @@ enum LibXrayMethod {
   minewireState,
   @JsonValue("controlXray")
   controlXray,
+  @JsonValue("killSwitchState")
+  killSwitchState,
+  @JsonValue("liftKillSwitch")
+  liftKillSwitch,
+  @JsonValue("resolveHost")
+  resolveHost,
 }
 
 /// Starts one embedded minewire engine (HYPER CLIENT libXray fork). The server
@@ -312,6 +341,67 @@ class MinewireEngineState {
       _$MinewireEngineStateFromJson(json);
 
   Map<String, dynamic> toJson() => _$MinewireEngineStateToJson(this);
+}
+
+/// Resolves a server name with libXray's own resolver, from the App process.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class ResolveHostRequest {
+  final String host;
+  final int? timeoutSeconds;
+
+  const ResolveHostRequest(this.host, {this.timeoutSeconds});
+
+  factory ResolveHostRequest.fromJson(Map<String, dynamic> json) =>
+      _$ResolveHostRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ResolveHostRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class ResolveHostResponse {
+  final List<String>? addresses;
+
+  const ResolveHostResponse(this.addresses);
+
+  factory ResolveHostResponse.fromJson(Map<String, dynamic> json) =>
+      _$ResolveHostResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ResolveHostResponseToJson(this);
+}
+
+/// The user's session as libXray reads it: the boot and the logon.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class KillSwitchSession {
+  /// Unix milliseconds; clock corrections move it a little.
+  final int bootedAt;
+  final String logon;
+
+  const KillSwitchSession({required this.bootedAt, required this.logon});
+
+  /// Whether [other] was read in this session: the same logon of the same
+  /// boot. Fast startup keeps the boot time across a shutdown, not the logon.
+  bool sameAs(KillSwitchSession other) =>
+      logon == other.logon &&
+      (bootedAt - other.bootedAt).abs() <=
+          const Duration(minutes: 2).inMilliseconds;
+
+  factory KillSwitchSession.fromJson(Map<String, dynamic> json) =>
+      _$KillSwitchSessionFromJson(json);
+
+  Map<String, dynamic> toJson() => _$KillSwitchSessionToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class KillSwitchStateResponse {
+  final bool engaged;
+  final KillSwitchSession session;
+
+  const KillSwitchStateResponse({required this.engaged, required this.session});
+
+  factory KillSwitchStateResponse.fromJson(Map<String, dynamic> json) =>
+      _$KillSwitchStateResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$KillSwitchStateResponseToJson(this);
 }
 
 @JsonSerializable(explicitToJson: true, includeIfNull: false)

@@ -136,23 +136,39 @@ class AppHostApi {
     }
   }
 
-  Future<NativeVpnCommandResult> stopVpn() async {
+  /// [restart]: another start follows, so the desktop kill switch keeps
+  /// what it holds. Mobile platforms have no such distinction.
+  Future<NativeVpnCommandResult> stopVpn({bool restart = false}) async {
     try {
-      return await _stopVpn();
+      return await _stopVpn(restart);
     } catch (error, stackTrace) {
       _reportUnexpected('stopVpn', error, stackTrace);
       return _commandFailed(failureDetails(error));
     }
   }
 
-  Future<NativeVpnCommandResult> _stopVpn() async {
+  Future<NativeVpnCommandResult> _stopVpn(bool restart) async {
     if (AppPlatform.isLinux) {
-      return LinuxFfiApi().stopVpn();
+      return LinuxFfiApi().stopVpn(restart: restart);
     } else if (AppPlatform.isWindows) {
-      return WindowsFfiApi().stopVpn();
+      return WindowsFfiApi().stopVpn(restart: restart);
     } else {
       return _api.stopVpn();
     }
+  }
+
+  /// Whether no Core runs and the desktop kill switch keeps apps offline.
+  /// Never fails: an unreadable state shows as not blocking.
+  Future<bool> killSwitchBlocking() async {
+    try {
+      if (AppPlatform.isLinux) return await LinuxFfiApi().killSwitchBlocking();
+      if (AppPlatform.isWindows) {
+        return await WindowsFfiApi().killSwitchBlocking();
+      }
+    } catch (error, stackTrace) {
+      _reportUnexpected('killSwitchBlocking', error, stackTrace);
+    }
+    return false;
   }
 
   String get tunFilesDir => _tunFilesDir;
@@ -233,6 +249,25 @@ class AppHostApi {
       ),
     );
     if (!response.success) throw LibXrayInvokeException(response.error);
+  }
+
+  /// Resolves [host] from the App process, IPv4 first. The system resolver
+  /// asks Windows' DNS Client service, which the desktop kill switch blocks
+  /// outside the tunnel; the App's own queries pass it.
+  Future<List<String>> resolveHost(String host, {Duration? timeout}) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.resolveHost,
+        payload: ResolveHostRequest(
+          host,
+          timeoutSeconds: timeout?.inSeconds,
+        ).toJson(),
+      ),
+    );
+    if (!response.success || response.data == null) {
+      throw LibXrayInvokeException(response.error);
+    }
+    return ResolveHostResponse.fromJson(response.data!).addresses ?? const [];
   }
 
   Future<List<MinewireEngineState>> minewireState() async {

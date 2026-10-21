@@ -69,6 +69,47 @@ void main() {
     expect(same(tun, withPort(tun, 10900)), isTrue);
   });
 
+  group('kill switch', () {
+    PlatformPolicy withDesktop(
+      PlatformPolicy policy,
+      Map<String, Object> values,
+    ) {
+      final json = policy.toJson();
+      json['desktop'] = {...json['desktop'] as Map, ...values};
+      return PlatformPolicy.fromJson(json);
+    }
+
+    bool same(PlatformPolicy a, PlatformPolicy b) =>
+        PolicyEditorService.sameRuntime(a, b, ConnectionPlatform.windows);
+
+    test('is on by default, local network allowed, not strict', () {
+      final policy = PlatformPolicy.defaults();
+      expect(policy.killSwitchEnabled, isTrue);
+      expect(policy.killSwitchAllowsLan, isTrue);
+      expect(policy.killSwitchStrict, isFalse);
+      // Stored before the kill switch existed: it is on after the update.
+      final legacy = policy.toJson();
+      legacy['desktop'] = {'runMode': 'tun', 'proxyPort': 10820};
+      expect(PlatformPolicy.fromJson(legacy).killSwitchEnabled, isTrue);
+    });
+
+    test('its switches change the runtime where they apply', () {
+      final tun = PlatformPolicy.defaults();
+      expect(same(tun, withDesktop(tun, {'killSwitch': false})), isFalse);
+      expect(same(tun, withDesktop(tun, {'killSwitchStrict': true})), isFalse);
+      expect(same(tun, withDesktop(tun, {'killSwitchLan': false})), isFalse);
+
+      final proxy = tun.withDesktopRunMode(DesktopRunMode.systemProxy);
+      // Proxy mode has no filters, so no local network to allow.
+      expect(same(proxy, withDesktop(proxy, {'killSwitchLan': false})), isTrue);
+      expect(same(proxy, withDesktop(proxy, {'killSwitch': false})), isFalse);
+
+      // Its settings are inert while it is off.
+      final off = withDesktop(tun, {'killSwitch': false});
+      expect(same(off, withDesktop(off, {'killSwitchStrict': true})), isTrue);
+    });
+  });
+
   group('system proxy exceptions', () {
     PlatformPolicy withBypass(PlatformPolicy policy, List<String> hosts) {
       final json = policy.toJson();

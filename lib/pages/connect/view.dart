@@ -61,6 +61,8 @@ class ConnectView extends StatelessWidget {
     this.livePing = LivePingView.idle,
     this.onLivePing,
     this.health = ConnectionHealth.none,
+    this.killSwitchBlocking = false,
+    this.onUnblock,
     this.activity,
   });
   final ConnectionView view;
@@ -104,6 +106,11 @@ class ConnectView extends StatelessWidget {
   /// The background check: a connection that stopped carrying traffic
   /// says so instead of "connected".
   final ConnectionHealth health;
+
+  /// The VPN stopped without a disconnect and the kill switch keeps apps
+  /// offline: Home says so and offers [onUnblock] next to reconnecting.
+  final bool killSwitchBlocking;
+  final VoidCallback? onUnblock;
 
   /// Background work (tests, downloads) at the top end of the header.
   final Widget? activity;
@@ -171,8 +178,11 @@ class ConnectView extends StatelessWidget {
     final failed = view.failed && !connected;
     final unreachable =
         connected && health.unreachable && health.appliesTo(view.runtime);
+    final blocked = killSwitchBlocking && !connected && !_busy;
     final presentationPhase = failed ? ConnectionPhase.failed : view.phase;
-    final title = unreachable
+    final title = blocked
+        ? l.killSwitchBlocked
+        : unreachable
         ? l.connectionHealthLost
         : switch (presentationPhase) {
             ConnectionPhase.disconnected => l.prototypeDisconnected,
@@ -182,7 +192,9 @@ class ConnectView extends StatelessWidget {
             ConnectionPhase.disconnecting => l.prototypeDisconnecting,
             ConnectionPhase.failed => l.prototypeConnectionFailed,
           };
-    final detail = unreachable
+    final detail = blocked && !failed
+        ? l.killSwitchBlockedDetail
+        : unreachable
         ? health.proxyTakenOver != null
               ? l.connectionHealthProxyTakenDetail(health.proxyTakenOver!)
               : health.minewireDown
@@ -201,7 +213,7 @@ class ConnectView extends StatelessWidget {
               permission: view.permission,
             ),
           };
-    final color = failed || unreachable
+    final color = failed || unreachable || blocked
         ? palette.destructive
         : connected
         ? palette.runningText
@@ -209,7 +221,7 @@ class ConnectView extends StatelessWidget {
         ? palette.primary
         : palette.mutedStrong;
     // A pending command shows progress at once, even on a live connection.
-    final tone = failed
+    final tone = failed || blocked
         ? ConnectionHeroTone.failed
         : _busy
         ? ConnectionHeroTone.busy
@@ -348,11 +360,28 @@ class ConnectView extends StatelessWidget {
               child: Text(
                 detail,
                 textAlign: TextAlign.center,
-                maxLines: failed ? 4 : 2,
+                maxLines: failed || blocked ? 4 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.supporting.copyWith(
-                  color: failed ? palette.destructive : palette.mutedForeground,
+                  color: failed || blocked
+                      ? palette.destructive
+                      : palette.mutedForeground,
                 ),
+              ),
+            ),
+          if (blocked && onUnblock != null)
+            Center(
+              child: TextButton(
+                key: const ValueKey('home-unblock'),
+                onPressed: pendingChange == null ? onUnblock : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: palette.primary,
+                  textStyle: AppTypography.homeLink,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(l.killSwitchUnblock),
               ),
             ),
           if (view.issue == 'selectionReset')

@@ -359,6 +359,14 @@ class ConnectionPreparation {
       systemProxyBypass: systemProxy && policy.systemProxyBypass.isNotEmpty
           ? policy.systemProxyBypass
           : null,
+      killSwitch:
+          PlatformPolicy.supportsDesktopRunMode(platform) &&
+              policy.killSwitchEnabled
+          ? DesktopKillSwitch(
+              allowLan: policy.killSwitchAllowsLan,
+              strict: policy.killSwitchStrict,
+            )
+          : null,
     );
     return ConnectionRuntime.create(
       configuration: configuration,

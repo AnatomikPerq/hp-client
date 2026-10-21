@@ -232,6 +232,13 @@ class PolicyEditorService {
           'proxyPort': policy.systemProxyPort,
           'proxyBypass': policy.systemProxyBypass,
         },
+        // The local network matters only to the TUN filters.
+        if (policy.killSwitchEnabled)
+          'killSwitch': {
+            'strict': policy.killSwitchStrict,
+            if (!policy.usesSystemProxy(platform))
+              'lan': policy.killSwitchAllowsLan,
+          },
       };
       if (platform == ConnectionPlatform.windows &&
           (windowsMode ?? windowsBuildMode) == WindowsMode.msix) {

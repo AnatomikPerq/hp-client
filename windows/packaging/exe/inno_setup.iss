@@ -49,6 +49,11 @@ Root: HKA; Subkey: "Software\Classes\hyperclient\shell\open\command"; ValueType:
 [Run]
 Filename: "{app}\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; A Core that crashed may have left the kill switch blocking the internet;
+; without the App nothing would lift it. The uninstaller runs elevated.
+Filename: "{app}\HyperClientCore.exe"; Parameters: "unblock"; Flags: runhidden waituntilterminated; RunOnceId: "LiftKillSwitch"
+
 [Code]
 function StartupShortcutTargetsCurrentInstall(const ShortcutPath,
   ExpectedTarget: String): Boolean;

@@ -202,7 +202,7 @@ class WindowsMsixFfiApi extends WindowsFfiApi {
   }
 
   @override
-  Future<NativeVpnCommandResult> stopVpn() async {
+  Future<NativeVpnCommandResult> stopVpn({bool restart = false}) async {
     _commandActive = true;
     try {
       await _emitWindowsStatus(WindowsVpnStatus.disconnecting);

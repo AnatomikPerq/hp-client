@@ -50,11 +50,12 @@ On Windows and Linux the Xray core is a **separate process** `HyperClientCore`, 
 - `-dns`/`-interface` only in TUN mode: they pin the Core's own DNS to the physical interface. System proxy mode passes neither.
 - `-config-sha256`: the config lives in a directory any process of the user can write; the elevated Core refuses a config swapped after UAC.
 - `-error-file`, and the log paths in the config, are opened by the Core first and refused if their final path is redirected (junction/symlink); the handles stay open to pin the paths.
-- `-stop-file <run>/core.stop`: the Core exits gracefully once the file appears, so disconnecting an elevated Core needs **no second UAC prompt**. `WindowsExeFfiApi._stopGracefully` creates it and falls back to terminate (UAC) for Cores too old to know the flag.
+- `-stop-file <run>/core.stop`: the Core exits gracefully once the file appears, so disconnecting an elevated Core needs **no second UAC prompt**. `WindowsExeFfiApi._stopGracefully` writes it (`requestDesktopCoreStop`, atomically) and falls back to terminate (UAC) for Cores too old to know the flag. Empty means a disconnect, `restart` that another Core follows; the kill switch tells them apart (below).
+- `-kill-switch` (TUN only, with `-kill-switch-lan`, `-kill-switch-app <App exe>`, `-kill-switch-persistent`) and the command `HyperClientCore unblock`: see Kill switch.
 
 TUN mode starts the Core elevated (`ShellExecuteEx runas`); system proxy mode starts it detached and unelevated. The installer is **per machine (Program Files)** so unprivileged processes cannot replace the binary that UAC elevates; the ZIP build does not have this protection.
 
-Exit watching is upstream's `CoreProcessMonitor` (`lib/core/ffi/core_process_monitor.dart`) on Windows and Linux. The fork hooks into it from the FFI APIs: a `disconnected` it reports (the Core exited on its own) and a start that finds no Core both restore the system proxy, and a stop restores it first, then writes `core.stop`, then terminates.
+Exit watching is upstream's `CoreProcessMonitor` (`lib/core/ffi/core_process_monitor.dart`) on Windows and Linux. The fork hooks into it from the FFI APIs: a `disconnected` it reports (the Core exited on its own) and a start that finds no Core both restore the system proxy unless the kill switch holds it, and a stop restores it first (a restart under the kill switch does not), then writes `core.stop`, then terminates.
 
 Windows TUN inbounds carry `autoSystemWfpBlockLeak: ["dns"]` (upstream #209): the Core blocks DNS that leaves outside the TUN, except its own, with WFP filters. Not yet checked live together with minewire engines.
 
@@ -71,6 +72,18 @@ Windows TUN inbounds carry `autoSystemWfpBlockLeak: ["dns"]` (upstream #209): th
 - The `proxy` balancer's `fallbackTag` is its own first node (`proxyFallbackTag`), **never `direct`**. Between `removeOutbound` and `addOutbound` of the same tag the balancer matches nothing and takes the fallback; Xray drops a connection routed to a missing tag, so the window fails closed. With `direct` it sent tunnel DNS, DoT and smart-mode proxy traffic out from the real address (verified on the real Core with loopback targets).
 
 Any failure falls back to a full restart: a half-configured tunnel is worse than an extra prompt.
+
+### Kill switch
+
+On by default (`desktop.killSwitch`, `killSwitchLan` on, `killSwitchStrict` off in `PlatformPolicy`; Settings → Advanced → VPN tunnel), owner's decision of 21.10.2026. Principle: apps stay offline while the user wants the VPN and no Core carries it; only a disconnect (or a new session, unless strict) lifts the block.
+
+- **TUN, Windows**: the elevated Core installs WFP filters (`libXray/killswitch`) before Xray starts, in a session that is **not dynamic**, so they outlive a crash: block everything in and out on both IP versions except the Core and the App executables (the App hosts minewire engines and pings), loopback, DHCP, IPv6 neighbor discovery, the TUN adapter once Xray created it (by LUID, re-engaged atomically after `RunXray`), and with `killSwitchLan` private/link-local/multicast networks, where DNS (port 53) stays blocked. The objects grant the user who ran the Core READ and DELETE, so **the unelevated App lifts them through libXray `liftKillSwitch` without UAC** (checked live with a medium-integrity process); `HyperClientCore unblock` run elevated is the fallback (an administrator elevated the Core with other credentials), and the uninstaller runs it. Strict mode adds `FWPM_*_FLAG_PERSISTENT` (survives reboot).
+- **Proxy mode** (Windows, Linux): no filters; the system proxy is left pointing at the dead Core's port, so apps that use it fail instead of leaking. Apps that ignore the system proxy are not covered.
+- `run/kill-switch.json` (`DesktopKillSwitchHold`, written before a start with the kill switch, removed on disconnect) records strictness and the session (`killSwitchState`: boot time and logon LUID from libXray). At App start a lenient hold from another session is lifted: Windows' **fast startup keeps WFP filters and the boot time across "Shut down"**, not the logon. The lenient Core also lifts at `WM_ENDSESSION` (hidden top-level window in `desktop_bin/session_windows.go`; console control events do not reach it once user32 is loaded). Filters without a hold are lifted at App start.
+- Stops: `stopVpn(restart: true)` (stop file `restart`) keeps the block and the proxy; `stopVpn()` writes an empty stop file (the Core lifts) and `disarm`s. `ConnectionCoordinator` uses `_stopForRestart` before every restart and, when a start fails, keeps the block only if the user was connected or blocked before and the kill switch is on; a failed first connect gives the network back.
+- UI: `ConnectionCoordinator.killSwitchBlocking` (a separate `ValueNotifier`, like health) comes from `HostConnection.killSwitchBlocking`; Home shows "Internet blocked" with the orb as reconnect and an "Unblock without VPN" link (= disconnect), the tray tooltip says so, the health monitor posts one notification and logs it.
+- minewire servers are resolved with libXray `resolveHost` (Go resolver, queries leave from the App process) before falling back to the system resolver: the DNS Client service is blocked outside the tunnel while a reconnect runs under the kill switch.
+- Not done: a Linux TUN kill switch (nftables); a "block without VPN" lockdown mode; the live check in the test VM (owner).
 
 ## Connection health and logs
 
@@ -153,6 +166,8 @@ The fork reworked navigation for usability after tunnel clients like INCY; the n
 ## Testing the VPN
 
 **Never start the tunnel or the system proxy mode system-wide on the owner's machine.** It runs another VPN through the system proxy (`127.0.0.1:10808`) that must not be disturbed.
+
+- **Never engage the kill switch outside the test VM**: unscoped filters cut the whole machine off, the agent's own API traffic included. `libXray/killswitch` live tests use their own WFP keys and narrow every block to documentation networks (`192.0.2.0/24`, `2001:db8::/32`), so they run safely elevated on any machine; `go test -c` plus `-killswitch.stage=engage` (elevated) and `=lift` (started through `explorer.exe`, which gives a medium token; `runas /trustlevel` does not) checks the unelevated lift by hand.
 
 - **WinINet writes are never isolated.** Even a throwaway per-connection entry rewrites the legacy LAN registry values. Tests of `lib/core/system_proxy/windows.dart` are read-only; writes are covered with a fake backend.
 - The environment has `HTTP_PROXY`/`HTTPS_PROXY=127.0.0.1:10808` and `NO_PROXY=localhost,127.0.0.1`: Dart `HttpClient` and Go follow them unless told otherwise, curl skips a `--socks5` proxy for 127.0.0.1 targets without `--noproxy ""`, and Python urllib bypasses proxies for localhost.

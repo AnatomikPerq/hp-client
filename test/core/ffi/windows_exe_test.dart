@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/ffi/desktop_core_exit.dart';
+import 'package:onexray/core/ffi/desktop_kill_switch.dart';
 import 'package:onexray/core/ffi/windows/core_process.dart';
 import 'package:onexray/core/ffi/windows/exe_ffi_api.dart';
 import 'package:onexray/core/ffi/windows/ffi_api.dart';
@@ -18,17 +19,24 @@ import 'package:onexray/core/system_proxy/manager.dart';
 import 'package:onexray/core/system_proxy/model.dart';
 import 'package:path/path.dart' as p;
 
+import 'kill_switch_fake.dart';
+
 void main() {
   late Directory directory;
   late _Process process;
   late List<VpnStatus> events;
   late List<Object> errors;
+  late FakeKillSwitchLib killSwitch;
+
+  String appPath() => p.join(directory.path, 'HyperClient.exe');
 
   WindowsExeFfiApi create({Future<StartVpnRequest> Function()? readRequest}) =>
       WindowsExeFfiApi(
         filesDirectory: directory.path,
         executable: p.join(directory.path, 'OneXrayCore.exe'),
         process: process,
+        appPath: appPath(),
+        killSwitch: killSwitch.control(p.join(directory.path, 'run')),
         readRequest:
             readRequest ??
             () async => StartVpnRequest(
@@ -61,6 +69,7 @@ void main() {
     process = _Process();
     events = [];
     errors = [];
+    killSwitch = FakeKillSwitchLib();
     addTearDown(() => directory.delete(recursive: true));
   });
 
@@ -501,10 +510,15 @@ void main() {
     );
     late _ProxyBackend backend;
 
-    WindowsExeFfiApi createProxy({List<String>? bypass}) => WindowsExeFfiApi(
+    WindowsExeFfiApi createProxy({
+      List<String>? bypass,
+      DesktopKillSwitch? kill,
+    }) => WindowsExeFfiApi(
       filesDirectory: directory.path,
       executable: p.join(directory.path, 'HyperClientCore.exe'),
       process: process,
+      appPath: appPath(),
+      killSwitch: killSwitch.control(p.join(directory.path, 'run')),
       readRequest: () async => StartVpnRequest(
         null,
         '10820',
@@ -516,6 +530,7 @@ void main() {
           ).toJson(),
         ),
         systemProxyBypass: bypass,
+        killSwitch: kill,
       ),
       notify: (status) async => events.add(status),
       notifyError: (error) => errors.add(error),
@@ -585,6 +600,51 @@ void main() {
       },
     );
 
+    const lenient = DesktopKillSwitch(allowLan: true, strict: false);
+
+    test('with the kill switch a Core that dies keeps the proxy', () async {
+      final api = createProxy(kill: lenient);
+      await api.observeVpnStatus();
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      // The unelevated proxy Core never gets the TUN filters.
+      expect(process.arguments, isNot(contains('-kill-switch')));
+      expect(await api.killSwitchBlocking(), isFalse);
+
+      process.exitPid(42);
+      await _eventually(() => events.last == VpnStatus.disconnected);
+      expect(backend.current.server, '127.0.0.1:10820');
+      expect(await api.killSwitchBlocking(), isTrue);
+
+      expect((await api.stopVpn()).status, VpnStatus.disconnected);
+      expect(backend.current, userProxy);
+      expect(await api.killSwitchBlocking(), isFalse);
+    });
+
+    test('a held proxy stays for this session, not for the next', () async {
+      final api = createProxy(kill: lenient);
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      // The App and the Core die without a stop.
+      process.pids.clear();
+
+      await createProxy().observeVpnStatus();
+      expect(backend.current.server, '127.0.0.1:10820');
+
+      // Logged off and on again: a new session starts unblocked.
+      killSwitch.session = {'bootedAt': 1000000, 'logon': '0-2'};
+      await createProxy().observeVpnStatus();
+      expect(backend.current, userProxy);
+    });
+
+    test('a restart with the kill switch never hands the proxy back', () async {
+      final api = createProxy(kill: lenient);
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      backend.writes.clear();
+
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(backend.writes, isNot(contains(userProxy)));
+      expect(backend.current.server, '127.0.0.1:10820');
+    });
+
     test('a proxy changed by other software is left alone', () async {
       final api = createProxy();
       expect((await api.startVpn()).status, VpnStatus.connected);
@@ -595,6 +655,103 @@ void main() {
       backend.current = foreign;
       expect((await api.stopVpn()).status, VpnStatus.disconnected);
       expect(backend.current, foreign);
+    });
+  });
+
+  group('TUN kill switch', () {
+    StartVpnRequest tunRequest(DesktopKillSwitch? kill) => StartVpnRequest(
+      TunJson.fromJson({
+        'tunDnsIPv4': '8.8.8.8',
+        'autoOutboundsInterface': 'Ethernet 2',
+      }),
+      '18187',
+      '18186',
+      jsonEncode(
+        LibXrayInvokeRequest(
+          method: LibXrayMethod.runXray,
+          payload: RunXrayRequest('{"inbounds":[]}').toJson(),
+        ).toJson(),
+      ),
+      killSwitch: kill,
+    );
+
+    File stopFile() => File(p.join(directory.path, 'run', 'core.stop'));
+
+    setUp(() {
+      process
+        ..stopFile = stopFile()
+        ..ignoreStopFile = false;
+    });
+
+    test('the elevated Core gets the kill switch and the App path', () async {
+      final api = create(
+        readRequest: () async =>
+            tunRequest(const DesktopKillSwitch(allowLan: false, strict: true)),
+      );
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(
+        process.arguments,
+        containsAllInOrder([
+          '-kill-switch',
+          '-kill-switch-persistent',
+          '-kill-switch-app',
+          appPath(),
+        ]),
+      );
+      expect(process.arguments, isNot(contains('-kill-switch-lan')));
+      expect(
+        (await DesktopKillSwitchHold.read(p.join(directory.path, 'run')))
+            ?.strict,
+        isTrue,
+      );
+    });
+
+    test('a restart keeps the block, a disconnect lifts it', () async {
+      final api = create(
+        readRequest: () async =>
+            tunRequest(const DesktopKillSwitch(allowLan: true, strict: false)),
+      );
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(process.arguments, contains('-kill-switch-lan'));
+      // The Core installed its filters.
+      killSwitch.engaged = true;
+
+      expect((await api.stopVpn(restart: true)).status, VpnStatus.disconnected);
+      expect(await stopFile().readAsString(), 'restart');
+      expect(killSwitch.engaged, isTrue);
+      expect(await api.killSwitchBlocking(), isTrue);
+
+      expect((await api.stopVpn()).status, VpnStatus.disconnected);
+      expect(await stopFile().readAsString(), isEmpty);
+      expect(killSwitch.engaged, isFalse);
+      expect(
+        await DesktopKillSwitchHold.read(p.join(directory.path, 'run')),
+        isNull,
+      );
+      expect(await api.killSwitchBlocking(), isFalse);
+    });
+
+    test('a Core without the kill switch lifts filters left before', () async {
+      killSwitch.engaged = true;
+      final api = create(readRequest: () async => tunRequest(null));
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      expect(process.arguments, isNot(contains('-kill-switch')));
+      expect(killSwitch.engaged, isFalse);
+    });
+
+    test('blocking is reported only while no Core runs', () async {
+      final api = create(
+        readRequest: () async =>
+            tunRequest(const DesktopKillSwitch(allowLan: true, strict: false)),
+      );
+      await api.observeVpnStatus();
+      expect((await api.startVpn()).status, VpnStatus.connected);
+      killSwitch.engaged = true;
+      expect(await api.killSwitchBlocking(), isFalse);
+
+      process.exitPid(42);
+      await _eventually(() => events.last == VpnStatus.disconnected);
+      expect(await api.killSwitchBlocking(), isTrue);
     });
   });
 
@@ -611,6 +768,8 @@ void main() {
       notifyError: (error) => errors.add(error),
       gracefulStop: const Duration(milliseconds: 300),
       systemProxy: (_) async => null,
+      appPath: appPath(),
+      killSwitch: killSwitch.control(p.join(directory.path, 'run')),
     );
     expect((await api.stopVpn()).status, VpnStatus.disconnected);
     expect(process.stops, 1);
@@ -719,6 +878,7 @@ Future<void> _eventually(bool Function() condition) async {
 
 class _ProxyBackend implements SystemProxyBackend {
   SystemProxySettings current;
+  final writes = <SystemProxySettings>[];
 
   _ProxyBackend(this.current);
 
@@ -726,5 +886,8 @@ class _ProxyBackend implements SystemProxyBackend {
   Future<SystemProxySettings> read() async => current;
 
   @override
-  Future<void> write(SystemProxySettings settings) async => current = settings;
+  Future<void> write(SystemProxySettings settings) async {
+    writes.add(settings);
+    current = settings;
+  }
 }

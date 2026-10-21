@@ -1563,6 +1563,169 @@ void main() {
       expect(stops, 2);
     },
   );
+
+  group('kill switch', () {
+    test('a reconnect stops the old Core without lifting the block', () async {
+      final old = _runtime('a');
+      final next = _runtime('b', entryIds: const [2]);
+      var host = HostConnection(VpnStatus.connected, runtime: old);
+      final calls = <String>[];
+      final coordinator = await _initialize(
+        ConnectionCoordinator(
+          database: db,
+          readRuntime: () async => host.runtime,
+          inspect: (_, {observedStatus}) async => host,
+          prepare: (_, _) async => next,
+          stop: () async {
+            calls.add('stop');
+            host = const HostConnection(VpnStatus.disconnected);
+            return host;
+          },
+          stopForRestart: () async {
+            calls.add('stopForRestart');
+            host = const HostConnection(VpnStatus.disconnected);
+            return host;
+          },
+          start: (runtime) async {
+            calls.add('start');
+            host = HostConnection(VpnStatus.connected, runtime: runtime);
+            return host;
+          },
+        ),
+      );
+
+      await coordinator.apply(
+        next.configuration,
+        prepare: (_, _) async => next,
+      );
+
+      expect(calls, ['stopForRestart', 'start']);
+      expect(coordinator.state.value.phase, ConnectionPhase.connected);
+    });
+
+    for (final (wasConnected, enabled, expected) in [
+      (true, true, 'stopForRestart'),
+      (true, false, 'stop'),
+      (false, true, 'stop'),
+    ]) {
+      test('a failed start after connected=$wasConnected with the kill switch '
+          '${enabled ? 'on' : 'off'} ends with $expected', () async {
+        final old = _runtime('a');
+        final policy = PlatformPolicy.fromJson({
+          'desktop': {'killSwitch': enabled},
+        });
+        final next = _runtime('b', entryIds: const [2], policy: policy);
+        var host = wasConnected
+            ? HostConnection(VpnStatus.connected, runtime: old)
+            : const HostConnection(VpnStatus.disconnected);
+        final calls = <String>[];
+        final coordinator = await _initialize(
+          ConnectionCoordinator(
+            database: db,
+            readRuntime: () async => host.runtime,
+            inspect: (_, {observedStatus}) async => host,
+            stop: () async {
+              calls.add('stop');
+              host = const HostConnection(VpnStatus.disconnected);
+              return host;
+            },
+            stopForRestart: () async {
+              calls.add('stopForRestart');
+              host = HostConnection(
+                VpnStatus.disconnected,
+                killSwitchBlocking: enabled,
+              );
+              return host;
+            },
+            start: (_) async =>
+                throw const ConnectionHostException('startFailed'),
+          ),
+        );
+
+        await expectLater(
+          coordinator.apply(
+            next.configuration,
+            connect: !wasConnected,
+            prepare: (_, _) async => next,
+          ),
+          throwsA(isA<ConnectionHostException>()),
+        );
+
+        expect(calls.last, expected);
+        expect(coordinator.state.value.phase, ConnectionPhase.failed);
+        expect(
+          coordinator.killSwitchBlocking.value,
+          expected == 'stopForRestart',
+        );
+      });
+    }
+
+    test(
+      'a Core gone without a command shows the block until unblocked',
+      () async {
+        final running = _runtime('a');
+        var host = HostConnection(VpnStatus.connected, runtime: running);
+        final coordinator = await _initialize(
+          ConnectionCoordinator(
+            database: db,
+            readRuntime: () async => host.runtime,
+            inspect: (_, {observedStatus}) async => host,
+            stop: () async {
+              host = const HostConnection(VpnStatus.disconnected);
+              return host;
+            },
+          ),
+        );
+        expect(coordinator.killSwitchBlocking.value, isFalse);
+
+        host = const HostConnection(
+          VpnStatus.disconnected,
+          killSwitchBlocking: true,
+        );
+        await coordinator.refresh(observedStatus: VpnStatus.disconnected);
+        expect(coordinator.state.value.phase, ConnectionPhase.disconnected);
+        expect(coordinator.killSwitchBlocking.value, isTrue);
+
+        await coordinator.disconnect();
+        expect(coordinator.killSwitchBlocking.value, isFalse);
+      },
+    );
+
+    test('connecting while blocked starts without another stop', () async {
+      final next = _runtime('b', entryIds: const [2]);
+      var host = const HostConnection(
+        VpnStatus.disconnected,
+        killSwitchBlocking: true,
+      );
+      final calls = <String>[];
+      final coordinator = await _initialize(
+        ConnectionCoordinator(
+          database: db,
+          readRuntime: () async => host.runtime,
+          inspect: (_, {observedStatus}) async => host,
+          prepare: (_, _) async => next,
+          stop: () async {
+            calls.add('stop');
+            return host = const HostConnection(VpnStatus.disconnected);
+          },
+          stopForRestart: () async {
+            calls.add('stopForRestart');
+            return host;
+          },
+          start: (runtime) async {
+            calls.add('start');
+            return host = HostConnection(VpnStatus.connected, runtime: runtime);
+          },
+        ),
+      );
+      expect(coordinator.killSwitchBlocking.value, isTrue);
+
+      await coordinator.connect();
+
+      expect(calls, ['start']);
+      expect(coordinator.killSwitchBlocking.value, isFalse);
+    });
+  });
 }
 
 Future<ConnectionCoordinator> _initialize(

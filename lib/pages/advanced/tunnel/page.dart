@@ -159,6 +159,36 @@ class VpnTunnelPane extends StatelessWidget {
                   ),
                   if (controller.service.requiresInterface)
                     _section(
+                      icon: LucideIcons.shieldBan,
+                      title: l.killSwitchTitle,
+                      description: l.killSwitchDescription,
+                      children: [
+                        PolicyToggle(
+                          controller: controller,
+                          section: 'desktop',
+                          field: 'killSwitch',
+                          title: l.killSwitchEnable,
+                        ),
+                        PolicyToggle(
+                          controller: controller,
+                          section: 'desktop',
+                          field: 'killSwitchLan',
+                          title: l.killSwitchLan,
+                          subtitle: l.killSwitchLanDescription,
+                          supported: controller.killSwitchEnabled,
+                        ),
+                        PolicyToggle(
+                          controller: controller,
+                          section: 'desktop',
+                          field: 'killSwitchStrict',
+                          title: l.killSwitchStrict,
+                          subtitle: l.killSwitchStrictDescription,
+                          supported: controller.killSwitchEnabled,
+                        ),
+                      ],
+                    ),
+                  if (controller.service.requiresInterface)
+                    _section(
                       icon: LucideIcons.network,
                       title: l.prototypeXrayOutboundInterface,
                       description: l.prototypeManagedInterfaceNotice,

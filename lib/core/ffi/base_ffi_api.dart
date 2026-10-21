@@ -9,6 +9,7 @@ import 'package:isolate_manager/isolate_manager.dart';
 import 'package:onexray/core/ffi/generated_bindings.dart';
 import 'package:onexray/core/pigeon/messages.g.dart';
 import 'package:onexray/core/pigeon/model.dart';
+import 'package:onexray/core/tools/atomic_file.dart';
 import 'package:onexray/core/tools/empty.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:path_provider/path_provider.dart';
@@ -22,6 +23,10 @@ import 'package:path/path.dart' as p;
 /// the file lives in a directory every process of the user can write.
 /// [stopFile] lets the App end the Core without terminating it, which for an
 /// elevated Core would cost another UAC prompt.
+///
+/// [killSwitch] makes a TUN Core block traffic outside the tunnel until the
+/// App disconnects; [killSwitchApp] (the App itself) may still pass. Only the
+/// elevated TUN Core can install the filters.
 List<String> desktopCoreRunArguments({
   String dns = '',
   String interfaceName = '',
@@ -29,15 +34,26 @@ List<String> desktopCoreRunArguments({
   String? errorFile,
   String? configSha256,
   String? stopFile,
+  DesktopKillSwitch? killSwitch,
+  String? killSwitchApp,
 }) {
   if (configPath.isEmpty || dns.isEmpty != interfaceName.isEmpty) {
     throw const FormatException(
       'Desktop Core DNS, interface, or config path is missing',
     );
   }
+  if (killSwitch != null && dns.isEmpty) {
+    throw const FormatException('The kill switch needs the TUN mode');
+  }
   return <String>[
     'run',
     if (dns.isNotEmpty) ...['-dns', '$dns:53', '-interface', interfaceName],
+    if (killSwitch != null) ...[
+      '-kill-switch',
+      if (killSwitch.allowLan) '-kill-switch-lan',
+      if (killSwitch.strict) '-kill-switch-persistent',
+      if (killSwitchApp != null) ...['-kill-switch-app', killSwitchApp],
+    ],
     '-config',
     configPath,
     if (configSha256 != null) ...['-config-sha256', configSha256],
@@ -53,6 +69,18 @@ String desktopCoreConfigSha256(String xrayJson) =>
 /// The Core stops gracefully once this file appears.
 File desktopCoreStopFile(String runDirectory) =>
     File(p.join(runDirectory, 'core.stop'));
+
+/// Asks the Core to stop through [stopFile]. Empty means a disconnect, and
+/// the Core lifts its kill switch; [restart] (another Core follows) keeps it,
+/// so nothing slips out in between. Written whole, so the Core never reads a
+/// restart as an empty file.
+Future<void> requestDesktopCoreStop(
+  File stopFile, {
+  bool restart = false,
+}) async {
+  await stopFile.parent.create(recursive: true);
+  await writeBytesAtomically(stopFile, restart ? utf8.encode('restart') : []);
+}
 
 /// Desktop requests without TUN settings run the system proxy mode; the
 /// SOCKS port is then the user-facing mixed inbound on 127.0.0.1.
@@ -137,9 +165,16 @@ abstract class BaseFfiApi {
   /// Successful commands return the confirmed terminal status. Each platform
   /// owns its notification/wait mechanism; callers do not poll for completion.
   Future<NativeVpnCommandResult> startVpn();
-  Future<NativeVpnCommandResult> stopVpn();
+
+  /// [restart] stops the Core for another one, where the desktop kill
+  /// switch keeps what it holds; a plain stop is the user's disconnect.
+  Future<NativeVpnCommandResult> stopVpn({bool restart = false});
   Future<void> observeVpnStatus();
   void disposeVpnStatus();
+
+  /// Whether no Core runs and the kill switch keeps apps offline. Desktop
+  /// platforms that have one override it.
+  Future<bool> killSwitchBlocking() async => false;
 
   @protected
   LibXrayRunConfig readRunXrayRequest(StartVpnRequest request) {

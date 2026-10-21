@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/ffi/base_ffi_api.dart';
 import 'package:onexray/core/ffi/core_process_monitor.dart';
+import 'package:onexray/core/ffi/desktop_kill_switch.dart';
 import 'package:onexray/core/ffi/desktop_core_exit.dart';
 import 'package:onexray/core/ffi/linux_core_exit.dart';
 import 'package:onexray/core/model/tun_json.dart';
@@ -33,7 +34,8 @@ class LinuxFfiApi extends BaseFfiApi {
       _watchExit = watchLinuxCoreExit,
       _notify = AppFlutterApi().vpnStatusChanged,
       _notifyError = AppFlutterApi().vpnStatusController.addError,
-      _createSystemProxy = createSystemProxyManager;
+      _createSystemProxy = createSystemProxyManager,
+      _injectedKillSwitch = null;
 
   @visibleForTesting
   LinuxFfiApi.forTesting({
@@ -46,7 +48,17 @@ class LinuxFfiApi extends BaseFfiApi {
     Future<void> Function(VpnStatus)? notify,
     void Function(Object)? notifyError,
     Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
+    DesktopKillSwitchControl? killSwitch,
   }) : _createSystemProxy = systemProxy ?? ((_) async => null),
+       // Tests have no libXray: a kill switch with no filters by default.
+       _injectedKillSwitch =
+           killSwitch ??
+           DesktopKillSwitchControl(
+             runDirectory: () async => p.join(_filesDirectory, 'run'),
+             invoke: (_) async =>
+                 '{"success":true,"data":{"engaged":false,'
+                 '"session":{"bootedAt":0,"logon":""}},"error":""}',
+           ),
        _startProcess = startProcess ?? Process.start,
        _readRequest = readRequest ?? StartVpnRequestReader.readFromStartFile,
        _notify = notify ?? AppFlutterApi().vpnStatusChanged,
@@ -65,14 +77,21 @@ class LinuxFfiApi extends BaseFfiApi {
   final Future<SystemProxyManager?> Function(String runDirectory)
   _createSystemProxy;
   Future<SystemProxyManager?>? _systemProxy;
+  final DesktopKillSwitchControl? _injectedKillSwitch;
+
+  /// Linux has no TUN filters: the kill switch holds only the system proxy.
+  late final DesktopKillSwitchControl _killSwitch =
+      _injectedKillSwitch ??
+      DesktopKillSwitchControl(
+        runDirectory: () async => p.join(await getTunFilesDir(), 'run'),
+        invoke: invoke,
+      );
   late final _monitor = CoreProcessMonitor(
     discoverPids: _queryCorePids,
     watchExit: _watchProcessExit,
     canPublish: () => !_stopping && _transition == null,
     notify: (status) async {
-      // A Core that exited on its own left the system proxy pointing at a
-      // closed port.
-      if (status == VpnStatus.disconnected) await _restoreSystemProxy();
+      if (status == VpnStatus.disconnected) await _releaseAfterExit();
       await _notify(status);
     },
     notifyError: _notifyError,
@@ -102,9 +121,12 @@ class LinuxFfiApi extends BaseFfiApi {
       await _notify(VpnStatus.connecting);
       final request = await _readRequest();
       final proxyPort = desktopSystemProxyPort(request);
+      await _killSwitch.arm(request.killSwitch);
+      // On failure the caller decides whether the kill switch stays: a
+      // reconnect keeps it, a first connect does not.
       if (!await startCore(readRunXrayRequest(request), request.tun)) {
         final error = _lastCoreError;
-        await stopVpn();
+        await stopVpn(restart: true);
         return commandFailed(error);
       }
       if (proxyPort != null) {
@@ -116,7 +138,7 @@ class LinuxFfiApi extends BaseFfiApi {
             bypass: desktopSystemProxyBypass(request),
           );
         } catch (error) {
-          await stopVpn();
+          await stopVpn(restart: true);
           return commandFailed(failureDetails(error));
         }
       }
@@ -130,13 +152,14 @@ class LinuxFfiApi extends BaseFfiApi {
   }
 
   @override
-  Future<NativeVpnCommandResult> stopVpn() async {
+  Future<NativeVpnCommandResult> stopVpn({bool restart = false}) async {
     _transition = VpnStatus.disconnecting;
     try {
       await _notify(VpnStatus.disconnecting);
-      if (!await stopCore()) {
+      if (!await (restart ? _stopCoreProcess(restart: true) : stopCore())) {
         return commandFailed('Unable to stop the current Core process.');
       }
+      if (!restart) await _killSwitch.disarm();
       await _notify(VpnStatus.disconnected);
       return commandSuccess(status: VpnStatus.disconnected);
     } finally {
@@ -151,8 +174,35 @@ class LinuxFfiApi extends BaseFfiApi {
   @override
   Future<void> observeVpnStatus() async {
     await _monitor.observe();
-    // Recover the user's proxy after a proxy-mode Core died unobserved.
-    if ((await _monitor.readPids()).isEmpty) await _restoreSystemProxy();
+    // Recover the user's proxy after a proxy-mode Core died unobserved,
+    // unless the kill switch still holds it.
+    if ((await _monitor.readPids()).isEmpty && !await _killSwitch.settle()) {
+      await _restoreSystemProxy();
+    }
+  }
+
+  /// With the kill switch the proxy stays at the closed port of a Core that
+  /// exited on its own: apps fail instead of going direct.
+  Future<void> _releaseAfterExit() async {
+    if (await _killSwitch.hold() == null) {
+      await _restoreSystemProxy();
+    } else {
+      AppLog.warning('the Core exited; the kill switch keeps apps offline');
+    }
+  }
+
+  @override
+  Future<bool> killSwitchBlocking() async {
+    if (_transition != null || (await queryCoreRunning() ?? true)) {
+      return false;
+    }
+    try {
+      return await _killSwitch.hold() != null &&
+          (await (await _proxyManager())?.holding() ?? false);
+    } catch (error) {
+      AppLog.warning('read kill switch failed: ${AppLog.reason(error)}');
+      return false;
+    }
   }
 
   @override
@@ -187,7 +237,7 @@ class LinuxFfiApi extends BaseFfiApi {
   Future<bool> startCore(LibXrayRunConfig request, TunJson? tun) async {
     _lastCoreError = null;
     try {
-      if (!await _stopCoreProcess()) {
+      if (!await _stopCoreProcess(restart: true)) {
         _lastCoreError = 'The previous Core process is still running.';
         return false;
       }
@@ -224,7 +274,7 @@ class LinuxFfiApi extends BaseFfiApi {
     } catch (error) {
       _lastCoreError = failureDetails(error);
       ygLogger('start core failed: $_lastCoreError');
-      await _stopCoreProcess();
+      await _stopCoreProcess(restart: true);
       return false;
     }
   }
@@ -234,11 +284,14 @@ class LinuxFfiApi extends BaseFfiApi {
 
   Future<bool> stopCore() => _stopCoreProcess();
 
-  Future<bool> _stopCoreProcess() async {
+  Future<bool> _stopCoreProcess({bool restart = false}) async {
     _stopping = true;
     _monitor.clearWatches();
-    // Hand the proxy back first, so apps never see a closed local port.
-    await _restoreSystemProxy();
+    // Hand the proxy back first, so apps never see a closed local port;
+    // unless the kill switch wants exactly that until the next Core is up.
+    if (!restart || await _killSwitch.hold() == null) {
+      await _restoreSystemProxy();
+    }
     try {
       var pids = await _monitor.readPids();
       for (final (signal, timeout) in const [

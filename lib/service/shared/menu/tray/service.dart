@@ -113,6 +113,7 @@ final class TrayService {
     );
     _coordinator.state.addListener(_connectionChanged);
     _health.addListener(_connectionChanged);
+    _coordinator.killSwitchBlocking.addListener(_connectionChanged);
     _initialized = true;
     _listeners.add(
       TrayMenuData.watch(_db).listen(
@@ -141,6 +142,7 @@ final class TrayService {
     _platform.dispose();
     _coordinator.state.removeListener(_connectionChanged);
     _health.removeListener(_connectionChanged);
+    _coordinator.killSwitchBlocking.removeListener(_connectionChanged);
     for (final listener in _listeners) {
       unawaited(listener.cancel());
     }
@@ -183,9 +185,13 @@ final class TrayService {
     final health = _health.value;
     final unreachable =
         connected && health.unreachable && health.appliesTo(view.runtime);
+    final blocked =
+        _coordinator.killSwitchBlocking.value && !connected && !view.busy;
     final parts = <String>[
       'HYPER CLIENT',
-      if (unreachable)
+      if (blocked)
+        l.killSwitchBlocked
+      else if (unreachable)
         l.connectionHealthLost
       else if (phase != ConnectionPhase.disconnected)
         switch (phase) {

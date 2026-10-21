@@ -3097,5 +3097,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "killSwitchTitle": "Kill switch",
+  "killSwitchDescription": "If the VPN stops without a disconnect, apps stay offline instead of going out from your real address. Reconnect or unblock on the home screen. In TUN mode Windows filters block the traffic; in proxy mode the system proxy keeps pointing at the stopped VPN, so only apps that use it are covered.",
+  "killSwitchEnable": "Block the internet when the VPN stops",
+  "killSwitchLan": "Allow the local network while blocked",
+  "killSwitchLanDescription": "Printers, the router and other devices at home stay reachable; DNS to them stays blocked. TUN mode only.",
+  "killSwitchStrict": "Keep blocking after logging off or restarting",
+  "killSwitchStrictDescription": "Otherwise logging off, shutting down or restarting Windows lifts the block. With this on, apps stay offline from the start of Windows until you connect or unblock.",
+  "killSwitchBlocked": "Internet blocked",
+  "killSwitchBlockedDetail": "The VPN stopped without a disconnect, and the kill switch keeps apps offline. Reconnect, or unblock to go online without the VPN.",
+  "killSwitchUnblock": "Unblock without VPN",
+  "killSwitchBlockedNotice": "The VPN stopped: the kill switch blocks the internet until you reconnect or unblock"
 }

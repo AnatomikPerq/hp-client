@@ -117,6 +117,8 @@ class _ConnectPageState extends State<ConnectPage> {
                 livePing: state.livePing,
                 onLivePing: controller.measureLivePing,
                 health: state.health,
+                killSwitchBlocking: state.killSwitchBlocking,
+                onUnblock: () => controller.unblock(context),
                 activity: const AppActivityIndicator(),
               );
             },

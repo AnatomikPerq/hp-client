@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:onexray/core/ffi/base_ffi_api.dart';
 import 'package:onexray/core/ffi/core_process_monitor.dart';
+import 'package:onexray/core/ffi/desktop_kill_switch.dart';
 import 'package:onexray/core/ffi/windows/core_process.dart';
 import 'package:onexray/core/ffi/windows/ffi_api.dart';
 import 'package:onexray/core/ffi/windows/model.dart';
@@ -26,14 +27,21 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   _createSystemProxy;
   Future<SystemProxyManager?>? _systemProxy;
   final Duration _gracefulStop;
+  final String _appPath;
+  final DesktopKillSwitchControl? _injectedKillSwitch;
+  late final DesktopKillSwitchControl _killSwitch =
+      _injectedKillSwitch ??
+      DesktopKillSwitchControl(
+        runDirectory: _runDirectory,
+        invoke: invoke,
+        liftElevated: () => _process.unblockElevated(_corePath),
+      );
   late final _monitor = CoreProcessMonitor(
     discoverPids: _process.findPids,
     watchExit: _process.watchExit,
     canPublish: () => _transition == null,
     notify: (status) async {
-      // A Core that exited on its own left the system proxy pointing at a
-      // closed port.
-      if (status == VpnStatus.disconnected) await _restoreSystemProxy();
+      if (status == VpnStatus.disconnected) await _releaseAfterExit();
       await _notify(status);
     },
     notifyError: _notifyError,
@@ -49,7 +57,11 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     void Function(Object)? notifyError,
     Future<SystemProxyManager?> Function(String runDirectory)? systemProxy,
     this._gracefulStop = const Duration(seconds: 3),
+    String? appPath,
+    DesktopKillSwitchControl? killSwitch,
   }) : _process = process ?? WindowsCoreProcess(),
+       _appPath = appPath ?? Platform.resolvedExecutable,
+       _injectedKillSwitch = killSwitch,
        _createSystemProxy = systemProxy ?? createSystemProxyManager,
        _corePath =
            executable ??
@@ -77,9 +89,37 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   @override
   Future<void> observeVpnStatus() async {
     await _monitor.observe();
-    // A proxy-mode Core that died with the App, or with the machine, left
-    // the system proxy pointing at a closed port. Give the user theirs back.
-    if (!await _running()) await _restoreSystemProxy();
+    // A Core that died with the App, or with the machine, left the system
+    // proxy pointing at a closed port, and maybe its TUN filters. Give the
+    // user their network back, unless the kill switch still holds it.
+    if (!await _running() && !await _killSwitch.settle()) {
+      await _restoreSystemProxy();
+    }
+  }
+
+  /// A Core that exited on its own left the system proxy at a closed port.
+  /// Without the kill switch the user gets their proxy back; with it the
+  /// closed port is the point: apps fail instead of going direct, as they do
+  /// against the TUN filters the Core leaves in place.
+  Future<void> _releaseAfterExit() async {
+    if (await _killSwitch.hold() == null) {
+      await _restoreSystemProxy();
+    } else {
+      AppLog.warning('the Core exited; the kill switch keeps apps offline');
+    }
+  }
+
+  @override
+  Future<bool> killSwitchBlocking() async {
+    if (_transition != null || await _running()) return false;
+    try {
+      if (await _killSwitch.filtersEngaged()) return true;
+      return await _killSwitch.hold() != null &&
+          (await (await _proxyManager())?.holding() ?? false);
+    } catch (error) {
+      AppLog.warning('read kill switch failed: ${AppLog.reason(error)}');
+      return false;
+    }
   }
 
   Future<String> _runDirectory() async => p.join(await getTunFilesDir(), 'run');
@@ -138,10 +178,12 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     var launchAttempted = false;
     try {
       await _notify(VpnStatus.connecting);
-      await _stop();
+      // Another Core follows: whatever the kill switch holds stays held.
+      await _stop(restart: true);
       await rotateDesktopCoreLogs(await _runDirectory());
       final request = await _readRequest();
       final proxyPort = desktopSystemProxyPort(request);
+      final killSwitch = request.killSwitch;
       final run = readRunXrayRequest(request);
       final config = await materializeRunXrayConfig(run);
       final xrayJson = run.request.xrayJson;
@@ -153,6 +195,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
       await errorFile.writeAsString('', flush: true);
       final stopFile = desktopCoreStopFile(await _runDirectory());
       if (await stopFile.exists()) await stopFile.delete();
+      await _killSwitch.arm(killSwitch);
       final arguments = desktopCoreRunArguments(
         dns: proxyPort == null ? request.tun?.tunDnsIPv4 ?? '' : '',
         interfaceName: proxyPort == null
@@ -162,6 +205,10 @@ class WindowsExeFfiApi extends WindowsFfiApi {
         errorFile: errorFile.path,
         configSha256: desktopCoreConfigSha256(xrayJson),
         stopFile: stopFile.path,
+        // In proxy mode the Core runs unelevated and cannot install filters;
+        // the system proxy left at its closed port is the kill switch there.
+        killSwitch: proxyPort == null ? killSwitch : null,
+        killSwitchApp: _appPath,
       );
       launchAttempted = true;
       // Only the TUN adapter needs administrator rights; a local proxy does
@@ -185,12 +232,21 @@ class WindowsExeFfiApi extends WindowsFfiApi {
           port: proxyPort,
           bypass: desktopSystemProxyBypass(request),
         );
+      } else {
+        // A proxy kept from proxy mode would send apps to a closed port.
+        await _restoreSystemProxy();
+      }
+      // TUN filters an earlier Core left that this one does not own.
+      if (proxyPort != null || killSwitch == null) {
+        await _killSwitch.liftFilters();
       }
       await _notify(VpnStatus.connected);
       return commandSuccess(status: VpnStatus.connected);
     } catch (error, stackTrace) {
       try {
-        if (launchAttempted) await _stop();
+        // The caller decides whether a failed start keeps the kill switch:
+        // a reconnect does, a first connect does not.
+        if (launchAttempted) await _stop(restart: true);
         if (!await _running()) await _notify(VpnStatus.disconnected);
       } catch (cleanupError) {
         ygLogger('clean up failed Windows Core start: $cleanupError');
@@ -201,12 +257,15 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     }
   }
 
+  /// [restart] stops the Core for another one: what the kill switch holds
+  /// stays held. Otherwise the user disconnects and the block is lifted.
   @override
-  Future<NativeVpnCommandResult> stopVpn() async {
+  Future<NativeVpnCommandResult> stopVpn({bool restart = false}) async {
     _transition = VpnStatus.disconnecting;
     try {
       await _notify(VpnStatus.disconnecting);
-      await _stop();
+      await _stop(restart: restart);
+      if (!restart) await _killSwitch.disarm();
       await _notify(VpnStatus.disconnected);
       return commandSuccess(status: VpnStatus.disconnected);
     } catch (error, stackTrace) {
@@ -216,12 +275,15 @@ class WindowsExeFfiApi extends WindowsFfiApi {
     }
   }
 
-  Future<void> _stop() async {
+  Future<void> _stop({required bool restart}) async {
     // A denied stop must still retire older queries, but keep live exit watches.
     _monitor.invalidateQueries();
-    // Hand the proxy back first, so apps never see a closed local port.
-    await _restoreSystemProxy();
-    await _stopGracefully();
+    // Hand the proxy back first, so apps never see a closed local port;
+    // unless the kill switch wants exactly that until the next Core is up.
+    if (!restart || await _killSwitch.hold() == null) {
+      await _restoreSystemProxy();
+    }
+    await _stopGracefully(restart: restart);
     await _process.stopAll();
     _monitor.clearWatches();
   }
@@ -229,13 +291,13 @@ class WindowsExeFfiApi extends WindowsFfiApi {
   /// Asks the Core to exit through its stop file. An elevated Core cannot be
   /// terminated by the App without another UAC prompt; the stop file needs
   /// none. A Core too old to know the flag is terminated as before.
-  Future<void> _stopGracefully() async {
+  Future<void> _stopGracefully({required bool restart}) async {
     // Created even when nothing runs: it is harmless, and the next start
     // deletes it before launching.
     final stopFile = desktopCoreStopFile(await _runDirectory());
     try {
-      await stopFile.create(recursive: true);
-    } on FileSystemException catch (error) {
+      await requestDesktopCoreStop(stopFile, restart: restart);
+    } catch (error) {
       ygLogger('request graceful Core stop failed: $error');
       return;
     }

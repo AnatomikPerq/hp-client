@@ -146,6 +146,15 @@ final class PlatformPolicy {
 
   static const maxSystemProxyBypass = 200;
 
+  /// Whether apps stay offline when the Core dies, until the user disconnects.
+  bool get killSwitchEnabled => toJson()['desktop']['killSwitch'] as bool;
+
+  /// TUN mode: the local network stays reachable while the kill switch blocks.
+  bool get killSwitchAllowsLan => toJson()['desktop']['killSwitchLan'] as bool;
+
+  /// The block survives the end of the Windows session and a reboot.
+  bool get killSwitchStrict => toJson()['desktop']['killSwitchStrict'] as bool;
+
   /// One host pattern in the system proxy's exception list: a domain, an
   /// address or a pattern with `*`, such as `*.example.com`. Separators,
   /// quotes and whitespace would split or break the list on Windows and in
@@ -357,7 +366,17 @@ const _defaults = <String, dynamic>{
   },
   // 10808/10809 are the defaults of the most common other client and are
   // often taken on machines that run it; 10820 avoids that collision.
-  'desktop': {'runMode': 'tun', 'proxyPort': 10820, 'proxyBypass': <String>[]},
+  // The kill switch is on by default: a Core that dies should leave apps
+  // offline, not on the real address. Strict keeps the block across the end
+  // of the Windows session; by default a new session starts unblocked.
+  'desktop': {
+    'runMode': 'tun',
+    'proxyPort': 10820,
+    'proxyBypass': <String>[],
+    'killSwitch': true,
+    'killSwitchLan': true,
+    'killSwitchStrict': false,
+  },
 };
 
 Map<String, dynamic> _readPolicyObject(

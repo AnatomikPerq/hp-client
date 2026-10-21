@@ -19,6 +19,11 @@ StartVpnRequest _$StartVpnRequestFromJson(Map<String, dynamic> json) =>
       systemProxyBypass: (json['systemProxyBypass'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      killSwitch: json['killSwitch'] == null
+          ? null
+          : DesktopKillSwitch.fromJson(
+              json['killSwitch'] as Map<String, dynamic>,
+            ),
     );
 
 Map<String, dynamic> _$StartVpnRequestToJson(StartVpnRequest instance) =>
@@ -30,7 +35,17 @@ Map<String, dynamic> _$StartVpnRequestToJson(StartVpnRequest instance) =>
       'snapshotToken': ?instance.snapshotToken,
       'metadataJson': ?instance.metadataJson,
       'systemProxyBypass': ?instance.systemProxyBypass,
+      'killSwitch': ?instance.killSwitch?.toJson(),
     };
+
+DesktopKillSwitch _$DesktopKillSwitchFromJson(Map<String, dynamic> json) =>
+    DesktopKillSwitch(
+      allowLan: json['allowLan'] as bool,
+      strict: json['strict'] as bool,
+    );
+
+Map<String, dynamic> _$DesktopKillSwitchToJson(DesktopKillSwitch instance) =>
+    <String, dynamic>{'allowLan': instance.allowLan, 'strict': instance.strict};
 
 LibXrayInvokeResponse _$LibXrayInvokeResponseFromJson(
   Map<String, dynamic> json,
@@ -220,6 +235,50 @@ Map<String, dynamic> _$MinewireEngineStateToJson(
   'lastError': ?instance.lastError,
 };
 
+ResolveHostRequest _$ResolveHostRequestFromJson(Map<String, dynamic> json) =>
+    ResolveHostRequest(
+      json['host'] as String,
+      timeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+    );
+
+Map<String, dynamic> _$ResolveHostRequestToJson(ResolveHostRequest instance) =>
+    <String, dynamic>{
+      'host': instance.host,
+      'timeoutSeconds': ?instance.timeoutSeconds,
+    };
+
+ResolveHostResponse _$ResolveHostResponseFromJson(Map<String, dynamic> json) =>
+    ResolveHostResponse(
+      (json['addresses'] as List<dynamic>?)?.map((e) => e as String).toList(),
+    );
+
+Map<String, dynamic> _$ResolveHostResponseToJson(
+  ResolveHostResponse instance,
+) => <String, dynamic>{'addresses': ?instance.addresses};
+
+KillSwitchSession _$KillSwitchSessionFromJson(Map<String, dynamic> json) =>
+    KillSwitchSession(
+      bootedAt: (json['bootedAt'] as num).toInt(),
+      logon: json['logon'] as String,
+    );
+
+Map<String, dynamic> _$KillSwitchSessionToJson(KillSwitchSession instance) =>
+    <String, dynamic>{'bootedAt': instance.bootedAt, 'logon': instance.logon};
+
+KillSwitchStateResponse _$KillSwitchStateResponseFromJson(
+  Map<String, dynamic> json,
+) => KillSwitchStateResponse(
+  engaged: json['engaged'] as bool,
+  session: KillSwitchSession.fromJson(json['session'] as Map<String, dynamic>),
+);
+
+Map<String, dynamic> _$KillSwitchStateResponseToJson(
+  KillSwitchStateResponse instance,
+) => <String, dynamic>{
+  'engaged': instance.engaged,
+  'session': instance.session.toJson(),
+};
+
 MinewireStateResponse _$MinewireStateResponseFromJson(
   Map<String, dynamic> json,
 ) => MinewireStateResponse(
@@ -306,6 +365,9 @@ const _$LibXrayMethodEnumMap = {
   LibXrayMethod.stopMinewire: 'stopMinewire',
   LibXrayMethod.minewireState: 'minewireState',
   LibXrayMethod.controlXray: 'controlXray',
+  LibXrayMethod.killSwitchState: 'killSwitchState',
+  LibXrayMethod.liftKillSwitch: 'liftKillSwitch',
+  LibXrayMethod.resolveHost: 'resolveHost',
 };
 
 GetFreePortsRequest _$GetFreePortsRequestFromJson(Map<String, dynamic> json) =>

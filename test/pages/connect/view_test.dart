@@ -44,6 +44,8 @@ void main() {
     VoidCallback? onExpert,
     Widget? servers,
     ConnectionHealth health = ConnectionHealth.none,
+    bool killSwitchBlocking = false,
+    VoidCallback? onUnblock,
   }) => ConnectView(
     view: view,
     hasServers: hasServers,
@@ -64,6 +66,8 @@ void main() {
     onRawActions: (_) {},
     servers: servers,
     health: health,
+    killSwitchBlocking: killSwitchBlocking,
+    onUnblock: onUnblock,
   );
 
   Widget app(
@@ -396,6 +400,34 @@ void main() {
 
     expect(find.text(l.prototypeTemporarilyUnavailable), findsOneWidget);
     expect(find.text(l.prototypeVpnPermissionRequired), findsNothing);
+  });
+
+  testWidgets('a kill switch block says so and offers to unblock', (
+    tester,
+  ) async {
+    var unblocked = 0;
+    await tester.pumpWidget(
+      app(screen(killSwitchBlocking: true, onUnblock: () => unblocked++)),
+    );
+    final l = AppLocalizations.of(tester.element(find.byType(ConnectView)))!;
+    expect(find.text(l.killSwitchBlocked), findsOneWidget);
+    expect(find.text(l.killSwitchBlockedDetail), findsOneWidget);
+    expect(find.text(l.prototypeDisconnected), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-unblock')));
+    expect(unblocked, 1);
+
+    // Connecting again hides the block at once.
+    await tester.pumpWidget(
+      app(
+        screen(
+          view: const ConnectionView(phase: ConnectionPhase.connecting),
+          killSwitchBlocking: true,
+          onUnblock: () {},
+        ),
+      ),
+    );
+    expect(find.text(l.killSwitchBlocked), findsNothing);
+    expect(find.byKey(const ValueKey('home-unblock')), findsNothing);
   });
 
   testWidgets('a connection that carries nothing says so, not connected', (

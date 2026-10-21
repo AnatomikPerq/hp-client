@@ -52,6 +52,7 @@ class ConnectPageState {
     Set<int> deletingRawIds = const {},
     this.livePing = LivePingView.idle,
     this.health = ConnectionHealth.none,
+    this.killSwitchBlocking = false,
   }) : configuration = configuration ?? ConnectionConfiguration(),
        catalog = catalog ?? ServerCatalog(),
        raws = List.unmodifiable(raws),
@@ -76,6 +77,10 @@ class ConnectPageState {
   /// The background check of the running connection.
   final ConnectionHealth health;
 
+  /// The VPN stopped without a disconnect and the kill switch keeps apps
+  /// offline.
+  final bool killSwitchBlocking;
+
   ConnectPageState copyWith({
     ConnectionConfiguration? configuration,
     ConnectionView? connectionView,
@@ -90,6 +95,7 @@ class ConnectPageState {
     Set<int>? deletingRawIds,
     LivePingView? livePing,
     ConnectionHealth? health,
+    bool? killSwitchBlocking,
   }) => ConnectPageState(
     configuration: configuration ?? this.configuration,
     connectionView: connectionView ?? this.connectionView,
@@ -106,6 +112,7 @@ class ConnectPageState {
     deletingRawIds: deletingRawIds ?? this.deletingRawIds,
     livePing: livePing ?? this.livePing,
     health: health ?? this.health,
+    killSwitchBlocking: killSwitchBlocking ?? this.killSwitchBlocking,
   );
   bool sameContentAs(ConnectPageState other) =>
       configuration == other.configuration &&
@@ -122,6 +129,7 @@ class ConnectPageState {
       pendingChange == other.pendingChange &&
       livePing == other.livePing &&
       health == other.health &&
+      killSwitchBlocking == other.killSwitchBlocking &&
       connectedMinutes == other.connectedMinutes &&
       connectionView.phase == other.connectionView.phase &&
       connectionView.runtime == other.connectionView.runtime &&
@@ -141,8 +149,10 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
        super(ConnectPageState()) {
     this.coordinator.state.addListener(_connectionChanged);
     connectionHealth.addListener(_healthChanged);
+    this.coordinator.killSwitchBlocking.addListener(_blockingChanged);
     _connectionChanged();
     _healthChanged();
+    _blockingChanged();
   }
 
   final AppDatabase db;
@@ -183,6 +193,28 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
 
   void _healthChanged() {
     if (isPageActive) emit(state.copyWith(health: connectionHealth.value));
+  }
+
+  void _blockingChanged() {
+    if (isPageActive) {
+      emit(
+        state.copyWith(
+          killSwitchBlocking: coordinator.killSwitchBlocking.value,
+        ),
+      );
+    }
+  }
+
+  /// Lifts the kill switch without connecting: the user goes online without
+  /// the VPN. The same command as a disconnect.
+  Future<void> unblock(BuildContext context) async {
+    if (connectionView.busy || pendingChange != null) return;
+    pendingChange = 'connection';
+    try {
+      await run(context, coordinator.disconnect);
+    } finally {
+      pendingChange = null;
+    }
   }
 
   void _connectionChanged() {
@@ -857,6 +889,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     _syncTrafficVisibility();
     coordinator.state.removeListener(_connectionChanged);
     connectionHealth.removeListener(_healthChanged);
+    coordinator.killSwitchBlocking.removeListener(_blockingChanged);
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

@@ -122,6 +122,7 @@ final class ConnectionHealthMonitor {
 
   Timer? _timer;
   String? _key;
+  bool _blocking = false;
   int _failures = 0;
   int _generation = 0;
   bool _started = false;
@@ -130,13 +131,17 @@ final class ConnectionHealthMonitor {
     if (!_enabled || _started) return;
     _started = true;
     _coordinator.state.addListener(_connectionChanged);
+    _coordinator.killSwitchBlocking.addListener(_blockingChanged);
     _connectionChanged();
+    _blockingChanged();
   }
 
   void dispose() {
     if (!_started) return;
     _started = false;
     _coordinator.state.removeListener(_connectionChanged);
+    _coordinator.killSwitchBlocking.removeListener(_blockingChanged);
+    _blocking = false;
     _timer?.cancel();
     _timer = null;
     _key = null;
@@ -162,6 +167,19 @@ final class ConnectionHealthMonitor {
     }
     state.value = ConnectionHealth(key: key);
     _schedule(firstCheck);
+  }
+
+  /// The kill switch took over: the Core is gone and apps are offline.
+  /// Without a word they would look like a dead network.
+  void _blockingChanged() {
+    final blocking = _coordinator.killSwitchBlocking.value;
+    if (blocking == _blocking) return;
+    _blocking = blocking;
+    if (!blocking) return;
+    AppLog.warning(
+      'the kill switch keeps apps offline until a reconnect or a disconnect',
+    );
+    unawaited(_post(appLocalizationsNoContext().killSwitchBlockedNotice));
   }
 
   void _schedule(Duration delay) {

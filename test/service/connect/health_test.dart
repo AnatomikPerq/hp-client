@@ -219,4 +219,20 @@ void main() {
     await monitor.check();
     expect((probes, monitor.state.value), (0, ConnectionHealth.none));
   });
+
+  test('the kill switch taking over is told once', () async {
+    coordinator.killSwitchBlocking.value = true;
+    await Future<void>.delayed(Duration.zero);
+    expect(notices, hasLength(1));
+    expect(notices.single, isNotEmpty);
+
+    // Still blocked: no repeat. Unblocked and blocked again: a new notice.
+    coordinator.killSwitchBlocking.value = true;
+    coordinator.killSwitchBlocking.value = false;
+    await Future<void>.delayed(Duration.zero);
+    expect(notices, hasLength(1));
+    coordinator.killSwitchBlocking.value = true;
+    await Future<void>.delayed(Duration.zero);
+    expect(notices, hasLength(2));
+  });
 }

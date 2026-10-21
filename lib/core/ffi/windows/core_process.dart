@@ -51,6 +51,30 @@ class WindowsCoreProcess {
     return process.pid;
   }
 
+  /// Runs `[executable] unblock` elevated and waits for it: the fallback that
+  /// lifts the kill switch when the App's user may not lift it themselves.
+  Future<void> unblockElevated(String executable) => Isolate.run(() {
+    final handle = _launchElevated(executable, ['unblock']);
+    try {
+      final waited = WaitForSingleObject(handle, 10000);
+      if (waited.value == WAIT_TIMEOUT) {
+        throw StateError('Timed out waiting for the elevated unblock');
+      }
+      if (waited.value != WAIT_OBJECT_0) {
+        _failed('WaitForSingleObject', waited.error);
+      }
+      final exitCode = using((arena) {
+        final code = arena<Uint32>();
+        final result = GetExitCodeProcess(handle, code);
+        if (!result.value) _failed('GetExitCodeProcess', result.error);
+        return code.value;
+      });
+      if (exitCode != 0) throw StateError('Elevated unblock failed: $exitCode');
+    } finally {
+      CloseHandle(handle);
+    }
+  });
+
   Future<int> start(String executable, List<String> arguments) =>
       Isolate.run(() {
         final handle = _launchElevated(executable, arguments);

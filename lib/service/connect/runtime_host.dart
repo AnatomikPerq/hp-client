@@ -35,11 +35,16 @@ class HostConnection {
   final ConnectionRuntime? runtime;
   final ConnectionTraffic? traffic;
   final PlatformPermissionResult? permission;
+
+  /// Desktop: no Core runs, and the kill switch keeps apps offline until the
+  /// user reconnects or disconnects.
+  final bool killSwitchBlocking;
   const HostConnection(
     this.status, {
     this.runtime,
     this.traffic,
     this.permission,
+    this.killSwitchBlocking = false,
   });
   bool get connected => status == VpnStatus.connected;
 }
@@ -62,6 +67,7 @@ class ConnectionRuntimeHost {
   final Future<NativeVpnCommandResult> Function()? _stopVpn;
   final Future<void> Function() _stopEngines;
   final Future<void> Function(ControlXrayRequest) _control;
+  final Future<bool> Function() _killSwitchBlocking;
 
   ConnectionRuntimeHost({
     String? runDirectory,
@@ -72,7 +78,14 @@ class ConnectionRuntimeHost {
     Future<NativeVpnCommandResult> Function()? stopVpn,
     Future<void> Function()? stopEngines,
     Future<void> Function(ControlXrayRequest)? control,
+    Future<bool> Function()? killSwitchBlocking,
   }) : _stopEngines = stopEngines ?? MinewireRuntime.instance.stopAll,
+       // A host with an injected status has no real kill switch to read.
+       _killSwitchBlocking =
+           killSwitchBlocking ??
+           (readStatus != null
+               ? () async => false
+               : AppHostApi().killSwitchBlocking),
        _control = control ?? AppHostApi().controlXray,
        _runDirectory = runDirectory,
        _readStatus = readStatus,
@@ -212,10 +225,12 @@ class ConnectionRuntimeHost {
     final platform = observedStatus == null
         ? await _status()
         : (status: observedStatus, permission: null, message: null);
+    final disconnected = platform.status == VpnStatus.disconnected;
     return HostConnection(
       platform.status,
-      runtime: platform.status == VpnStatus.disconnected ? null : runtime,
+      runtime: disconnected ? null : runtime,
       permission: platform.permission,
+      killSwitchBlocking: disconnected && await _killSwitchBlocking(),
     );
   }
 
@@ -308,8 +323,10 @@ class ConnectionRuntimeHost {
     return dir is String && dir.isNotEmpty ? dir : null;
   }
 
-  Future<HostConnection> stop() async {
-    final result = await (_stopVpn?.call() ?? _host.stopVpn());
+  /// [restart]: a start follows, so the desktop kill switch keeps what it
+  /// holds. A plain stop is the user's disconnect and lifts it.
+  Future<HostConnection> stop({bool restart = false}) async {
+    final result = await (_stopVpn?.call() ?? _host.stopVpn(restart: restart));
     if (result.state != NativeVpnCommandState.success) {
       throw ConnectionHostException('stopFailed', cause: result.message);
     }
@@ -318,6 +335,10 @@ class ConnectionRuntimeHost {
     }
     // In-App engines serve only the runtime that has just stopped.
     await _stopEngines();
-    return HostConnection(result.status!, permission: result.permission);
+    return HostConnection(
+      result.status!,
+      permission: result.permission,
+      killSwitchBlocking: await _killSwitchBlocking(),
+    );
   }
 }

@@ -877,5 +877,16 @@
   "connectionHealthLostNotice": "通过 {node} 无法连接",
   "connectionHealthRestoredNotice": "连接已恢复",
   "connectionHealthProxyTakenNotice": "系统代理已被其他程序更改：应用绕过了 HYPER CLIENT",
-  "connectionHealthProxyTakenDetail": "系统代理现在指向 {proxy}，应用绕过了此连接。重新连接即可恢复。"
+  "connectionHealthProxyTakenDetail": "系统代理现在指向 {proxy}，应用绕过了此连接。重新连接即可恢复。",
+  "killSwitchTitle": "断网保护",
+  "killSwitchDescription": "如果 VPN 未经断开就停止，应用将保持离线，而不会用你的真实地址上网。可在首页重新连接或解除阻止。TUN 模式由 Windows 过滤器阻止流量；代理模式下系统代理继续指向已停止的 VPN，因此只覆盖使用系统代理的应用。",
+  "killSwitchEnable": "VPN 停止时阻止上网",
+  "killSwitchLan": "阻止时允许局域网",
+  "killSwitchLanDescription": "打印机、路由器和家中的其他设备仍可访问；发往它们的 DNS 仍被阻止。仅限 TUN 模式。",
+  "killSwitchStrict": "注销或重启后继续阻止",
+  "killSwitchStrictDescription": "否则注销、关机或重启 Windows 会解除阻止。开启后，应用从 Windows 启动起保持离线，直到你连接或解除阻止。",
+  "killSwitchBlocked": "已阻止上网",
+  "killSwitchBlockedDetail": "VPN 未经断开就停止了，断网保护让应用保持离线。请重新连接，或解除阻止以不经 VPN 上网。",
+  "killSwitchUnblock": "解除阻止（不用 VPN）",
+  "killSwitchBlockedNotice": "VPN 已停止：断网保护会阻止上网，直到你重新连接或解除阻止"
 }

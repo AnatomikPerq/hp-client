@@ -877,5 +877,16 @@
   "connectionHealthLostNotice": "透過 {node} 無法連線",
   "connectionHealthRestoredNotice": "連線已恢復",
   "connectionHealthProxyTakenNotice": "系統代理已被其他程式變更：應用程式繞過了 HYPER CLIENT",
-  "connectionHealthProxyTakenDetail": "系統代理現在指向 {proxy}，應用程式繞過了此連線。重新連線即可恢復。"
+  "connectionHealthProxyTakenDetail": "系統代理現在指向 {proxy}，應用程式繞過了此連線。重新連線即可恢復。",
+  "killSwitchTitle": "斷網保護",
+  "killSwitchDescription": "如果 VPN 未經中斷連線就停止，應用程式將保持離線，而不會用你的真實位址上網。可在首頁重新連線或解除封鎖。TUN 模式由 Windows 篩選器封鎖流量；代理模式下系統代理繼續指向已停止的 VPN，因此只涵蓋使用系統代理的應用程式。",
+  "killSwitchEnable": "VPN 停止時封鎖上網",
+  "killSwitchLan": "封鎖時允許區域網路",
+  "killSwitchLanDescription": "印表機、路由器和家中的其他裝置仍可存取；送往它們的 DNS 仍被封鎖。僅限 TUN 模式。",
+  "killSwitchStrict": "登出或重新啟動後繼續封鎖",
+  "killSwitchStrictDescription": "否則登出、關機或重新啟動 Windows 會解除封鎖。開啟後，應用程式從 Windows 啟動起保持離線，直到你連線或解除封鎖。",
+  "killSwitchBlocked": "已封鎖上網",
+  "killSwitchBlockedDetail": "VPN 未經中斷連線就停止了，斷網保護讓應用程式保持離線。請重新連線，或解除封鎖以不經 VPN 上網。",
+  "killSwitchUnblock": "解除封鎖（不用 VPN）",
+  "killSwitchBlockedNotice": "VPN 已停止：斷網保護會封鎖上網，直到你重新連線或解除封鎖"
 }

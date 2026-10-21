@@ -82,6 +82,10 @@ class ConnectionCoordinator with WidgetsBindingObserver {
   late final PrepareConnection _prepare;
   late final Future<HostConnection> Function(ConnectionRuntime) _start;
   late final Future<HostConnection> Function() _stop;
+
+  /// Stops the Core for another start: the desktop kill switch keeps what it
+  /// holds, so a reconnect never lets traffic out between two Cores.
+  late final Future<HostConnection> Function() _stopForRestart;
   late final InspectConnection _inspect;
   late final Future<ConnectionTraffic> Function(ConnectionRuntime) _readTraffic;
   late final Future<ConnectionRuntime?> Function() _readRuntime;
@@ -103,6 +107,11 @@ class ConnectionCoordinator with WidgetsBindingObserver {
   final void Function() _disposeStatus;
   final _commands = CommandSerialExecutor();
   final state = ValueNotifier(const ConnectionView());
+
+  /// Desktop: no Core runs and the kill switch keeps apps offline until the
+  /// user reconnects or disconnects. Separate from [state], like the health
+  /// verdict: a dozen places build a [ConnectionView].
+  final killSwitchBlocking = ValueNotifier(false);
   Future<void>? _initializing;
   Future<void>? _connectRequested;
   StreamSubscription<VpnStatus>? _statusSubscription;
@@ -129,6 +138,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     PrepareConnection? prepare,
     Future<HostConnection> Function(ConnectionRuntime)? start,
     Future<HostConnection> Function()? stop,
+    Future<HostConnection> Function()? stopForRestart,
     InspectConnection? inspect,
     Future<ConnectionTraffic> Function(ConnectionRuntime)? readTraffic,
     Future<ConnectionRuntime?> Function()? readRuntime,
@@ -156,6 +166,8 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     final host = ConnectionRuntimeHost();
     _start = start ?? host.start;
     _stop = stop ?? host.stop;
+    _stopForRestart =
+        stopForRestart ?? stop ?? (() => host.stop(restart: true));
     _inspect = inspect ?? host.inspect;
     _readTraffic = readTraffic ?? host.query;
     _readRuntime = readRuntime ?? host.readRuntime;
@@ -615,7 +627,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
             runtime: old,
             traffic: current.traffic,
           );
-          running = await _stop();
+          running = await (disconnect ? _stop() : _stopForRestart());
           if (running.status != VpnStatus.disconnected) {
             throw const ConnectionHostException('stopNotConfirmed');
           }
@@ -661,8 +673,14 @@ class ConnectionCoordinator with WidgetsBindingObserver {
       } catch (error, stack) {
         HostConnection? failed;
         if (touchedHost) {
+          // A reconnect that fails keeps the kill switch: the user still
+          // wants the VPN. A first connect that fails gives the network back.
+          final keepBlock =
+              !disconnect &&
+              (current.connected || current.killSwitchBlocking) &&
+              next.policy.killSwitchEnabled;
           try {
-            failed = await _stop();
+            failed = await (keepBlock ? _stopForRestart() : _stop());
           } catch (_) {
             try {
               failed = await _inspect(await _currentRuntime());
@@ -682,6 +700,9 @@ class ConnectionCoordinator with WidgetsBindingObserver {
         }
         if (touchedHost) {
           final status = failed?.status;
+          if (failed != null) {
+            killSwitchBlocking.value = failed.killSwitchBlocking;
+          }
           _failureLatched = true;
           state.value = ConnectionView(
             phase: ConnectionPhase.failed,
@@ -844,6 +865,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
       if (current.status != VpnStatus.disconnected) {
         runtime = current.runtime;
       }
+      killSwitchBlocking.value = current.killSwitchBlocking;
     } catch (_) {
       // Unknown host state stays an explicit failure; retry inspects it again.
     }
@@ -900,6 +922,7 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     }
     // A newer, different native notification must still be reconciled.
     if (_pendingStatus == current.status) _pendingStatus = null;
+    killSwitchBlocking.value = current.killSwitchBlocking && !current.connected;
     if (keepResult) {
       // Reconciliation/sampling does not replace the last command's result.
       // A newly successful system connection resolves an old disconnected error.
@@ -993,5 +1016,6 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     _disposeStatus();
     _trafficPoll?.cancel();
     state.dispose();
+    killSwitchBlocking.dispose();
   }
 }

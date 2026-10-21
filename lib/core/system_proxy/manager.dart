@@ -103,6 +103,14 @@ class SystemProxyManager {
   /// Whether the App currently holds saved settings to restore.
   Future<bool> get active async => await _readState() != null;
 
+  /// Whether the system proxy still points at the App's endpoint. After the
+  /// Core has exited that endpoint is closed, which is what the kill switch
+  /// relies on in proxy mode: apps fail instead of going direct.
+  Future<bool> holding() => _serial(() async {
+    final saved = await _readState();
+    return saved != null && _owns(await backend.read(), saved);
+  });
+
   static bool _owns(SystemProxySettings current, _State saved) =>
       current.enabled &&
       current.server.trim().toLowerCase() ==

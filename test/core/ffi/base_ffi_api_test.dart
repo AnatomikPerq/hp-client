@@ -76,6 +76,49 @@ void main() {
     );
   });
 
+  test('the kill switch reaches only a TUN Core', () {
+    expect(
+      desktopCoreRunArguments(
+        dns: '8.8.8.8',
+        interfaceName: 'Ethernet',
+        configPath: 'xray.json',
+        killSwitch: const DesktopKillSwitch(allowLan: true, strict: true),
+        killSwitchApp: r'C:\Program Files\HYPER CLIENT\HyperClient.exe',
+      ),
+      <String>[
+        'run',
+        '-dns',
+        '8.8.8.8:53',
+        '-interface',
+        'Ethernet',
+        '-kill-switch',
+        '-kill-switch-lan',
+        '-kill-switch-persistent',
+        '-kill-switch-app',
+        r'C:\Program Files\HYPER CLIENT\HyperClient.exe',
+        '-config',
+        'xray.json',
+      ],
+    );
+    expect(
+      () => desktopCoreRunArguments(
+        configPath: 'xray.json',
+        killSwitch: const DesktopKillSwitch(allowLan: false, strict: false),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('a stop request tells a restart from a disconnect', () async {
+    final directory = await createTestDirectory('core-stop-');
+    addTearDown(() => directory.delete(recursive: true));
+    final stop = desktopCoreStopFile(directory.path);
+    await requestDesktopCoreStop(stop, restart: true);
+    expect(await stop.readAsString(), 'restart');
+    await requestDesktopCoreStop(stop);
+    expect(await stop.readAsString(), isEmpty);
+  });
+
   test('a desktop request without TUN settings is the proxy mode', () {
     StartVpnRequest request(TunJson? tun, String? socks) =>
         StartVpnRequest(tun, socks, '18186', '{}');

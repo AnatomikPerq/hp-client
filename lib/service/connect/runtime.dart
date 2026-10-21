@@ -129,6 +129,7 @@ class ConnectionRuntime {
       snapshotToken: request.snapshotToken,
       metadataJson: metadataJson,
       systemProxyBypass: request.systemProxyBypass,
+      killSwitch: request.killSwitch,
     );
     return ConnectionRuntime._(
       configuration: configuration,
