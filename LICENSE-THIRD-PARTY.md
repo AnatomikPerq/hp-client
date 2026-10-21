@@ -81,3 +81,21 @@ MPL-2.0, и обёртка [libXray](https://github.com/XTLS/libXray), MIT.
 Copyright 2019 Twitter, Inc and other contributors. Graphics licensed under
 CC-BY 4.0. Файлы не изменялись, только переименованы: флаги по коду страны,
 эмодзи по кодам символов без U+FE0F.
+
+## Данные маршрутизации
+
+### Списки «заблокировано в России» (runetfreedom)
+
+- **Что это:** домены и IP-адреса, заблокированные в России, для профиля
+  «Заблокированное в России». Домены — категория `ru-blocked`
+  (antifilter community и re:filter), адреса — `ru-blocked`
+  (antifilter.download: `ipresolve.lst` и `subnet.lst`).
+- **Где лежит:** сжатые текстовые списки в `assets/ru_blocked/` установщика
+  (забирает `build_scripts/app/ru_blocked.py` при сборке), в рабочей папке
+  приложения — `ru-blocked-domains.dat` и `ru-blocked-ips.dat`, собранные
+  из них без изменения содержимого.
+- **Источник:** [runetfreedom/russia-blocked-geosite](https://github.com/runetfreedom/russia-blocked-geosite)
+  и [runetfreedom/russia-blocked-geoip](https://github.com/runetfreedom/russia-blocked-geoip);
+  данные — [antifilter.download](https://antifilter.download/) и
+  [re:filter](https://github.com/1andrevich/Re-filter-lists)
+- **Лицензия:** репозитории runetfreedom — **GPL-3.0**, как и HYPER CLIENT.

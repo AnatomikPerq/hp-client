@@ -50,6 +50,10 @@ import 'package:onexray/pages/connect/routing/smart/page.dart';
 import 'package:onexray/pages/connect/routing/smart/regions.dart';
 import 'package:onexray/pages/connect/routing/custom/page.dart';
 import 'package:onexray/pages/connect/routing/custom/rule_page.dart';
+import 'package:onexray/pages/connect/routing/profiles/controller.dart';
+import 'package:onexray/pages/connect/routing/profiles/editor_page.dart';
+import 'package:onexray/pages/connect/routing/profiles/page.dart';
+import 'package:onexray/service/connect/routing/profiles/profile.dart';
 import 'package:onexray/pages/settings/app_update/dialog.dart';
 import 'package:onexray/pages/settings/app_update/params.dart';
 import 'package:onexray/pages/settings/app_icon/page.dart';
@@ -349,6 +353,23 @@ final _pageRoutes = <_PageRoute>[
   _route(
     AppPageDestination.customRule,
     (_, state) => CustomRoutingRulePage(rule: state.extra as RoutingRuleState?),
+  ),
+  _route(
+    AppPageDestination.trafficProfiles,
+    (_, _) => TrafficProfilesPage(
+      openProfile: (context, profile) =>
+          context.pushScoped<TrafficProfileEditResult>(
+            AppPageDestination.trafficProfile,
+            extra: profile,
+          ),
+    ),
+  ),
+  _route(
+    AppPageDestination.trafficProfile,
+    (_, state) => _withExtra<TrafficProfile>(
+      state,
+      (profile) => TrafficProfileEditorPage(profile: profile),
+    ),
   ),
   _route(
     AppPageDestination.share,

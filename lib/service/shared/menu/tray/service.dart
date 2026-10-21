@@ -577,12 +577,15 @@ final class TrayService {
         label = (await _db.routingProfileDao.searchRow(id))!.name;
       case 'traffic':
         if (value != TrafficMode.smart.name &&
+            value != TrafficMode.selective.name &&
             value != TrafficMode.allVpn.name) {
           return;
         }
         values = {'expert': false, 'trafficMode': value};
         label = value == TrafficMode.smart.name
             ? l.prototypeSmartRoutingRecommended
+            : value == TrafficMode.selective.name
+            ? l.trafficSelective
             : l.prototypeAllViaVpn;
       default:
         return;

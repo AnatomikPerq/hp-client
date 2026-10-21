@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
+import 'package:onexray/pages/shared/widgets/country_flag.dart';
+import 'package:onexray/pages/shared/widgets/name_emoji.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/service/connect/coordinator.dart';
 import 'package:onexray/service/connect/traffic.dart';
@@ -92,9 +94,18 @@ class RuntimeObservatoryReadout extends StatelessWidget {
         palette.destructive,
       ),
     };
+    // Fork: Windows prints emoji flags as letters ("NL"); the entry's first
+    // emoji is drawn as an icon and flags leave the text, as in the lists.
+    String plain(String name) {
+      final split = splitFlagEmoji(name).name;
+      return split.isEmpty ? name : split;
+    }
+
+    final entry = splitNameEmoji(path.entryName);
+    final entryName = entry.name.isEmpty ? path.entryName : entry.name;
     final label = path.finalExitName == null
-        ? path.entryName
-        : '${path.entryName} → ${path.finalExitName}';
+        ? entryName
+        : '$entryName → ${plain(path.finalExitName!)}';
     final delay = availability == RuntimePathAvailability.available
         ? sample?.delayMs
         : null;
@@ -108,7 +119,17 @@ class RuntimeObservatoryReadout extends StatelessWidget {
       key: ValueKey('runtime-path-${path.tag}'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Row(
+          children: [
+            if (entry.emoji != null) ...[
+              NameIcon(emoji: entry.emoji, size: 16),
+              const SizedBox(width: 6),
+            ],
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          ],
+        ),
         const SizedBox(height: 3),
         Wrap(
           spacing: 8,

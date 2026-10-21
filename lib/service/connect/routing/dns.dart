@@ -22,6 +22,8 @@ abstract final class RoutingDns {
     Iterable<XrayRoutingRule>? rules,
     RoutingDnsSettings? settings,
     bool directEnabled = true,
+    // Fork: Selective mode resolves unmatched names like it routes them.
+    bool defaultDirect = false,
   }) {
     final queryStrategy = ipv6 ? 'UseIP' : 'UseIPv4';
     final options =
@@ -53,6 +55,7 @@ abstract final class RoutingDns {
           ),
     ];
     final hasDirectBlock = blocks.any((block) => block.direct);
+    final fallbackDirect = defaultDirect && hasDirect;
     XrayDnsServer fakeServer({List<String>? domains, bool? skipFallback}) =>
         XrayDnsServer(
           address: FakeDns.address,
@@ -101,10 +104,14 @@ abstract final class RoutingDns {
         ],
         // Keep unused direct resolvers in construction validation, but never
         // let them become the generic fallback for unmatched domains.
-        if (hasDirect && !hasDirectBlock)
+        if (hasDirect && !hasDirectBlock && !fallbackDirect)
           ...realServers(direct: true, domains: [], skipFallback: true),
-        if (fakeDns) fakeServer(),
-        ...realServers(direct: false),
+        if (fallbackDirect)
+          ...realServers(direct: true)
+        else ...[
+          if (fakeDns) fakeServer(),
+          ...realServers(direct: false),
+        ],
       ],
     );
   }
@@ -115,5 +122,6 @@ abstract final class RoutingDns {
       rule.network == null &&
       (rule.protocol?.isEmpty ?? true) &&
       (rule.localOS?.isEmpty ?? true) &&
+      (rule.process?.isEmpty ?? true) &&
       (rule.inboundTag?.isEmpty ?? true);
 }

@@ -558,6 +558,9 @@ class GeoDataService {
       if (GeoDataInput.canonicalFileName(source.fileName) != source.fileName) {
         throw const FormatException('Geodata filename is not canonical');
       }
+      if (GeoDataInput.appManaged(source.fileName)) {
+        throw const FormatException('Geodata filename is App-managed');
+      }
       GeoDataInput.httpsUri(source.url);
     }
     await withFiles(() async {

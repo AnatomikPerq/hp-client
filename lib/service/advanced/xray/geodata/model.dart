@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/model/geo_dat.dart';
 import 'package:onexray/core/model/geo_data_type.dart';
+import 'package:onexray/service/connect/routing/profiles/catalog.dart';
 import 'package:path/path.dart' as p;
 
 class GeoDataInput {
@@ -52,6 +53,13 @@ class GeoDataInput {
     }
     return file;
   }
+
+  /// Fork: files the App writes itself (the ru-blocked profile's lists).
+  /// Rules may reference them; a custom source may not take their names.
+  static bool appManaged(String file) => {
+    TrafficProfiles.ruBlockedDomainFile,
+    TrafficProfiles.ruBlockedIpFile,
+  }.contains(file.toLowerCase());
 
   static Uri httpsUri(String value) {
     final uri = Uri.tryParse(value);

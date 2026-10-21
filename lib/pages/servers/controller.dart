@@ -10,6 +10,7 @@ import 'package:onexray/pages/shared/page_cubit.dart';
 import 'package:onexray/pages/advanced/xray/config/params.dart';
 import 'package:onexray/pages/shared/connection_action.dart';
 import 'package:onexray/pages/servers/catalog.dart';
+import 'package:onexray/pages/shared/widgets/country_flag.dart';
 import 'package:onexray/service/servers/catalog.dart';
 import 'package:onexray/service/servers/sort.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
@@ -460,7 +461,8 @@ class ServersController extends PageCubit<ServersPageState>
     if (providerGroup(group)) return false;
     if (group.country == '') return false;
     final count = entryCount(group.selection);
-    final finalExit = configuration.connection.trafficMode == TrafficMode.smart
+    // The normal route's final exit, also while Raw is active.
+    final finalExit = configuration.connection.usesSmartSettings
         ? configuration.connection.smart.finalExitId
         : null;
     return count > 0 &&
@@ -532,10 +534,14 @@ class ServersController extends PageCubit<ServersPageState>
           return delay == 0 ? a.id.compareTo(b.id) : delay;
         });
     if (count <= 0 || rows.length < count) return (names: [], first: null);
-    return (
-      names: rows.take(count).map(serverName).toList(),
-      first: rows.first,
-    );
+    // Windows prints emoji flags as letters ("NL") in plain text.
+    String plain(CoreConfigData row) {
+      final name = serverName(row);
+      final split = splitFlagEmoji(name).name;
+      return split.isEmpty ? name : split;
+    }
+
+    return (names: rows.take(count).map(plain).toList(), first: rows.first);
   }
 
   String? automaticResult(AppLocalizations l) {
@@ -604,7 +610,7 @@ class ServersController extends PageCubit<ServersPageState>
 
   bool exitConflict(CoreConfigData row) =>
       catalog.outboundEligible(row) &&
-      configuration.connection.trafficMode == TrafficMode.smart &&
+      configuration.connection.usesSmartSettings &&
       configuration.connection.smart.finalExitId == row.id;
 
   bool chosen(CoreConfigData row) => selected(ServerSelection.server(row.id));

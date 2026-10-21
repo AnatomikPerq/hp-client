@@ -84,6 +84,8 @@ android/app/key.properties
 *.xcframework
 linux/app/
 windows/app/
+assets/ru_blocked/*
+!assets/ru_blocked/README.md
 generated_bindings.dart
 desiredFileName.txt
 dist/

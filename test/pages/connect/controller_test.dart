@@ -568,7 +568,8 @@ void main() {
       await tester.tap(find.text('methods-action'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a traffic method'), findsOneWidget);
-      await tester.tap(find.text('Edit'));
+      // Smart's edit comes first; Selective's opens the profiles page.
+      await tester.tap(find.text('Edit').first);
       await tester.pumpAndSettle();
       expect(find.text('smart-editor'), findsOneWidget);
       router.pop();

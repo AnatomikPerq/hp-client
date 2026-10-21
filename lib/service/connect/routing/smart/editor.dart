@@ -97,7 +97,7 @@ class SmartRoutingEditorService {
     final affectsRuntime =
         !providerActive &&
         !connection.expert &&
-        connection.trafficMode == TrafficMode.smart &&
+        connection.usesSmartSettings &&
         !sameRuntime(connection, smart, await regions());
     var allowReconnect = false;
     if (affectsRuntime &&
@@ -193,8 +193,12 @@ class SmartRoutingEditorService {
     SmartRoutingSettings next,
     RegionCatalog regions,
   ) {
+    // Fork: Selective takes Smart's connection options, not its rules.
+    final selective = original.trafficMode == TrafficMode.selective;
     Object semantic(SmartRoutingSettings value) {
-      final rules = ConnectionCompiler.smartRules(value, regions);
+      final rules = selective
+          ? <XrayRoutingRule>[]
+          : ConnectionCompiler.smartRules(value, regions);
       // Region order does not change a rule's OR set or the direct DNS set.
       for (final rule in rules) {
         rule.domain?.sort();
@@ -217,6 +221,8 @@ class SmartRoutingEditorService {
         ),
         'fakeDns': value.fakeDns,
         'fragment': value.fragment,
+        'blockAds': value.blockAds,
+        'directDns': value.directDns,
         'entryCount': original.selection.kind == SelectionKind.server
             ? 1
             : value.entryCount,

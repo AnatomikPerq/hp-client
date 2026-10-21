@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/errors/failure.dart';
@@ -7,6 +8,9 @@ import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/advanced/xray/geodata/service.dart';
 import 'package:onexray/service/advanced/xray/geodata/system_state.dart';
 import 'package:onexray/service/advanced/xray/data_update/state.dart';
+import 'package:onexray/service/connect/routing/profiles/catalog.dart';
+import 'package:onexray/service/connect/routing/profiles/ru_blocked.dart';
+import 'package:onexray/service/connect/runtime.dart';
 import 'package:onexray/service/servers/subscription/service.dart';
 
 class DataUpdateService {
@@ -94,6 +98,27 @@ class DataUpdateService {
           ygLogger('Custom Geodata update failed: ${failureDetails(error)}');
         }
       }
+    }
+
+    // Fork: the ru-blocked profile's lists follow the same schedule while
+    // the profile is on.
+    if (_paused || !isVpnConnected()) return;
+    try {
+      final configuration = ConnectionConfiguration.fromJson(
+        jsonDecode(
+          (await AppDatabase().connectionConfigDao.read()).configurationJson,
+        ) as Map<String, dynamic>,
+      );
+      if (!TrafficProfiles.usesRuBlocked(configuration.connection.profiles)) {
+        return;
+      }
+      final status = await RuBlockedList.instance.status();
+      final checked = status?.checkedAt ?? status?.fetchedAt;
+      if (checked == null || now.difference(checked).inHours >= interval) {
+        await RuBlockedList.instance.update();
+      }
+    } catch (error) {
+      ygLogger('ru-blocked list update failed: ${failureDetails(error)}');
     }
   }
 

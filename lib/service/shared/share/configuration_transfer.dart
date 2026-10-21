@@ -333,6 +333,8 @@ Map<String, GeoDataType> geoDataReferences(Map<String, dynamic> json) {
       if (match == null) continue;
       final file = match.group(1)!;
       if (file == 'geosite.dat' || file == 'geoip.dat') continue;
+      // Fork: App-managed like the default pair, never a shared dependency.
+      if (GeoDataInput.appManaged(file)) continue;
       if (result.containsKey(file) && result[file] != type) {
         throw const FormatException('A Geodata file cannot have two types');
       }

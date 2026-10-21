@@ -1,10 +1,14 @@
 import 'package:onexray/service/connect/routing/options.dart';
+import 'package:onexray/service/connect/routing/profiles/profile.dart';
 
 enum ConnectionPlatform { ios, macos, android, windows, linux }
 
 enum SelectionKind { automatic, region, source, server }
 
-enum TrafficMode { smart, allVpn, custom }
+/// Fork: [selective] sends only what enabled traffic profiles name through
+/// the VPN and everything else direct. It reuses the Smart settings for its
+/// entries, DNS, sniffing, Fragment, FakeDNS and ad blocking.
+enum TrafficMode { smart, allVpn, custom, selective }
 
 class ServerSelection {
   final SelectionKind kind;
@@ -153,6 +157,9 @@ class ConnectionSettings {
   final int? customId;
   final SmartRoutingSettings smart;
 
+  /// Fork: profiles on top of the routing mode, see [TrafficProfileSettings].
+  final TrafficProfileSettings profiles;
+
   ConnectionSettings({
     this.expert = false,
     this.rawId,
@@ -160,6 +167,7 @@ class ConnectionSettings {
     this.trafficMode = TrafficMode.smart,
     this.customId,
     SmartRoutingSettings? smart,
+    this.profiles = const TrafficProfileSettings(),
   }) : smart = smart ?? SmartRoutingSettings();
 
   factory ConnectionSettings.fromJson(Map<String, dynamic> value) =>
@@ -176,6 +184,9 @@ class ConnectionSettings {
         smart: SmartRoutingSettings.fromJson(
           value['smart'] as Map<String, dynamic>? ?? {},
         ),
+        profiles: TrafficProfileSettings.fromJson(
+          value['profiles'] as Map<String, dynamic>? ?? {},
+        ),
       );
 
   Map<String, dynamic> toJson() => {
@@ -185,6 +196,9 @@ class ConnectionSettings {
     'trafficMode': trafficMode.name,
     'customId': customId,
     'smart': smart.toJson(),
+    // Absent until a profile is touched, so upstream-shaped settings and
+    // their comparisons stay byte-identical.
+    if (!profiles.isDefault) 'profiles': profiles.toJson(),
   };
 
   int requiredEntries({int? customEntryCount}) {
@@ -194,7 +208,7 @@ class ConnectionSettings {
       return 1;
     }
     return switch (trafficMode) {
-      TrafficMode.smart => smart.entryCount,
+      TrafficMode.smart || TrafficMode.selective => smart.entryCount,
       TrafficMode.allVpn => 1,
       TrafficMode.custom =>
         customEntryCount ?? (throw StateError('Custom route is required')),
@@ -202,5 +216,9 @@ class ConnectionSettings {
   }
 
   int? get finalExitId =>
-      !expert && trafficMode == TrafficMode.smart ? smart.finalExitId : null;
+      !expert && usesSmartSettings ? smart.finalExitId : null;
+
+  /// Smart and Selective share entries, final exit and connection options.
+  bool get usesSmartSettings =>
+      trafficMode == TrafficMode.smart || trafficMode == TrafficMode.selective;
 }

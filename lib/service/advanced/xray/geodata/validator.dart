@@ -23,9 +23,10 @@ class GeoDataValidator {
       return Tuple2(false, appLocalizationsNoContext().prototypeEnterFileName);
     }
     final rows = await AppDatabase().geoDataDao.allSources;
-    if (rows.any(
-      (row) => '${row.name}.dat'.toLowerCase() == fileName.toLowerCase(),
-    )) {
+    if (GeoDataInput.appManaged(fileName) ||
+        rows.any(
+          (row) => '${row.name}.dat'.toLowerCase() == fileName.toLowerCase(),
+        )) {
       return Tuple2(false, appLocalizationsNoContext().validationNameDuplicate);
     }
     return Tuple2(true, "");

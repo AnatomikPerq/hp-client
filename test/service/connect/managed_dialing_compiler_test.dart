@@ -68,7 +68,8 @@ void main() {
           _socket(_outbound(config, 'dnsOut'))['dialerProxy'],
           'app-entry-0',
         );
-      } else {
+      } else if (mode != TrafficMode.selective) {
+        // Selective fakes only names profiles send through the VPN.
         expect(
           _dnsServers(config).any((server) => server['address'] == 'fakedns'),
           isTrue,

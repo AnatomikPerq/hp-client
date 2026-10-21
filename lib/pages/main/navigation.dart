@@ -46,6 +46,8 @@ enum AppPageDestination {
   customRouting("custom-routing"),
   advancedRouting("advanced-routing"),
   customRule("custom-rule"),
+  trafficProfiles("traffic-profiles"),
+  trafficProfile("traffic-profile"),
   appleVpn("apple-vpn"),
   appleWifi("apple-wifi"),
   androidVpn("android-vpn"),

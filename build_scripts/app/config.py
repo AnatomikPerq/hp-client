@@ -13,6 +13,7 @@ PROJECT_CONFIG = {
         "core.lib.dst.dir.linux": "app",
         "core.lib.dst.dir.windows": "app",
         "core.dat.dst.dir": "../assets/dat",
+        "ru_blocked.dst.dir": "../assets/ru_blocked",
         "core.bin.src.file.linux": "bin/xray",
         "core.bin.src.file.windows": "bin/xray.exe",
         "core.bin.dst.file.linux": "app/HyperClientCore",

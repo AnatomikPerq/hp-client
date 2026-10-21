@@ -5,6 +5,7 @@ import 'package:onexray/pages/shared/widgets/page_help.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
+import 'package:onexray/service/connect/routing/profiles/profile.dart';
 import 'package:shadcn_ui/shadcn_ui.dart' show ShadSwitch;
 
 class RoutingFakeDnsRow extends StatelessWidget {
@@ -58,6 +59,34 @@ class RoutingFragmentRow extends StatelessWidget {
       trailing: Semantics(
         label: l.routingFragment,
         child: ShadSwitch(value: value, enabled: enabled, onChanged: onChanged),
+      ),
+    );
+  }
+}
+
+/// Fork: where a traffic profile sends what it matches.
+class TrafficProfileDirectionBadge extends StatelessWidget {
+  final TrafficProfileAction action;
+
+  const TrafficProfileDirectionBadge({super.key, required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final palette = ColorManager.palette(context);
+    final proxy = action == TrafficProfileAction.proxy;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: proxy ? palette.selectedSurface : palette.card,
+        border: Border.all(color: proxy ? palette.primary : palette.border),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Text(
+        proxy ? l.trafficProfileViaVpn : l.trafficProfileDirect,
+        style: AppTypography.actionHelp.copyWith(
+          color: proxy ? palette.primary : palette.mutedStrong,
+        ),
       ),
     );
   }

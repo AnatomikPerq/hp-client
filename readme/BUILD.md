@@ -102,7 +102,9 @@ python build_scripts/main.py HyperClient windows --windows-mode exe
 ```
 
 Скрипт сам пересобирает `libXray.dll` и ядро из соседнего `libXray`,
-обновляет GeoData и берёт wintun (SHA-256 закреплён). Результат лежит в
+обновляет GeoData, скачивает списки runetfreedom для профиля
+«Заблокированное в России» в `assets/ru_blocked/` и берёт wintun
+(SHA-256 закреплён). Результат лежит в
 `..\output`: `HyperClient-windows-amd64.exe` (установщик), `.zip` и
 `provenance-windows-x64-exe.json` с ревизиями и хешами. Оба дерева должны
 быть закоммичены: протокол записывает, были ли они чистыми.

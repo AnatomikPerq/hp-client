@@ -184,6 +184,12 @@ class TrayMenuData {
             enabled: trafficEnabled,
           ),
           choice(
+            'traffic:selective',
+            l.trafficSelective,
+            configuration.trafficMode == TrafficMode.selective,
+            enabled: trafficEnabled,
+          ),
+          choice(
             'traffic:allVpn',
             l.prototypeAllViaVpn,
             configuration.trafficMode == TrafficMode.allVpn,

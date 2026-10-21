@@ -186,6 +186,9 @@ XrayRoutingRule _$XrayRoutingRuleFromJson(Map<String, dynamic> json) =>
       localOS: (json['localOS'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      process: (json['process'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
       inboundTag: (json['inboundTag'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
@@ -202,6 +205,7 @@ Map<String, dynamic> _$XrayRoutingRuleToJson(XrayRoutingRule instance) =>
       'network': ?instance.network,
       'protocol': ?instance.protocol,
       'localOS': ?instance.localOS,
+      'process': ?instance.process,
       'inboundTag': ?instance.inboundTag,
       'outboundTag': ?instance.outboundTag,
       'balancerTag': ?instance.balancerTag,

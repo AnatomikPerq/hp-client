@@ -168,7 +168,7 @@ def finish_build(builder, receipt: dict) -> Path:
                     else f"VCore/{path.relative_to(vcore).as_posix()}")
             files[name] = sha256(path)
 
-    native_paths = [root / "assets/dat", root / "assets/geodata"]
+    native_paths = [root / "assets/dat", root / "assets/geodata", root / "assets/ru_blocked"]
     lib_destination = Path(builder.project_dir) / builder.project_config[
         f"core.lib.dst.dir.{builder.system}"]
     for name in builder.project_config[f"core.lib.src.files.{builder.system}"]:

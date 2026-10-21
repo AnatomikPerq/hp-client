@@ -125,6 +125,8 @@ flutter_gen:
     exclude:
       - assets/flags/**
       - assets/emoji/**
+      # Fork: build inputs read by path, see build_scripts/app/ru_blocked.py.
+      - assets/ru_blocked/**
 
 flutter:
   uses-material-design: true
@@ -134,6 +136,7 @@ flutter:
     - assets/
     - assets/dat/
     - assets/geodata/regions.json
+    - assets/ru_blocked/
     - assets/icon/
     - assets/app_icon/
     - assets/macos_icon/

@@ -16,6 +16,8 @@ import 'package:onexray/service/connect/routing/custom/configuration.dart';
 import 'package:onexray/service/connect/routing/custom/advanced.dart';
 import 'package:onexray/service/connect/routing/dns.dart';
 import 'package:onexray/service/connect/routing/options.dart';
+import 'package:onexray/service/connect/routing/profiles/catalog.dart';
+import 'package:onexray/service/connect/routing/profiles/profile.dart';
 import 'package:onexray/service/servers/outbound/map.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
 import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
@@ -296,6 +298,7 @@ class ConnectionCompiler {
     RoutingConfiguration? custom,
     required RegionCatalog regions,
     required RuntimeOptions options,
+    TrafficProfileContext profileContext = const TrafficProfileContext(),
   }) {
     final nodeTags = <String, int>{};
     late final Map<String, dynamic> config;
@@ -380,14 +383,60 @@ class ConnectionCompiler {
       }
       final ordinary = custom is RoutingProfileState ? custom : null;
       final allVpn = settings.trafficMode == TrafficMode.allVpn;
+      final selective = settings.trafficMode == TrafficMode.selective;
+      // Fork: enabled profiles go above the mode's own rules. Everything
+      // already reaches the VPN in All VPN and leaves direct in Selective,
+      // so those modes only take the other direction.
+      final profileRules = TrafficProfiles.rules(
+        settings.profiles,
+        context: profileContext.withProcesses(options.desktop),
+        actions: {
+          if (!allVpn) TrafficProfileAction.proxy,
+          if (!selective) TrafficProfileAction.direct,
+        },
+        lanGuard: !selective,
+      );
       final rules = <XrayRoutingRule>[];
-      if (settings.trafficMode == TrafficMode.smart) {
-        rules.addAll(smartRules(settings.smart, regions));
-      } else if (settings.trafficMode == TrafficMode.custom) {
-        for (final (index, rule) in ordinary!.rules.indexed) {
-          rules.add(rule.xrayJson..ruleTag = 'app-custom-$index');
-        }
+      switch (settings.trafficMode) {
+        case TrafficMode.smart:
+          final smart = smartRules(settings.smart, regions);
+          bool blocks(XrayRoutingRule rule) => rule.outboundTag == 'block';
+          rules
+            ..addAll(smart.where(blocks))
+            ..addAll(profileRules)
+            ..addAll(smart.where((rule) => !blocks(rule)));
+        case TrafficMode.selective:
+          rules
+            ..addAll([
+              if (settings.smart.blockAds)
+                XrayRoutingRule(
+                  ruleTag: 'app-smart-ads',
+                  domain: ['geosite:CATEGORY-ADS-ALL'],
+                  outboundTag: 'block',
+                ),
+            ])
+            ..addAll(
+              TrafficProfiles.privateDirect(
+                'app-selective-private',
+                profileContext,
+              ),
+            )
+            ..addAll(profileRules);
+        case TrafficMode.custom:
+          rules.addAll(profileRules);
+          for (final (index, rule) in ordinary!.rules.indexed) {
+            rules.add(rule.xrayJson..ruleTag = 'app-custom-$index');
+          }
+        case TrafficMode.allVpn:
+          rules.addAll(profileRules);
       }
+      // All VPN resolves through the proxy alone until a profile sends
+      // something direct.
+      final directDns = switch (settings.trafficMode) {
+        TrafficMode.smart || TrafficMode.selective => settings.smart.directDns,
+        TrafficMode.custom => true,
+        TrafficMode.allVpn => profileRules.isNotEmpty,
+      };
       final entriesOutbounds = <Map<String, dynamic>>[];
       final exits = <Map<String, dynamic>>[];
       final selector = <String>[];
@@ -408,7 +457,7 @@ class ConnectionCompiler {
         }
       }
       final fragment = switch (settings.trafficMode) {
-        TrafficMode.smart =>
+        TrafficMode.smart || TrafficMode.selective =>
           settings.smart.fragment ? XrayFragment.defaultOutbound() : null,
         TrafficMode.custom => ordinary!.fragmentOutbound,
         TrafficMode.allVpn => null,
@@ -445,35 +494,32 @@ class ConnectionCompiler {
         ).toJson(),
       ]);
       final dnsSettings = switch (settings.trafficMode) {
-        TrafficMode.smart => settings.smart.dns,
+        TrafficMode.smart || TrafficMode.selective => settings.smart.dns,
         TrafficMode.custom => ordinary!.dns,
         TrafficMode.allVpn => const RoutingDnsSettings(),
       };
       final sniffing = switch (settings.trafficMode) {
-        TrafficMode.smart => settings.smart.sniffing,
+        TrafficMode.smart || TrafficMode.selective => settings.smart.sniffing,
         TrafficMode.custom => ordinary!.sniffing,
         TrafficMode.allVpn => const RoutingSniffingSettings(),
       };
       final selectionSettings = switch (settings.trafficMode) {
-        TrafficMode.smart => settings.smart.selection,
+        TrafficMode.smart || TrafficMode.selective => settings.smart.selection,
         TrafficMode.custom => ordinary!.selection,
         TrafficMode.allVpn => const RoutingSelectionSettings(),
       };
       final selection = selectionSettings.compile(selector: selector);
       final fakeDns = !allVpn && (ordinary?.fakeDns ?? settings.smart.fakeDns);
-      dnsSettings.validate(
-        directEnabled:
-            !allVpn && (ordinary != null || settings.smart.directDns),
-      );
+      dnsSettings.validate(directEnabled: directDns);
       selectionSettings.validate();
       sniffing.validate(fakeDns: fakeDns);
       final dns = RoutingDns.compile(
         settings: dnsSettings,
-        rules: allVpn ? const [] : rules,
-        directEnabled:
-            !allVpn && (ordinary != null || settings.smart.directDns),
+        rules: rules,
+        directEnabled: directDns,
         fakeDns: fakeDns,
         ipv6: options.ipv6,
+        defaultDirect: selective,
       );
       dns.servers = [
         ...ManagedServerDialing.bootstrapServers(
@@ -513,7 +559,10 @@ class ConnectionCompiler {
         dns: dns,
         fakedns: FakeDns.poolsFor(dns),
         routing: XrayRouting(
-          domainStrategy: allVpn ? 'AsIs' : 'IPIfNonMatch',
+          // Address rules of a profile need the name resolved in All VPN too.
+          domainStrategy: allVpn && !rules.any((rule) => rule.ip != null)
+              ? 'AsIs'
+              : 'IPIfNonMatch',
           balancers: [selection.balancer],
           rules: [
             if (bootstrapDomains.isNotEmpty)
@@ -527,7 +576,7 @@ class ConnectionCompiler {
               inboundTag: [dnsProxy],
               balancerTag: 'proxy',
             ),
-            if (!allVpn)
+            if (!allVpn || directDns)
               XrayRoutingRule(
                 ruleTag: 'app-direct-dns',
                 inboundTag: [dnsDirect],
@@ -546,7 +595,16 @@ class ConnectionCompiler {
               balancerTag: 'proxy',
             ),
             ...rules,
-            if (selection.automatic)
+            if (selective)
+              XrayRoutingRule(
+                ruleTag: TrafficProfiles.selectiveDirectTag,
+                inboundTag: [
+                  'tunIn',
+                  if (options.lanProxyEnabled) lanProxyInboundTag,
+                ],
+                outboundTag: 'direct',
+              )
+            else if (selection.automatic)
               XrayRoutingRule(
                 ruleTag: 'app-proxy-catchall',
                 inboundTag: [

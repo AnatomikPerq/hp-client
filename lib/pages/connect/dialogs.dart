@@ -215,9 +215,13 @@ class ConnectTrafficMethodDialog extends StatelessWidget {
     super.key,
     required this.current,
     required this.customRoutes,
+    this.profilesSummary = '',
   });
   final ConnectionSettings current;
   final List<ConnectCustomChoice> customRoutes;
+
+  /// Fork: the enabled traffic profiles, by name.
+  final String profilesSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -248,11 +252,31 @@ class ConnectTrafficMethodDialog extends StatelessWidget {
               onEdit: () => choose(TrafficMode.smart, null, edit: true),
             ),
             const SizedBox(height: 10),
+            // Fork: editing Selective (and the profiles row) opens the
+            // profiles page; it never changes the mode by itself.
+            _MethodOption(
+              title: l.trafficSelective,
+              description: l.trafficSelectiveDescription,
+              selected: current.trafficMode == TrafficMode.selective,
+              onPressed: () => choose(TrafficMode.selective, null),
+              onEdit: () => choose(TrafficMode.selective, null, edit: true),
+            ),
+            const SizedBox(height: 10),
             _MethodOption(
               title: l.prototypeAllViaVpn,
               description: l.prototypeAllViaVpnDescription,
               selected: current.trafficMode == TrafficMode.allVpn,
               onPressed: () => choose(TrafficMode.allVpn, null),
+            ),
+            const SizedBox(height: 10),
+            _MethodOption(
+              title: l.trafficProfiles,
+              description: profilesSummary.isEmpty
+                  ? l.trafficProfilesNone
+                  : profilesSummary,
+              selected: false,
+              icon: LucideIcons.layers,
+              onPressed: () => choose(TrafficMode.selective, null, edit: true),
             ),
             const SizedBox(height: 19),
             Padding(
@@ -352,11 +376,13 @@ class _MethodOption extends StatelessWidget {
     required this.selected,
     required this.onPressed,
     this.onEdit,
+    this.icon = LucideIcons.shieldCheck,
   });
   final String title, description;
   final bool selected;
   final VoidCallback onPressed;
   final VoidCallback? onEdit;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -394,11 +420,7 @@ class _MethodOption extends StatelessWidget {
                         color: palette.selectedSurface,
                         borderRadius: BorderRadius.circular(9),
                       ),
-                      child: Icon(
-                        LucideIcons.shieldCheck,
-                        size: 21,
-                        color: palette.primary,
-                      ),
+                      child: Icon(icon, size: 21, color: palette.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

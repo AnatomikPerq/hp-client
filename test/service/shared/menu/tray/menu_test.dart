@@ -564,6 +564,9 @@ void main() {
     final tray =
         TrayService.forTesting(
             database: db,
+            // The shared instance would open the real App directories after
+            // the test ended (path_provider), failing it at random.
+            coordinator: ConnectionCoordinator(database: db),
             connect: () async => fail('Selection must not directly start VPN'),
             notify: (message) async => notifications.add(message),
             showMainWindow: () async =>

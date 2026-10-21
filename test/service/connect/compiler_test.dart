@@ -727,13 +727,20 @@ void main() {
                   interfaceName: 'Ethernet',
                 ),
               ).config;
-              final active = enabled && mode != TrafficMode.allVpn;
+              // Selective fakes only names that profiles send through the
+              // VPN, and this route enables none.
+              final selective = mode == TrafficMode.selective;
+              final active =
+                  enabled && mode != TrafficMode.allVpn && !selective;
               final servers = config['dns']['servers'] as List;
               expect(
                 servers.any((server) => server['tag'] == 'app-dns-fake'),
                 active,
               );
-              expect(servers.last['tag'], 'app-dns-proxy');
+              expect(
+                servers.last['tag'],
+                selective ? 'app-dns-direct' : 'app-dns-proxy',
+              );
               expect(
                 servers.every(
                   (server) =>
@@ -913,6 +920,13 @@ void main() {
         options: options(ipv6: false, tunDnsIpv4Address: '192.0.2.53'),
       );
       final servers = compiled.config['dns']['servers'] as List;
+      if (mode == TrafficMode.selective) {
+        // Unmatched names resolve directly, see routing/profiles/compiler_test.
+        expect(servers.last['tag'], 'app-dns-direct');
+        expect(servers.last['address'], '1.1.1.1');
+        expect(servers.last['domains'], isNull);
+        continue;
+      }
       expect(servers.last['tag'], 'app-dns-proxy');
       expect(servers.last['address'], '8.8.8.8');
       expect(servers.last['queryStrategy'], 'UseIPv4');

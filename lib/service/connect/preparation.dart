@@ -23,6 +23,8 @@ import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/custom/configuration.dart';
+import 'package:onexray/service/connect/routing/profiles/catalog.dart';
+import 'package:onexray/service/connect/routing/profiles/ru_blocked.dart';
 import 'package:onexray/service/minewire/runtime.dart';
 import 'package:path/path.dart' as p;
 
@@ -144,6 +146,7 @@ class ConnectionPreparation {
   getFreePorts;
   final LocalApiService _localApi;
   final Future<void> Function(Map<String, GeoDataType>) _requireDependencies;
+  final Future<void> Function() _ensureRuBlocked;
 
   ConnectionPreparation({
     AppDatabase? db,
@@ -151,10 +154,13 @@ class ConnectionPreparation {
     this.getFreePorts,
     LocalApiService? localApi,
     Future<void> Function(Map<String, GeoDataType>)? requireDependencies,
+    Future<void> Function()? ensureRuBlocked,
   }) : db = db ?? AppDatabase(),
        _localApi = localApi ?? LocalApiService.instance,
        _requireDependencies =
            requireDependencies ?? GeoDataService().requireDependencies,
+       _ensureRuBlocked =
+           ensureRuBlocked ?? RuBlockedList.instance.ensureInstalled,
        resolver =
            resolver ??
            ConnectionResolver(
@@ -319,6 +325,31 @@ class ConnectionPreparation {
         geoipCodes: RegionCatalog.codesFromIndex(await readIndex('geoip')),
       );
     }
+    // Fork: traffic profiles drop built-in categories the installed Geodata
+    // lacks, and the ru-blocked lists come from the bundle when missing
+    // (a local copy only; updates are the profile page's and auto update's).
+    var profileContext = const TrafficProfileContext();
+    if (profile == null &&
+        !settings.expert &&
+        (settings.trafficMode == TrafficMode.selective ||
+            settings.profiles.enabled.isNotEmpty)) {
+      Future<Set<String>> codes(String name) async => {
+        for (final code in RegionCatalog.codesFromIndex(
+          jsonDecode(
+            await File(p.join(VpnConstants.datDir, '$name.json'))
+                .readAsString(),
+          ) as Map<String, dynamic>,
+        ))
+          code.toUpperCase(),
+      };
+      final ruBlocked = TrafficProfiles.usesRuBlocked(settings.profiles);
+      if (ruBlocked) await _ensureRuBlocked();
+      profileContext = TrafficProfileContext(
+        geositeCodes: await codes('geosite'),
+        geoipCodes: await codes('geoip'),
+        ruBlocked: ruBlocked,
+      );
+    }
     final rawConfig = raw == null ? null : ConnectionCompiler.parseRawJson(raw);
     final userInbounds =
         profile?.config['inbounds'] ??
@@ -421,6 +452,7 @@ class ConnectionPreparation {
         profileRow: profileRow,
         custom: custom,
         regions: regions,
+        profileContext: profileContext,
         shareLanProxy: shareLanProxy,
         serverDrafts: serverDrafts,
         notice: notice,
@@ -449,6 +481,7 @@ class ConnectionPreparation {
     required CoreConfigData? profileRow,
     required RoutingConfiguration? custom,
     required RegionCatalog regions,
+    required TrafficProfileContext profileContext,
     required bool shareLanProxy,
     required Map<int, ResolvedServer> serverDrafts,
     required String? notice,
@@ -464,6 +497,7 @@ class ConnectionPreparation {
       profile: profile,
       custom: custom,
       regions: regions,
+      profileContext: profileContext,
       options: RuntimeOptions(
         platform: platform,
         sessionDirectory: VpnConstants.runDir,

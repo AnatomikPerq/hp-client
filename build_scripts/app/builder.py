@@ -11,6 +11,7 @@ from app.command_line import (
     run_command,
 )
 from app.config import PROJECT_CONFIG
+from app.ru_blocked import fetch_ru_blocked
 
 # ponytail: Only pubspec's top-level version is needed; add a YAML parser if the
 # build interface ever needs structured YAML data.
@@ -91,7 +92,16 @@ class Builder:
         check_and_delete_dir(dat_dst_path)
         shutil.copytree(dat_src_path, dat_dst_path, symlinks=True)
 
+        self.bundle_ru_blocked()
         self.build_core_binary()
+
+    def bundle_ru_blocked(self):
+        # Fork: the ru-blocked traffic profile ships a fresh copy of its lists.
+        key = "ru_blocked.dst.dir"
+        if key in self.project_config:
+            fetch_ru_blocked(
+                os.path.join(self.project_dir, self.project_config[key])
+            )
 
     def build_core_binary(self):
         src_key = f"core.bin.src.file.{self.system}"

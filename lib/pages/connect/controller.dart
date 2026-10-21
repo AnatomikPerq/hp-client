@@ -16,6 +16,8 @@ import 'package:onexray/pages/main/navigation.dart';
 import 'package:onexray/pages/shared/alert.dart';
 import 'package:onexray/pages/shared/page_cubit.dart';
 import 'package:onexray/pages/connect/dialogs.dart';
+import 'package:onexray/pages/connect/routing/profiles/controller.dart';
+import 'package:onexray/service/connect/routing/profiles/catalog.dart';
 import 'package:onexray/pages/connect/hero.dart';
 import 'package:onexray/service/shared/ping/live_probe.dart';
 import 'package:onexray/pages/theme/color.dart';
@@ -367,7 +369,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
         settings.trafficMode == TrafficMode.allVpn) {
       return 1;
     }
-    if (settings.trafficMode == TrafficMode.smart) {
+    if (settings.usesSmartSettings) {
       return settings.smart.entryCount;
     }
     final profile = customRoutes
@@ -416,11 +418,30 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     return health(l10n, row);
   }
 
-  String homeMethodTitle(AppLocalizations l10n) => providerConfiguration
-      ? l10n.providerConfigurationTitle
-      : configuration.connection.trafficMode == TrafficMode.smart
-      ? l10n.prototypeSmartRoutingRecommended
-      : methodTitle(l10n);
+  String homeMethodTitle(AppLocalizations l10n) {
+    if (providerConfiguration) return l10n.providerConfigurationTitle;
+    // Fork: profiles on top of the mode are part of the routing choice; the
+    // short mode name leaves room for them in the pill.
+    final profiles = configuration.connection.expert
+        ? 0
+        : TrafficProfiles.active(configuration.connection.profiles).length;
+    if (profiles > 0) {
+      return '${methodTitle(l10n)} · ${l10n.trafficProfilesCount(profiles)}';
+    }
+    return configuration.connection.trafficMode == TrafficMode.smart
+        ? l10n.prototypeSmartRoutingRecommended
+        : methodTitle(l10n);
+  }
+
+  /// Fork: the enabled traffic profiles, by name.
+  String profilesSummary(AppLocalizations l10n) => [
+    for (final profile in TrafficProfiles.active(
+      configuration.connection.profiles,
+    ))
+      profile.custom
+          ? profile.name
+          : TrafficProfilesController.builtInName(l10n, profile.id),
+  ].join(', ');
 
   int _ruleCount(RoutingConfiguration profile) => profile.ruleCount;
 
@@ -431,6 +452,8 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
         return l10n.prototypeSmartRoutingDescription;
       case TrafficMode.allVpn:
         return l10n.prototypeAllViaVpnDescription;
+      case TrafficMode.selective:
+        return l10n.trafficSelectiveDescription;
       case TrafficMode.custom:
         final row = customRoutes
             .where((row) => row.id == configuration.connection.customId)
@@ -475,6 +498,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
       : switch (configuration.connection.trafficMode) {
           TrafficMode.smart => l10n.prototypeSmartRouting,
           TrafficMode.allVpn => l10n.prototypeAllViaVpn,
+          TrafficMode.selective => l10n.trafficSelective,
           TrafficMode.custom =>
             customRoutes
                     .where((row) => row.id == configuration.connection.customId)
@@ -638,6 +662,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     return switch (next.trafficMode) {
       TrafficMode.smart => l.prototypeSmartRoutingRecommended,
       TrafficMode.allVpn => l.prototypeAllViaVpn,
+      TrafficMode.selective => l.trafficSelective,
       TrafficMode.custom =>
         customRoutes
                 .where((row) => row.id == next.customId)
@@ -767,6 +792,7 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
       context,
       (context) => ConnectTrafficMethodDialog(
         current: configuration.connection,
+        profilesSummary: profilesSummary(AppLocalizations.of(context)!),
         customRoutes: [
           for (final profile in customRoutes)
             (
@@ -780,7 +806,9 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
     );
     if (selected != null && context.mounted) {
       if (selected.edit) {
-        var destination = AppPageDestination.smartRouting;
+        var destination = selected.mode == TrafficMode.selective
+            ? AppPageDestination.trafficProfiles
+            : AppPageDestination.smartRouting;
         if (selected.mode == TrafficMode.custom) {
           final advanced = selected.id == null
               ? await showCustomRoutingModeDialog(context)
@@ -855,6 +883,9 @@ class ConnectController extends PageCubit<ConnectPageState> with ServerLabels {
                   ? l.prototypeSmartConnectionReason(entryNames)
                   : l.prototypeSmartConnectionChainReason(entryNames, exit),
             TrafficMode.allVpn => l.prototypeAllVpnConnectionReason(entryNames),
+            TrafficMode.selective => l.trafficSelectiveConnectionReason(
+              entryNames,
+            ),
             TrafficMode.custom =>
               custom == null
                   ? l.prototypeCustomConnectionReason
