@@ -8,6 +8,7 @@ import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/tools/json.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/connect/dialing.dart';
 import 'package:onexray/service/connect/runtime_network_policy.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/custom/state.dart';
@@ -22,6 +23,7 @@ import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
 import 'package:onexray/service/shared/xray/fake_dns.dart';
 import 'package:onexray/service/shared/xray/fragment.dart';
 import 'package:onexray/service/shared/xray/remnawave.dart';
+import 'package:onexray/service/shared/xray/server_dialing.dart';
 
 /// A complete provider graph selected as one subscription asset.
 class ResolvedProfile {
@@ -104,6 +106,7 @@ class RuntimeOptions {
   final String lanProxyUser;
   final String lanProxyPassword;
   final bool ipv6;
+  final ServerDialingSettings dialing;
   final String tunDnsIpv4Address;
   final String tunDnsIpv6Address;
   final String interfaceName;
@@ -128,6 +131,7 @@ class RuntimeOptions {
     this.lanProxyUser = '',
     this.lanProxyPassword = '',
     this.ipv6 = true,
+    this.dialing = const ServerDialingSettings(),
     this.tunDnsIpv4Address = '8.8.8.8',
     this.tunDnsIpv6Address = '2001:4860:4860::8888',
     this.interfaceName = '',
@@ -420,6 +424,13 @@ class ConnectionCompiler {
         ...helpers,
       ];
       _applyOutboundPolicy(outbounds, options, raw: false);
+      final bootstrapDomains = ManagedServerDialing.apply(
+        outbounds: outbounds,
+        settings: options.dialing.effective(ipv6: options.ipv6),
+        // Only where _applyOutboundPolicy binds too: system proxy mode has
+        // no tunnel to keep the dial out of.
+        interfaceName: options.requiresInterface ? options.interfaceName : null,
+      );
       outbounds.addAll([
         createFreedomOutbound(
           tag: 'direct',
@@ -464,6 +475,15 @@ class ConnectionCompiler {
         fakeDns: fakeDns,
         ipv6: options.ipv6,
       );
+      dns.servers = [
+        ...ManagedServerDialing.bootstrapServers(
+          domains: bootstrapDomains,
+          ipv4Address: options.tunDnsIpv4Address,
+          ipv6Address: options.tunDnsIpv6Address,
+          ipv6: options.ipv6,
+        ),
+        ...?dns.servers,
+      ];
       final normal = XrayJson(
         env: XrayEnv(
           assetLocation: VpnConstants.datDir,
@@ -496,6 +516,12 @@ class ConnectionCompiler {
           domainStrategy: allVpn ? 'AsIs' : 'IPIfNonMatch',
           balancers: [selection.balancer],
           rules: [
+            if (bootstrapDomains.isNotEmpty)
+              XrayRoutingRule(
+                ruleTag: ManagedServerDialing.dnsTag,
+                inboundTag: [ManagedServerDialing.dnsTag],
+                outboundTag: 'direct',
+              ),
             XrayRoutingRule(
               ruleTag: 'app-default',
               inboundTag: [dnsProxy],

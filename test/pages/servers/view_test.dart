@@ -167,6 +167,51 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'sorting changes display order without selecting or testing nodes',
+    (tester) async {
+      CoreConfigData named(int id, String name, {int? delay}) {
+        final row = _server(id, 'NL');
+        return row.copyWith(
+          name: name,
+          delay: delay ?? row.delay,
+          data: Value(
+            outboundCompanion({
+              'tag': name,
+              'protocol': 'vless',
+              'streamSettings': {'network': 'xhttp', 'security': 'tls'},
+            }).data.value,
+          ),
+        );
+      }
+
+      controller.servers = [named(2, 'Alpha'), named(1, 'Zulu')];
+      await pumpBrowser(tester, 1280);
+      expect(controller.servers.map((row) => row.id), [1, 2]);
+
+      await tester.tap(find.byTooltip('Sort servers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Name').last);
+      await tester.pumpAndSettle();
+      expect(controller.servers.map((row) => row.id), [2, 1]);
+
+      controller.servers = [
+        named(1, 'Zulu', delay: 1),
+        named(2, 'Alpha', delay: 900),
+      ];
+      await tester.pumpAndSettle();
+      expect(controller.servers.map((row) => row.id), [2, 1]);
+
+      await tester.tap(find.byTooltip('Sort servers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Latency').last);
+      await tester.pumpAndSettle();
+      expect(controller.servers.map((row) => row.id), [1, 2]);
+      expect(coordinator.state.value.phase, ConnectionPhase.disconnected);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   Finder iconButton(String tooltip) => find.byWidgetPredicate(
     (widget) => widget is IconButton && widget.tooltip == tooltip,
   );

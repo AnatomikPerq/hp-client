@@ -11,6 +11,7 @@ import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/servers/menus.dart';
 import 'package:onexray/pages/servers/node_tile.dart';
+import 'package:onexray/pages/servers/sort.dart';
 import 'package:onexray/pages/servers/subscription/user_info.dart';
 import 'package:onexray/pages/shared/widgets/adaptive_dialog.dart';
 import 'package:onexray/pages/shared/widgets/country_flag.dart';
@@ -223,40 +224,47 @@ class _SearchField extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadii.card),
       borderSide: BorderSide(color: palette.border),
     );
-    return SizedBox(
-      height: 40,
-      child: TextField(
-        controller: controller.search,
-        onChanged: controller.searchChanged,
-        textAlignVertical: TextAlignVertical.center,
-        style: AppTypography.settingsInput.copyWith(color: palette.foreground),
-        decoration: InputDecoration(
-          isDense: true,
-          filled: true,
-          fillColor: palette.card,
-          contentPadding: const EdgeInsetsDirectional.only(end: 13),
-          hintText: l.prototypeSearchSubscriptionsServers,
-          hintStyle: AppTypography.settingsInput.copyWith(
+    final field = TextField(
+      controller: controller.search,
+      onChanged: controller.searchChanged,
+      textAlignVertical: TextAlignVertical.center,
+      style: AppTypography.settingsInput.copyWith(color: palette.foreground),
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: palette.card,
+        contentPadding: const EdgeInsetsDirectional.only(end: 13),
+        hintText: l.prototypeSearchSubscriptionsServers,
+        hintStyle: AppTypography.settingsInput.copyWith(
+          color: palette.mutedForeground,
+        ),
+        prefixIconConstraints: const BoxConstraints.tightFor(
+          width: 40,
+          height: 40,
+        ),
+        prefixIcon: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 13, end: 9),
+          child: Icon(
+            LucideIcons.search,
+            size: 17,
             color: palette.mutedForeground,
           ),
-          prefixIconConstraints: const BoxConstraints.tightFor(
-            width: 40,
-            height: 40,
-          ),
-          prefixIcon: Padding(
-            padding: const EdgeInsetsDirectional.only(start: 13, end: 9),
-            child: Icon(
-              LucideIcons.search,
-              size: 17,
-              color: palette.mutedForeground,
-            ),
-          ),
-          border: border,
-          enabledBorder: border,
-          focusedBorder: border.copyWith(
-            borderSide: BorderSide(color: palette.primary),
-          ),
         ),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border.copyWith(
+          borderSide: BorderSide(color: palette.primary),
+        ),
+      ),
+    );
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: [
+          Expanded(child: field),
+          const SizedBox(width: 4),
+          ServerSortButton(controller: controller),
+        ],
       ),
     );
   }

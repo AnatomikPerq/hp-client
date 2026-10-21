@@ -8,6 +8,7 @@ import 'package:onexray/core/tools/app_log.dart';
 import 'package:onexray/core/tools/logger.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/routing/dns.dart';
+import 'package:onexray/service/shared/xray/server_dialing.dart';
 import 'package:onexray/service/connect/runtime_host.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/minewire/link.dart';
@@ -344,7 +345,10 @@ class MinewireRuntime {
           final server = servers[index];
           if (server is String) {
             servers[index] = _tcpDnsAddress(server, null) ?? server;
-          } else if (server is Map && server['tag'] != RoutingDns.directTag) {
+          } else if (server is Map &&
+              server['tag'] != RoutingDns.directTag &&
+              // Bootstrap queries for server domains go out direct.
+              server['tag'] != ManagedServerDialing.dnsTag) {
             final address = _tcpDnsAddress(server['address'], server['port']);
             if (address != null) {
               server

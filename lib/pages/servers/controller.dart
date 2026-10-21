@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/core/db/database/enum.dart';
-import 'package:onexray/core/errors/failure.dart';
 import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/shared/page_cubit.dart';
@@ -12,6 +11,9 @@ import 'package:onexray/pages/advanced/xray/config/params.dart';
 import 'package:onexray/pages/shared/connection_action.dart';
 import 'package:onexray/pages/servers/catalog.dart';
 import 'package:onexray/service/servers/catalog.dart';
+import 'package:onexray/service/servers/sort.dart';
+import 'package:onexray/service/shared/event_bus/service.dart';
+import 'package:onexray/service/shared/failure.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/connect/routing/custom/configuration.dart';
 
@@ -68,6 +70,7 @@ class ServersPageState {
     Map<Object, PendingServerTest> serverTests = const {},
     Set<int> favoritingServerIds = const {},
     this.selectingServers,
+    this.sortSaving = false,
     Map<int, String> sourceErrors = const {},
     Set<String> collapsedGroupIds = const {},
     this.protocolFilter,
@@ -99,6 +102,7 @@ class ServersPageState {
   final Map<Object, PendingServerTest> serverTests;
   final Set<int> favoritingServerIds;
   final ServerSelection? selectingServers;
+  final bool sortSaving;
   final Map<int, String> sourceErrors;
   final Set<String> collapsedGroupIds;
   final String? protocolFilter;
@@ -120,6 +124,7 @@ class ServersPageState {
     Map<Object, PendingServerTest>? serverTests,
     Set<int>? favoritingServerIds,
     Object? selectingServers = _unchanged,
+    bool? sortSaving,
     Map<int, String>? sourceErrors,
     Set<String>? collapsedGroupIds,
     Object? protocolFilter = _unchanged,
@@ -144,6 +149,7 @@ class ServersPageState {
     selectingServers: identical(selectingServers, _unchanged)
         ? this.selectingServers
         : selectingServers as ServerSelection?,
+    sortSaving: sortSaving ?? this.sortSaving,
     sourceErrors: sourceErrors ?? this.sourceErrors,
     collapsedGroupIds: collapsedGroupIds ?? this.collapsedGroupIds,
     protocolFilter: identical(protocolFilter, _unchanged)
@@ -245,6 +251,25 @@ class ServersController extends PageCubit<ServersPageState>
 
   void _readFailed(Object error) =>
       emit(state.copyWith(failed: true, failure: error));
+
+  Future<void> setSortOrder(BuildContext context, ServerSortOrder order) async {
+    if (state.sortSaving || order == catalog.sortOrder) return;
+    emit(state.copyWith(sortSaving: true));
+    try {
+      await AppEventBus.instance.setServerSort(order);
+      emit(state.copyWith(catalog: catalog.copyWith(sortOrder: order)));
+    } catch (error) {
+      if (isPageActive && context.mounted) {
+        ContextAlert.showToast(
+          context,
+          appFailureMessage(AppLocalizations.of(context)!, error),
+        );
+      }
+    } finally {
+      emit(state.copyWith(sortSaving: false));
+    }
+  }
+
   Future<void> addServers(BuildContext context) =>
       context.pushScoped(AppPageDestination.serversImport);
   Future<bool> run(BuildContext context, Future<void> Function() action) =>
