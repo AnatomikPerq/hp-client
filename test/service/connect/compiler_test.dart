@@ -13,6 +13,8 @@ import 'package:onexray/service/connect/routing/custom/advanced.dart';
 import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
 import 'package:onexray/service/shared/xray/remnawave.dart';
 
+import '../../support/xdrive_template_fixture.dart';
+
 final catalog = RegionCatalog.fromJson(
   {
     'geosite': {
@@ -129,6 +131,9 @@ void main() {
         'servers': ['1.1.1.1'],
         'disableCache': true,
       },
+      'fakedns': [
+        {'ipPool': 'fc00:1::/64', 'poolSize': 1024},
+      ],
       'outbounds': [
         {
           'tag': 'edge',
@@ -218,6 +223,7 @@ void main() {
         'last',
       );
       expect(actual['dns']['disableCache'], isTrue);
+      expect(actual['fakedns'], source['fakedns']);
       expect(actual['metrics']['listen'], '127.0.0.1:18186');
       expect(actual['stats'], isEmpty);
       final inbounds = actual['inbounds'] as List;
@@ -713,7 +719,7 @@ void main() {
               if (active) {
                 expect(config['fakedns'], [
                   {'ipPool': '198.19.0.0/16', 'poolSize': 32768},
-                  {'ipPool': 'fc00:1::/64', 'poolSize': 32768},
+                  {'ipPool': '2001:2::/48', 'poolSize': 32768},
                 ]);
                 expect(servers.last['address'], '8.8.8.8');
                 final direct = servers.firstWhere(
@@ -784,7 +790,7 @@ void main() {
         for (final poolKey in [null, 'fakedns', 'fakeDns']) {
           final source = <String, dynamic>{
             'dns': dns,
-            ?poolKey: {'ipPool': '198.18.16.0/20', 'poolSize': 1024},
+            ?poolKey: {'ipPool': 'fc00:1::/64', 'poolSize': 1024},
             'inbounds': [
               {
                 'tag': 'tunIn',
@@ -1693,6 +1699,43 @@ void main() {
     expect(raw['geodata'], jsonDecode(source)['geodata']);
     expect(plan.nodeTags, isEmpty);
     _fixture('raw', plan);
+  });
+
+  test('Raw and provider runtime copies preserve XDrive template maps', () {
+    final source = <String, dynamic>{
+      'outbounds': [xdriveTemplateOutbound()],
+      'futureRoot': {'keep': true},
+    };
+    final before = jsonEncode(source);
+    for (final provider in [false, true]) {
+      final compiled = ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          expert: !provider,
+          selection: const ServerSelection.server(99),
+        ),
+        entries: const [],
+        raw: provider ? null : source,
+        profile: provider
+            ? ResolvedProfile(
+                id: 99,
+                sourceId: 7,
+                name: 'Template',
+                config: source,
+              )
+            : null,
+        regions: catalog,
+        options: options(),
+      ).config;
+      expect(
+        compiled['outbounds'].first['streamSettings']['xdriveSettings'],
+        source['outbounds'][0]['streamSettings']['xdriveSettings'],
+      );
+      expect(compiled['outbounds'].first['mux'], {
+        'enabled': true,
+        'concurrency': 8,
+      });
+      expect(jsonEncode(source), before);
+    }
   });
 
   test('Raw semantic comparison includes fields unknown to the App', () {
