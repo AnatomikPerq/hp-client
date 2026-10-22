@@ -24,6 +24,7 @@ const _original = CoreConfigData(
   tags: '',
   delay: 0,
   subId: 0,
+  manualSortOrder: 0,
   favorite: false,
 );
 

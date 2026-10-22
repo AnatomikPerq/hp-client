@@ -7,8 +7,151 @@ import 'package:onexray/service/connect/routing/custom/advanced.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
 import 'package:onexray/service/shared/xray/validation.dart';
 import 'package:onexray/service/shared/xray/remnawave.dart';
+import 'package:onexray/service/shared/xray/vpn_config.dart';
 
 void main() {
+  for (final provider in [false, true]) {
+    final kind = provider ? 'provider' : 'Raw';
+    test('$kind validation rejects default DNS inbound collisions early', () {
+      for (final dnsCase in ['missing', 'null', 'empty']) {
+        final source = <String, dynamic>{
+          'inbounds': [
+            {
+              'tag': VpnConfigAdapter.defaultDnsTag,
+              'protocol': 'socks',
+              'port': 1081,
+            },
+          ],
+          'outbounds': [
+            {'tag': 'proxy', 'protocol': 'freedom'},
+          ],
+          if (dnsCase == 'null') 'dns': null,
+          if (dnsCase == 'empty') 'dns': {'servers': <dynamic>[]},
+        };
+        final before = jsonEncode(source);
+        expect(
+          () => XrayValidation.full(
+            provider ? RemnawaveAdapter.adapt(source) : source,
+          ),
+          throwsFormatException,
+        );
+        expect(jsonEncode(source), before);
+      }
+    });
+
+    test('$kind validation checks the direct tag when DNS ingress exists', () {
+      for (final existingRule in [false, true]) {
+        final source = <String, dynamic>{
+          'outbounds': [
+            {'tag': 'proxy', 'protocol': 'freedom'},
+            {
+              'tag': VpnConfigAdapter.defaultDnsDirectTag,
+              'protocol': 'blackhole',
+            },
+            if (!existingRule) {'tag': 'user-dns', 'protocol': 'dns'},
+          ],
+          if (existingRule)
+            'routing': {
+              'rules': [
+                {'port': 53, 'outboundTag': 'proxy'},
+              ],
+            },
+        };
+        expect(
+          () => XrayValidation.full(
+            provider ? RemnawaveAdapter.adapt(source) : source,
+          ),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test(
+      '$kind explicit DNS does not reserve unused default resolver tags',
+      () {
+        final source = <String, dynamic>{
+          'inbounds': [
+            {
+              'tag': VpnConfigAdapter.defaultDnsTag,
+              'protocol': 'socks',
+              'port': 1081,
+            },
+          ],
+          'outbounds': [
+            {'tag': 'user-dns', 'protocol': 'dns'},
+            {
+              'tag': VpnConfigAdapter.defaultDnsDirectTag,
+              'protocol': 'blackhole',
+            },
+          ],
+          'dns': {
+            'servers': ['192.0.2.53'],
+          },
+        };
+        final before = jsonEncode(source);
+        final validated = jsonDecode(
+          XrayValidation.full(
+            provider ? RemnawaveAdapter.adapt(source) : source,
+          ),
+        );
+        expect(validated['dns'], source['dns']);
+        expect(validated['outbounds'].take(2).toList(), source['outbounds']);
+        expect(jsonEncode(source), before);
+      },
+    );
+  }
+
+  test(
+    'full validation supplements portable ingress without device defaults',
+    () {
+      final source = <String, dynamic>{
+        'outbounds': [
+          {'protocol': 'freedom'},
+        ],
+        'dns': {
+          'hosts': {'example.test': '192.0.2.1'},
+        },
+      };
+      final before = jsonEncode(source);
+      final config = jsonDecode(XrayValidation.full(source));
+      expect(config['inbounds'].single['protocol'], 'socks');
+      expect(config['routing']['rules'].single['inboundTag'], ['tunIn']);
+      expect(config['outbounds'].first, source['outbounds'][0]);
+      expect(config['dns'], source['dns']);
+      expect(config.containsKey('metrics'), false);
+      expect(jsonEncode(source), before);
+    },
+  );
+
+  test('full validation leaves malformed native containers for Core', () {
+    for (final source in <Map<String, dynamic>>[
+      {'inbounds': false},
+      {'outbounds': 'invalid'},
+      {'routing': false},
+      {
+        'routing': {'rules': false},
+      },
+      {'dns': false},
+      {
+        'dns': {'servers': 'invalid'},
+      },
+      {
+        'inbounds': [false],
+        'outbounds': [false],
+      },
+    ]) {
+      final config = jsonDecode(XrayValidation.full(source));
+      for (final key in source.keys) {
+        final actual = config[key];
+        if (source[key] is List) {
+          expect(actual, containsAll(source[key] as List));
+        } else {
+          expect(actual, source[key]);
+        }
+      }
+    }
+  });
+
   test('provider validation retains adapted graph and replaces only the disposable tunnel', () {
     final source = <String, dynamic>{
       'inbounds': [

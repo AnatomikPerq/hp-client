@@ -31,6 +31,7 @@ CoreConfigData _server(int id, {int source = 0}) => CoreConfigData(
   tags: '',
   delay: 20,
   subId: source,
+  manualSortOrder: 0,
   favorite: false,
 );
 

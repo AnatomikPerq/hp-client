@@ -11,7 +11,10 @@ import 'package:onexray/pages/advanced/xray/config/params.dart';
 import 'package:onexray/pages/shared/connection_action.dart';
 import 'package:onexray/pages/servers/catalog.dart';
 import 'package:onexray/service/servers/catalog.dart';
+import 'package:onexray/service/servers/manual_groups.dart';
+import 'package:onexray/pages/servers/manual_group_dialogs.dart';
 import 'package:onexray/service/servers/sort.dart';
+import 'package:onexray/pages/servers/order/controller.dart';
 import 'package:onexray/service/shared/event_bus/service.dart';
 import 'package:onexray/service/shared/failure.dart';
 import 'package:onexray/service/connect/routing/custom/service.dart';
@@ -39,7 +42,7 @@ import 'package:onexray/service/servers/subscription/model.dart';
 
 export 'catalog.dart';
 
-enum ServerAction { edit, test, copy, share, delete }
+enum ServerAction { edit, test, copy, share, move, delete }
 
 enum SourceAction { update, test, edit, share, delete }
 
@@ -165,6 +168,8 @@ class ServersController extends PageCubit<ServersPageState>
       emit(state.copyWith(catalog: catalog.copyWith(servers: rows)));
   set sources(List<SubscriptionData> rows) =>
       emit(state.copyWith(catalog: catalog.copyWith(sources: rows)));
+  set manualGroups(List<ManualServerGroupData> rows) =>
+      emit(state.copyWith(catalog: catalog.copyWith(manualGroups: rows)));
   ConnectionConfiguration get configuration => state.configuration;
   set configuration(ConnectionConfiguration value) =>
       emit(state.copyWith(configuration: value));
@@ -248,6 +253,8 @@ class ServersController extends PageCubit<ServersPageState>
     await runConnectionAction(context, coordinator, action);
   }
 
+  late final ManualServerGroupService manualGroupService =
+      ManualServerGroupService(database: db);
   late final ServerAssetService assets;
   final PingService _ping;
   bool _confirmingTest = false;
@@ -326,13 +333,21 @@ class ServersController extends PageCubit<ServersPageState>
   bool canTest(CoreConfigData row) => catalog.outboundEligible(row);
 
   bool canUse(ServerGroup group) {
-    if (providerGroup(group)) return false;
-    final count = entryCount(group.selection);
+    final selection = group.selection;
+    if (providerGroup(group) || selection == null) return false;
+    return canUseSelection(selection, group.rows);
+  }
+
+  bool canUseSelection(
+    ServerSelection selection,
+    Iterable<CoreConfigData> rows,
+  ) {
+    final count = entryCount(selection);
     final finalExit = configuration.connection.trafficMode == TrafficMode.smart
         ? configuration.connection.smart.finalExitId
         : null;
     return count > 0 &&
-        group.rows
+        rows
                 .where((row) => row.id != finalExit && catalog.selectable(row))
                 .take(count)
                 .length >=
@@ -456,7 +471,12 @@ class ServersController extends PageCubit<ServersPageState>
     final id = selection.kind == SelectionKind.source
         ? selection.id
         : first?.subId ?? connectionView.runtime?.profile?.sourceId;
-    return id == null ? null : 'subscription:$id';
+    if (id == 0 && first != null) {
+      return first.manualGroupId == null
+          ? 'manual:ungrouped'
+          : 'manual:${first.manualGroupId}';
+    }
+    return id == null || id == 0 ? null : 'subscription:$id';
   }
 
   bool canChoose(CoreConfigData row) =>
@@ -724,8 +744,217 @@ class ServersController extends PageCubit<ServersPageState>
         }, ids: {row.id});
       case ServerAction.share:
         await shareAsset(context, SharePageParams(ShareType.config, row.id));
+      case ServerAction.move:
+        await moveServer(context, row);
       case ServerAction.delete:
         await remove(context, serverName(row), ids: {row.id});
+    }
+  }
+
+  Future<void> openGroupOrder(BuildContext context) async {
+    if (query.trim().isNotEmpty || catalog.manualGroups.length < 2) return;
+    Future<List<ManualOrderItem>> load() async =>
+        (await db.manualServerGroupDao.allRows)
+            .map((group) => ManualOrderItem(group.id, group.name))
+            .toList();
+    await context.pushScoped(
+      AppPageDestination.manualServerOrder,
+      extra: ManualOrderParams(
+        title: AppLocalizations.of(context)!.manualGroupOrder,
+        items: catalog.orderedManualGroups
+            .map((group) => ManualOrderItem(group.id, group.name))
+            .toList(),
+        reload: load,
+        save: (expected, ordered) => manualGroupService.reorderGroups(
+          expectedIds: expected,
+          orderedIds: ordered,
+        ),
+      ),
+    );
+  }
+
+  Future<void> openServerOrder(BuildContext context, ServerGroup group) async {
+    if (!group.manual ||
+        query.trim().isNotEmpty ||
+        group.rows.length < 2 ||
+        manualGroupBusy(group)) {
+      return;
+    }
+    List<ManualOrderItem> items(ServerCatalog value) => value
+        .copyWith(sortOrder: ServerSortOrder.defaultOrder)
+        .servers
+        .where(
+          (row) =>
+              ServerCatalog.isManual(row) &&
+              row.manualGroupId == group.manualGroupId,
+        )
+        .map((row) => ManualOrderItem(row.id, value.display(row).name))
+        .toList();
+    Future<List<ManualOrderItem>> load() async => items(
+      ServerCatalog(
+        servers: await db.coreConfigDao.allActiveServerRows(),
+        manualGroups: await db.manualServerGroupDao.allRows,
+      ),
+    );
+    await context.pushScoped(
+      AppPageDestination.manualServerOrder,
+      extra: ManualOrderParams(
+        title:
+            '${AppLocalizations.of(context)!.manualServerOrder} · ${group.name}',
+        items: items(catalog),
+        reload: load,
+        save: (expected, ordered) => manualGroupService.reorderServers(
+          groupId: group.manualGroupId,
+          expectedIds: expected,
+          orderedIds: ordered,
+        ),
+      ),
+    );
+  }
+
+  bool manualGroupBusy(ServerGroup group) =>
+      _pending.contains('manual-group:${group.manualGroupId}') ||
+      group.rows.any(serverBusy);
+
+  Future<void> createManualGroup(BuildContext context) async {
+    final name = await showAppDialog<String>(
+      context,
+      (_) => const ManualGroupNameDialog(),
+    );
+    if (name == null || !context.mounted || !isPageActive) return;
+    await perform(context, () async {
+      final id = await manualGroupService.create(name);
+      activeGroupId = 'manual:$id';
+      if (context.mounted) ContextAlert.settingsSaved(context);
+    });
+  }
+
+  Future<void> moveServer(BuildContext context, CoreConfigData row) async {
+    if (!ServerCatalog.isManual(row)) return;
+    final target = await showAppDialog<ManualGroupTarget>(
+      context,
+      (_) => ManualGroupMoveDialog(
+        groups: catalog.orderedManualGroups,
+        currentId: row.manualGroupId,
+      ),
+    );
+    if (target == null ||
+        target.id == row.manualGroupId ||
+        !context.mounted ||
+        !isPageActive) {
+      return;
+    }
+    await perform(context, () async {
+      await manualGroupService.move({row.id}, targetGroupId: target.id);
+      if (context.mounted) ContextAlert.settingsSaved(context);
+    }, ids: {row.id});
+  }
+
+  Future<void> openManualGroupMenu(
+    BuildContext context,
+    ServerGroup group, {
+    bool closeAfterDeletion = false,
+  }) async {
+    final id = group.manualGroupId;
+    if (!group.manual || id == null || manualGroupBusy(group)) return;
+    final action = await showAppDialog<ManualGroupAction>(
+      context,
+      (_) => ManualGroupActionsDialog(name: group.name),
+    );
+    if (action == null || !context.mounted || !isPageActive) return;
+    switch (action) {
+      case ManualGroupAction.rename:
+        final name = await showAppDialog<String>(
+          context,
+          (_) => ManualGroupNameDialog(initialName: group.name),
+        );
+        if (name == null ||
+            name == group.name ||
+            !context.mounted ||
+            !isPageActive) {
+          return;
+        }
+        await _manualGroupAction(context, group, () async {
+          await manualGroupService.rename(id, name);
+          if (context.mounted) ContextAlert.settingsSaved(context);
+        });
+      case ManualGroupAction.dissolve:
+        await _manualGroupAction(context, group, () async {
+          final l = AppLocalizations.of(context)!;
+          if (!await showDestructiveConfirmationDialog(
+            context,
+            title: l.manualGroupDissolve,
+            subtitle: group.name,
+            warning: l.manualGroupDissolveWarning(group.rows.length),
+            confirmLabel: l.manualGroupDissolve,
+          )) {
+            return;
+          }
+          await manualGroupService.dissolve(id);
+          if (context.mounted && isPageActive) {
+            _manualGroupRemoved(context, group, closeAfterDeletion);
+          }
+        });
+      case ManualGroupAction.delete:
+        await _manualGroupAction(context, group, () async {
+          final preview = await assets.previewRemoval(manualGroupId: id);
+          if (!context.mounted || !isPageActive) return;
+          final l = AppLocalizations.of(context)!;
+          final reconnect = preview.affectsRuntime && !preview.disconnect;
+          if (!await showDestructiveConfirmationDialog(
+            context,
+            title: l.manualGroupDelete,
+            subtitle: group.name,
+            warning:
+                '${l.manualGroupDeleteWarning(preview.ids.length)}'
+                '${preview.ids.isEmpty ? '' : '\n\n${l.prototypeDeletedServerSelectionNotice}'}'
+                '${reconnect ? '\n\n${l.prototypeReconnectNotice}' : ''}',
+            confirmLabel: preview.disconnect
+                ? l.prototypeDeleteAndDisconnect
+                : reconnect
+                ? l.prototypeDeleteAndReconnect
+                : l.prototypeDelete,
+          )) {
+            return;
+          }
+          await assets.remove(preview);
+          if (context.mounted && isPageActive) {
+            _manualGroupRemoved(context, group, closeAfterDeletion);
+          }
+        });
+    }
+  }
+
+  void _manualGroupRemoved(
+    BuildContext context,
+    ServerGroup group,
+    bool closePage,
+  ) {
+    if (activeGroupId == group.id) activeGroupId = 'manual:ungrouped';
+    if (!context.mounted) return;
+    ContextAlert.showToast(
+      context,
+      AppLocalizations.of(context)!.prototypeNameRemoved(group.name),
+    );
+    if (closePage) Navigator.of(context).maybePop();
+  }
+
+  Future<void> _manualGroupAction(
+    BuildContext context,
+    ServerGroup group,
+    Future<void> Function() action,
+  ) async {
+    if (manualGroupBusy(group)) return;
+    final key = 'manual-group:${group.manualGroupId}';
+    emit(state.copyWith(pendingServerActions: {..._pending, key}));
+    try {
+      await perform(
+        context,
+        action,
+        ids: group.rows.map((row) => row.id).toSet(),
+      );
+    } finally {
+      emit(state.copyWith(pendingServerActions: {..._pending}..remove(key)));
     }
   }
 

@@ -905,5 +905,46 @@
   "subscriptionUserAgentInvalid": "User-Agent должен содержать одну строку символов ASCII.",
   "subscriptionRemnawaveFormatTitle": "Remnawave не вернул JSON",
   "subscriptionConvertToOrdinaryMessage": "Преобразовать «{name}» в обычную подписку с узлами под управлением OneXray?",
-  "subscriptionConvertToOrdinary": "Преобразовать в обычную подписку"
+  "subscriptionConvertToOrdinary": "Преобразовать в обычную подписку",
+  "manualGroupUngrouped": "Без группы",
+  "manualGroupCount": "Групп вручную: {count}",
+  "@manualGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupsTitle": "Группы вручную",
+  "manualGroupNew": "Новая группа",
+  "manualGroupRename": "Переименовать группу",
+  "manualGroupName": "Название группы",
+  "manualGroupMove": "Переместить в группу",
+  "manualGroupDissolve": "Расформировать группу",
+  "manualGroupDelete": "Удалить группу и серверы",
+  "manualGroupDissolveWarning": "Переместить серверы ({count}) в «Без группы» и удалить группу?",
+  "manualGroupDeleteWarning": "Удалить группу и все её серверы ({count})?",
+  "manualGroupEmpty": "Добавьте сервер или переместите его в эту группу.",
+  "@manualGroupDissolveWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@manualGroupDeleteWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupOrder": "Порядок групп",
+  "manualServerOrder": "Порядок серверов",
+  "manualOrderDrag": "Перетащите для изменения порядка",
+  "manualOrderMoveUp": "Выше",
+  "manualOrderMoveDown": "Ниже",
+  "manualOrderChanged": "Список изменился. Загрузите его снова перед сортировкой.",
+  "manualOrderReload": "Загрузить заново",
+  "manualOrderClearSearch": "Очистите поиск для изменения порядка."
 }

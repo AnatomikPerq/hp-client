@@ -19,6 +19,7 @@ import 'package:onexray/pages/shared/widgets/app_activity.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/servers/subscription/user_info.dart';
+import 'package:onexray/service/servers/catalog.dart';
 
 class ServerBrowser extends StatelessWidget {
   final ServersController controller;
@@ -36,7 +37,7 @@ class ServerBrowser extends StatelessWidget {
     final favorites = controller.favorites(l);
     final mobile =
         MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
-    if (controller.servers.isEmpty) {
+    if (controller.servers.isEmpty && controller.catalog.manualGroups.isEmpty) {
       if (controller.sources.isNotEmpty) {
         return PageEmptyState(
           title: l.subscriptionModeNoCacheTitle,
@@ -179,6 +180,8 @@ class ServerBrowser extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           ServerSortButton(controller: controller),
+          if (controller.catalog.manualGroups.length > 1)
+            ManualGroupOrderButton(controller: controller),
         ],
       ),
     );
@@ -260,8 +263,15 @@ class ServerBrowser extends StatelessWidget {
             for (final row in favorites)
               ServerNodeRow(controller: controller, row: row),
           ],
-          _listHeading(context, l.prototypeBySubscription),
-          for (final group in groups)
+          if (controller.servers.any(ServerCatalog.isManual))
+            _allManualRow(context),
+          if (groups.any((group) => group.manual))
+            _listHeading(context, l.manualGroupsTitle),
+          for (final group in groups.where((group) => group.manual))
+            _groupRow(context, group, active: group.id == activeGroup?.id),
+          if (groups.any((group) => !group.manual))
+            _listHeading(context, l.prototypeBySubscription),
+          for (final group in groups.where((group) => !group.manual))
             _groupRow(context, group, active: group.id == activeGroup?.id),
           if (groups.isEmpty && controller.search.text.isNotEmpty)
             Padding(
@@ -320,6 +330,38 @@ class ServerBrowser extends StatelessWidget {
       ),
     ),
   );
+
+  Widget _manualMenu(BuildContext context, ServerGroup group) => IconButton(
+    tooltip:
+        '${AppLocalizations.of(context)!.prototypeMoreActions}: ${group.name}',
+    onPressed: controller.manualGroupBusy(group)
+        ? null
+        : () => controller.openManualGroupMenu(context, group),
+    icon: const Icon(LucideIcons.ellipsis, size: 18),
+  );
+
+  Widget _allManualRow(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    const selection = ServerSelection.source(0);
+    final rows = controller.servers.where(ServerCatalog.isManual);
+    final enabled = controller.canUseSelection(selection, rows);
+    final selected = controller.selected(selection);
+    return ListTile(
+      leading: const Icon(LucideIcons.server),
+      title: Text(l.prototypeManualAdditions),
+      selected: selected,
+      trailing: OutlinedButton.icon(
+        onPressed: controller.busy || !enabled
+            ? null
+            : () => controller.choose(context, selection),
+        icon: Icon(
+          selected ? LucideIcons.circleCheck : LucideIcons.zap,
+          size: 16,
+        ),
+        label: Text(l.prototypeUse),
+      ),
+    );
+  }
 
   Widget _automaticRow(BuildContext context) {
     final l = AppLocalizations.of(context)!;
@@ -518,14 +560,16 @@ class ServerBrowser extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: ServerUseButton(
-                controller: controller,
-                group: group,
-                inline: true,
+            if (group.selection != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ServerUseButton(
+                  controller: controller,
+                  group: group,
+                  inline: true,
+                ),
               ),
-            ),
+            if (group.manualGroupId != null) _manualMenu(context, group),
             if (group.source != null)
               SizedBox(
                 width: 42,
@@ -674,6 +718,22 @@ class ServerGroupView extends StatelessWidget {
                           ),
                         ],
                       )
+                    : group.manual && group.rows.isEmpty
+                    ? Column(
+                        children: [
+                          Text(
+                            l.manualGroupEmpty,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.rowValue,
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () => controller.addServers(context),
+                            icon: const Icon(LucideIcons.plus, size: 16),
+                            label: Text(l.prototypeAddServer),
+                          ),
+                        ],
+                      )
                     : Text(
                         l.prototypeNoServersYet,
                         textAlign: TextAlign.center,
@@ -810,8 +870,35 @@ class ServerGroupView extends StatelessWidget {
               ],
             ),
           ),
-        if (!controller.providerGroup(group))
+        if (group.manual && group.rows.length > 1)
+          Tooltip(
+            message: controller.query.trim().isNotEmpty
+                ? l.manualOrderClearSearch
+                : l.manualServerOrder,
+            child: OutlinedButton.icon(
+              onPressed:
+                  controller.query.trim().isNotEmpty ||
+                      controller.manualGroupBusy(group)
+                  ? null
+                  : () => controller.openServerOrder(context, group),
+              icon: const Icon(LucideIcons.listOrdered, size: 16),
+              label: Text(l.manualServerOrder),
+            ),
+          ),
+        if (!controller.providerGroup(group) && group.selection != null)
           ServerUseButton(controller: controller, group: group),
+        if (group.manualGroupId != null)
+          IconButton(
+            tooltip: '${l.prototypeMoreActions}: ${group.name}',
+            onPressed: controller.manualGroupBusy(group)
+                ? null
+                : () => controller.openManualGroupMenu(
+                    context,
+                    group,
+                    closeAfterDeletion: groupPage,
+                  ),
+            icon: const Icon(LucideIcons.ellipsis, size: 18),
+          ),
         if (group.source != null)
           SizedBox(
             width: 36,
@@ -859,12 +946,14 @@ class ServerUseButton extends StatelessWidget {
         label: Text(l.providerChooseConfiguration),
       );
     }
-    final count = controller.entryCount(group.selection);
+    final selection = group.selection;
+    if (selection == null) return const SizedBox.shrink();
+    final count = controller.entryCount(selection);
     final enabled = controller.canUse(group);
-    final selected = controller.selected(group.selection);
+    final selected = controller.selected(selection);
     final VoidCallback? choose = controller.busy || !enabled
         ? null
-        : () => controller.choose(context, group.selection);
+        : () => controller.choose(context, selection);
     final mobile =
         MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
     final palette = ColorManager.palette(context);
@@ -918,7 +1007,7 @@ class ServerUseButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (controller.selectingGroup(group.selection))
+                if (controller.selectingGroup(selection))
                   const ButtonProgressIndicator()
                 else
                   Icon(
@@ -1256,6 +1345,7 @@ class ServerMenu extends StatelessWidget {
       name: controller.serverName(row),
       source: controller.sourceName(l, row),
       provider: controller.providerRow(row),
+      canMove: ServerCatalog.isManual(row),
     );
     if (context.mounted && action != null) {
       await controller.serverAction(context, row, action);

@@ -85,6 +85,7 @@ CoreConfigData _server(int id, {bool favorite = false, String? name}) =>
       ),
       delay: id * 20,
       subId: 0,
+      manualSortOrder: 0,
       favorite: favorite,
     );
 
@@ -632,8 +633,17 @@ void main() {
           );
           final l = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
           for (final (index, (delay, color)) in samples.indexed) {
+            final rowFinder = find.byKey(ValueKey(index + 1));
+            await tester.scrollUntilVisible(
+              rowFinder,
+              120,
+              scrollable: find.descendant(
+                of: find.byType(ServerGroupView),
+                matching: find.byType(Scrollable),
+              ),
+            );
             final label = controller.health(l, controller.servers[index]);
-            final prefix = '${l.prototypeManualAdditions} · ';
+            final prefix = '${l.manualGroupUngrouped} · ';
             final text = tester.widget<Text>(
               find.descendant(
                 of: find.byKey(ValueKey(index + 1)),
@@ -945,7 +955,7 @@ void main() {
     expect(find.text('outbound'), findsOneWidget);
     expect(find.text(l.countryRegionName('JP')), findsNothing);
     expect(find.text(l.countryRegionName('SG')), findsNothing);
-    await tester.tap(find.text(l.prototypeManualAdditions));
+    await tester.tap(find.text(l.manualGroupUngrouped));
     await tester.pumpAndSettle();
     expect(controller.browsedOnMobile, isTrue);
     expect(tester.takeException(), isNull);

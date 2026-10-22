@@ -905,5 +905,46 @@
   "subscriptionUserAgentInvalid": "برای User-Agent یک خط متن ASCII وارد کنید.",
   "subscriptionRemnawaveFormatTitle": "Remnawave پاسخ JSON برنگرداند",
   "subscriptionConvertToOrdinaryMessage": "«{name}» به اشتراک معمولی با مدیریت گره‌ها توسط OneXray تبدیل شود؟",
-  "subscriptionConvertToOrdinary": "تبدیل به اشتراک معمولی"
+  "subscriptionConvertToOrdinary": "تبدیل به اشتراک معمولی",
+  "manualGroupUngrouped": "بدون گروه",
+  "manualGroupCount": "{count} گروه دستی",
+  "@manualGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupsTitle": "گروه‌های دستی",
+  "manualGroupNew": "گروه جدید",
+  "manualGroupRename": "تغییر نام گروه",
+  "manualGroupName": "نام گروه",
+  "manualGroupMove": "انتقال به گروه",
+  "manualGroupDissolve": "منحل کردن گروه",
+  "manualGroupDelete": "حذف گروه و سرورها",
+  "manualGroupDissolveWarning": "{count} سرور به «بدون گروه» منتقل و این گروه حذف شود؟",
+  "manualGroupDeleteWarning": "این گروه و {count} سرور آن حذف شوند؟",
+  "manualGroupEmpty": "یک سرور اضافه کنید یا به این گروه منتقل کنید.",
+  "@manualGroupDissolveWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@manualGroupDeleteWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupOrder": "ترتیب گروه‌ها",
+  "manualServerOrder": "ترتیب سرورها",
+  "manualOrderDrag": "برای مرتب‌سازی بکشید",
+  "manualOrderMoveUp": "انتقال به بالا",
+  "manualOrderMoveDown": "انتقال به پایین",
+  "manualOrderChanged": "فهرست تغییر کرد. پیش از مرتب‌سازی دوباره بارگیری کنید.",
+  "manualOrderReload": "بارگیری دوباره",
+  "manualOrderClearSearch": "برای مرتب‌سازی، جستجو را پاک کنید."
 }
