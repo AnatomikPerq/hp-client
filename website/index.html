@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HYPER CLIENT — VPN-клиент для нестандартных протоколов</title>
+  <meta name="description" content="Открытый VPN-клиент на Xray-core для Windows: VLESS, Hysteria2, REALITY и XHTTP, а сверху minewire и AmneziaWG 3.1. Kill switch, профили маршрутизации, смена узла на лету. Без аккаунтов и телеметрии.">
+  <meta name="theme-color" content="#060a14">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon-64.png" sizes="64x64" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HYPER CLIENT">
+  <meta property="og:title" content="HYPER CLIENT — VPN-клиент для протоколов, которых не понимают обычные">
+  <meta property="og:description" content="Xray-core, minewire и AmneziaWG 3.1 в одном туннеле. Kill switch, профили маршрутизации, смена узла на лету. Открытый код, без телеметрии.">
+  <meta property="og:url" content="https://anatomikperq.github.io/hp-client/">
+  <meta property="og:image" content="https://anatomikperq.github.io/hp-client/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="ru_RU">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Unbounded:wght@500;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.add("js")</script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <!-- Иконки Lucide (ISC) и знак GitHub одним спрайтом. -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-paste" viewBox="0 0 24 24"><path d="M15 2H9a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.53 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.97a4 4 0 0 0 3.3-1.7l5.45-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.97a4 4 0 0 1 3.3 1.7l.59.93"/><path d="M22 18h-6.04a4 4 0 0 1-3.29-1.7l-.53-.83"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+    <symbol id="i-rss" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 100 100"><path fill="currentColor" stroke="none" d="M50 4 L57.5 42.5 L96 50 L57.5 57.5 L50 96 L42.5 57.5 L4 50 L42.5 42.5 Z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3"/></symbol>
+  </svg>
+
+  <!-- Фон: звёздное поле на canvas и туманности. -->
+  <div class="cosmos" aria-hidden="true">
+    <div class="nebula nebula-a"></div>
+    <div class="nebula nebula-b"></div>
+    <div class="nebula nebula-c"></div>
+    <canvas id="starfield"></canvas>
+    <div class="vignette"></div>
+  </div>
+
+  <a class="skip" href="#main">К содержимому</a>
+
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="HYPER CLIENT, наверх">
+        <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="bm-ring" cx="50" cy="50" r="40"/>
+          <g class="bm-orbit"><circle class="bm-sat" cx="21.7" cy="78.3" r="6.5"/></g>
+          <use href="#i-sparkle" class="bm-star" x="22" y="22" width="56" height="56"/>
+        </svg>
+        <span>HYPER CLIENT</span>
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Разделы">
+        <a href="#protocols">Протоколы</a>
+        <a href="#features">Возможности</a>
+        <a href="#routing">Маршрутизация</a>
+        <a href="#roadmap">Дорожная карта</a>
+        <a href="#faq">Вопросы</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="icon-btn" href="https://github.com/AnatomikPerq/hp-client" aria-label="Исходный код на GitHub"><svg class="i"><use href="#i-github"/></svg></a>
+        <a class="btn btn-gold btn-sm" href="#download"><svg class="i"><use href="#i-download"/></svg><span>Скачать</span></a>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="Меню" aria-expanded="false" aria-controls="nav-links"><svg class="i"><use href="#i-menu"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="top">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <a class="news" id="news" href="https://github.com/AnatomikPerq/hp-client/releases/tag/v0.1.0-beta.8">
+            <span class="news-dot"></span>
+            <span id="news-text">Вышла beta.8: kill switch и профили маршрутизации</span>
+            <svg class="i"><use href="#i-arrow"/></svg>
+          </a>
+          <h1 class="hero-title">
+            <span class="wordmark" aria-label="HYPER CLIENT"><span>HYPER</span><span>CLIENT<svg class="wm-star" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-sparkle"/></svg></span></span>
+            <span class="tagline">VPN-клиент для протоколов, которых не&nbsp;понимают обычные клиенты</span>
+          </h1>
+          <p class="lead">
+            Всё, что умеет Xray-core, — а сверху <b class="hl-mint">minewire</b>, который прячет трафик
+            под игру в Minecraft, и <b class="hl-violet">AmneziaWG&nbsp;3.1</b> прямо внутри ядра.
+            Один список узлов, один туннель.
+          </p>
+          <div class="cta">
+            <a class="btn btn-gold btn-lg" id="hero-download" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64-setup.exe">
+              <svg class="i"><use href="#i-download"/></svg>
+              <span class="btn-stack"><span>Скачать для Windows</span><small id="hero-download-meta">beta.8 · установщик · 40,6&nbsp;МБ</small></span>
+            </a>
+            <a class="btn btn-ghost btn-lg" href="https://github.com/AnatomikPerq/hp-client">
+              <svg class="i"><use href="#i-github"/></svg><span>Исходники</span>
+            </a>
+          </div>
+          <ul class="trust">
+            <li><svg class="i"><use href="#i-check"/></svg>Без аккаунтов</li>
+            <li><svg class="i"><use href="#i-check"/></svg>Без телеметрии и рекламы</li>
+            <li><svg class="i"><use href="#i-check"/></svg>Открытый код, GPL-3.0</li>
+          </ul>
+        </div>
+
+        <!-- Живой макет главного экрана клиента. -->
+        <div class="hero-demo">
+          <div class="demo-hint" id="demo-hint" aria-hidden="true">
+            <span>Это не скриншот — нажмите на&nbsp;кнопку</span><svg class="i"><use href="#i-down"/></svg>
+          </div>
+          <div class="app-window" id="app" data-state="idle" data-mode="proxy">
+            <div class="aw-title">
+              <span class="aw-brand">HYPER CLIENT</span><span class="aw-ver" id="aw-ver">v0.1.0-beta.8</span>
+              <span class="aw-ctrls" aria-hidden="true"><svg class="i"><use href="#i-minus"/></svg><svg class="i"><use href="#i-square"/></svg><svg class="i"><use href="#i-x"/></svg></span>
+            </div>
+            <div class="aw-body">
+              <aside class="aw-side" aria-hidden="true">
+                <svg class="aw-logo" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="#0d1424"/><use href="#i-sparkle" x="22" y="22" width="56" height="56" fill="#ffc93c"/></svg>
+                <span class="aw-nav is-active"><svg class="i"><use href="#i-shield"/></svg></span>
+                <span class="aw-nav"><svg class="i"><use href="#i-server"/></svg></span>
+                <span class="aw-nav"><svg class="i"><use href="#i-settings"/></svg></span>
+              </aside>
+              <div class="aw-home">
+                <div class="aw-stars" id="aw-stars" aria-hidden="true"></div>
+                <div class="aw-seg" role="radiogroup" aria-label="Режим работы">
+                  <button type="button" role="radio" aria-checked="false" data-run="tun"><svg class="i"><use href="#i-network"/></svg>TUN</button>
+                  <button type="button" role="radio" aria-checked="true" data-run="proxy"><svg class="i"><use href="#i-globe"/></svg>Системный прокси</button>
+                </div>
+                <div class="aw-stats">
+                  <span class="aw-speed"><svg class="i up"><use href="#i-up"/></svg><b id="aw-up">0 B/s</b></span>
+                  <span class="aw-clock"><span><svg class="i"><use href="#i-clock"/></svg><b id="aw-time">00:00</b></span><small id="aw-total">↑ 0 MB · ↓ 0 MB</small></span>
+                  <span class="aw-speed"><svg class="i down"><use href="#i-down"/></svg><b id="aw-down">0 B/s</b></span>
+                </div>
+                <div class="aw-orb-wrap">
+                  <svg class="aw-orbit" viewBox="0 0 200 200" aria-hidden="true">
+                    <circle class="ring" cx="100" cy="100" r="92"/>
+                    <g class="sat"><circle cx="100" cy="8" r="4.5"/></g>
+                  </svg>
+                  <button class="aw-orb" id="aw-orb" type="button" aria-label="Подключить (демонстрация)">
+                    <svg class="i orb-power"><use href="#i-power"/></svg>
+                    <span class="orb-spin"></span>
+                  </button>
+                </div>
+                <p class="aw-status" id="aw-status" aria-live="polite">Не подключено</p>
+                <p class="aw-node"><img src="assets/flags/nl.png" alt="" width="18" height="18" id="aw-node-flag"><b id="aw-node-name">Амстердам · REALITY + XHTTP</b><small id="aw-node-ping">Быстрый · 48 мс</small></p>
+                <div class="aw-row">
+                  <button type="button" class="aw-link" id="aw-check">Проверить соединение <b id="aw-check-res"></b></button>
+                  <button type="button" class="aw-pill" id="aw-route"><svg class="i"><use href="#i-shield"/></svg><span id="aw-route-label">Умная маршрутизация · 3 профиля</span><svg class="i"><use href="#i-chevron"/></svg></button>
+                </div>
+                <div class="aw-actions" aria-hidden="true">
+                  <span class="aw-btn primary"><svg class="i"><use href="#i-plus"/></svg>Добавить</span>
+                  <span class="aw-btn"><svg class="i"><use href="#i-paste"/></svg>Вставить</span>
+                  <span class="aw-btn sq"><svg class="i"><use href="#i-list"/></svg></span>
+                </div>
+                <div class="aw-auto" aria-hidden="true">
+                  <svg class="i"><use href="#i-zap"/></svg>
+                  <span><b>Автоматически (рекомендуется)</b><small>Выбирать по скорости и доступности</small></span>
+                </div>
+                <div class="aw-group">
+                  <div class="aw-group-head" aria-hidden="true"><svg class="i chev"><use href="#i-chevron"/></svg><svg class="i star"><use href="#i-star"/></svg><b>Избранное</b><span class="aw-count">3</span></div>
+                  <div class="aw-nodes" id="aw-nodes" role="listbox" aria-label="Узлы (демонстрация)">
+                    <button type="button" role="option" aria-selected="true" class="aw-node-row" data-flag="nl" data-name="Амстердам · REALITY + XHTTP" data-ping="48" data-tags="VLESS|XHTTP|REALITY">
+                      <img src="assets/flags/nl.png" alt="" width="22" height="22"><span class="nr-main"><b>Амстердам · REALITY + XHTTP</b><span class="tags"><i class="t-cyan">VLESS</i>·<i>XHTTP</i>·<i class="t-gold">REALITY</i></span></span><span class="nr-ping"><i></i>48 мс</span>
+                    </button>
+                    <button type="button" role="option" aria-selected="false" class="aw-node-row" data-flag="fi" data-name="Хельсинки · minewire" data-ping="71" data-tags="MINEWIRE">
+                      <img src="assets/flags/fi.png" alt="" width="22" height="22"><span class="nr-main"><b>Хельсинки · minewire</b><span class="tags"><i class="t-mint">MINEWIRE</i>·<i>TCP</i></span></span><span class="nr-ping"><i></i>71 мс</span>
+                    </button>
+                    <button type="button" role="option" aria-selected="false" class="aw-node-row" data-flag="de" data-name="Франкфурт · AmneziaWG 3.1" data-ping="39" data-tags="AMNEZIAWG">
+                      <img src="assets/flags/de.png" alt="" width="22" height="22"><span class="nr-main"><b>Франкфурт · AmneziaWG 3.1</b><span class="tags"><i class="t-violet">AMNEZIAWG</i>·<i>UDP</i></span></span><span class="nr-ping"><i></i>39 мс</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="aw-toast" id="aw-toast" role="status"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ БЕГУЩАЯ СТРОКА ПРОТОКОЛОВ ============ -->
+    <div class="marquee" aria-label="Поддерживаемые протоколы">
+      <div class="marquee-track">
+        <ul class="marquee-list">
+          <li>VLESS</li><li class="gold">REALITY</li><li>XHTTP</li><li>VMess</li><li>Trojan</li><li class="mint">minewire</li><li>Shadowsocks</li><li>Hysteria2</li><li>WireGuard</li><li class="violet">AmneziaWG 3.1</li><li>gRPC</li><li>WebSocket</li><li>mux</li><li>Fragment</li>
+        </ul>
+        <ul class="marquee-list" aria-hidden="true">
+          <li>VLESS</li><li class="gold">REALITY</li><li>XHTTP</li><li>VMess</li><li>Trojan</li><li class="mint">minewire</li><li>Shadowsocks</li><li>Hysteria2</li><li>WireGuard</li><li class="violet">AmneziaWG 3.1</li><li>gRPC</li><li>WebSocket</li><li>mux</li><li>Fragment</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ ЗАЧЕМ ============ -->
+    <section class="section" id="why">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Зачем он</p>
+          <h2>Обычный клиент умеет ровно то, что&nbsp;умеет его&nbsp;ядро</h2>
+          <p>Когда канал закрывают, а пройти получается только нестандартным транспортом, стандартный клиент такую ссылку молча выбрасывает и делает вид, что её не было. HYPER CLIENT разбирает такие ссылки сам, поднимает их движки внутри себя и связывает всё в один туннель.</p>
+        </header>
+
+        <div class="import-duel" id="duel">
+          <article class="import-card reveal" data-kind="plain">
+            <header><span class="ic-title">Обычный клиент</span><span class="ic-sub">Импорт подписки</span></header>
+            <ol class="import-lines">
+              <li data-ok><code>vless://…@nl.example.net:443</code><span class="res">VLESS · REALITY</span></li>
+              <li data-ok><code>hysteria2://…@fi.example.net:8443</code><span class="res">Hysteria2</span></li>
+              <li data-drop><code>mw://…@mc.example.net:25565</code><span class="res"></span></li>
+              <li data-drop><code>awg://W0ludGVyZmFjZV0KUHJpdmF0…</code><span class="res"></span></li>
+              <li data-drop><code>vpn://AAAHvXjaxVRrb9owFP0rUT7…</code><span class="res"></span></li>
+            </ol>
+            <footer><span class="sum bad">Импортировано: 2</span><span class="hint">Куда делись три ссылки? Никто не скажет.</span></footer>
+          </article>
+          <article class="import-card hc reveal" data-kind="hyper" style="--d:120ms">
+            <header><span class="ic-title"><svg class="i"><use href="#i-sparkle"/></svg>HYPER CLIENT</span><span class="ic-sub">Та же подписка</span></header>
+            <ol class="import-lines">
+              <li data-ok><code>vless://…@nl.example.net:443</code><span class="res">VLESS · REALITY</span></li>
+              <li data-ok><code>hysteria2://…@fi.example.net:8443</code><span class="res">Hysteria2</span></li>
+              <li data-ok data-tone="mint"><code>mw://…@mc.example.net:25565</code><span class="res">minewire</span></li>
+              <li data-ok data-tone="violet"><code>awg://W0ludGVyZmFjZV0KUHJpdmF0…</code><span class="res">AmneziaWG 3.1</span></li>
+              <li data-ok data-tone="violet"><code>vpn://AAAHvXjaxVRrb9owFP0rUT7…</code><span class="res">AmneziaVPN → AWG</span></li>
+            </ol>
+            <footer><span class="sum good">Импортировано: 5 из 5</span><span class="hint">Каждый узел проверен ядром до того, как попасть в список.</span></footer>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ПРОТОКОЛЫ ============ -->
+    <section class="section" id="protocols">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Протоколы</p>
+          <h2>Основа из Xray-core и&nbsp;то, чего в&nbsp;нём&nbsp;нет</h2>
+          <p>Нестандартные протоколы скомпилированы внутрь библиотеки клиента, а не лежат рядом отдельными файлами: ни лишних процессов, ни паролей в конфигах на диске.</p>
+        </header>
+
+        <div class="proto-grid">
+          <article class="card proto reveal">
+            <div class="proto-visual orbit-visual" aria-hidden="true">
+              <div class="ov-core">Xray</div>
+              <div class="ov-ring r1"><span><i>VLESS</i></span><span><i>Trojan</i></span><span><i>VMess</i></span></div>
+              <div class="ov-ring r2"><span><i>Hysteria2</i></span><span><i>Shadowsocks</i></span><span><i>WireGuard</i></span></div>
+            </div>
+            <div class="proto-body">
+              <p class="status">Есть · основа клиента</p>
+              <h3>Всё из Xray-core</h3>
+              <p>VLESS, VMess, Trojan, Shadowsocks, Hysteria2 и WireGuard с транспортами XHTTP, gRPC, WebSocket и защитой REALITY. Ссылки, подписки base64 и полные JSON-конфиги провайдеров вместе с mux.</p>
+              <ul class="chips"><li>XHTTP</li><li class="gold">REALITY</li><li>gRPC</li><li>WebSocket</li><li>mux</li><li>Fragment</li></ul>
+            </div>
+          </article>
+
+          <article class="card proto reveal" style="--d:100ms">
+            <div class="proto-visual mw-visual" aria-hidden="true">
+              <div class="mw-pipe">
+                <span class="mw-label">TCP · 25565</span>
+                <div class="mw-blocks"></div>
+              </div>
+              <p class="mw-caption"><span>для DPI:</span> игровая сессия</p>
+            </div>
+            <div class="proto-body">
+              <p class="status mint">Есть · Windows</p>
+              <h3>minewire</h3>
+              <p>Транспорт, который маскирует трафик под игровой протокол Minecraft. Движки живут в процессе клиента, по одному на узел, и работают одновременно — например, в автовыборе. Только TCP: DNS через такой узел клиент сам переводит на TCP.</p>
+              <pre class="link-format"><code><span class="lf-s">mw://</span>пароль@хост:порт<span class="lf-q">?mode=fast|realistic</span>#имя</code></pre>
+            </div>
+          </article>
+
+          <article class="card proto reveal" style="--d:200ms">
+            <div class="proto-visual awg-visual" aria-hidden="true">
+              <div class="awg-lane" id="awg-lane"></div>
+              <ul class="awg-legend">
+                <li><i class="k-junk"></i>мусор Jc</li>
+                <li><i class="k-imit"></i>имитация I1–I5</li>
+                <li><i class="k-hs"></i>рукопожатие + S1–S4</li>
+                <li><i class="k-data"></i>данные H1–H4</li>
+              </ul>
+            </div>
+            <div class="proto-body">
+              <p class="status violet">Есть · Windows</p>
+              <h3>AmneziaWG 3.1</h3>
+              <p>WireGuard с обфускацией Amnezia до последней версии: мусорные пакеты, паддинги всех типов сообщений, свои заголовки диапазонами, пакеты-имитации, защита заголовков, случайные тайминги и хвосты. Не движок сбоку, а выход внутри ядра — с UDP, сменой узла на лету и пингом.</p>
+              <ul class="chips"><li>awg://</li><li>vpn:// AmneziaVPN</li><li>wireguard://</li><li>.conf</li><li>.vpn</li></ul>
+            </div>
+          </article>
+        </div>
+
+        <div class="arch reveal" aria-label="Как устроен клиент">
+          <div class="arch-node">
+            <svg class="i"><use href="#i-monitor"/></svg>
+            <b>Приложение</b>
+            <small>Flutter · интерфейс, подписки, маршрутизация</small>
+          </div>
+          <div class="arch-link"><span></span></div>
+          <div class="arch-node">
+            <svg class="i"><use href="#i-box"/></svg>
+            <b>libXray нашего форка</b>
+            <small>в процессе приложения: ссылки, пинг, движки minewire</small>
+          </div>
+          <div class="arch-link"><span></span></div>
+          <div class="arch-node gold">
+            <svg class="i"><use href="#i-cpu"/></svg>
+            <b>HyperClientCore</b>
+            <small>Xray-core и AmneziaWG отдельным процессом; в TUN — с правами администратора</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ВОЗМОЖНОСТИ ============ -->
+    <section class="section" id="features">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Возможности</p>
+          <h2>Честный туннель, который не&nbsp;делает вид</h2>
+          <p>«Подключено» здесь значит, что туннель поднят и трафик проходит. Если что-то сломалось, клиент скажет об этом, а не будет тихо выпускать вас в сеть с настоящего адреса.</p>
+        </header>
+
+        <div class="bento">
+          <article class="card feat f-kill reveal">
+            <div class="feat-visual ks-visual" aria-hidden="true">
+              <div class="ks-apps"><span>браузер</span><span>Telegram</span><span>игры</span></div>
+              <div class="ks-wall"><svg class="i"><use href="#i-shield"/></svg></div>
+              <div class="ks-net"><span class="ks-x"><svg class="i"><use href="#i-x"/></svg></span>ваш настоящий IP</div>
+              <div class="ks-beam"></div>
+            </div>
+            <p class="status gold">Включён по умолчанию</p>
+            <h3>Kill switch</h3>
+            <p>Если VPN остановился без команды «Отключить», программы остаются без сети, а не выходят в интернет с вашего адреса. В TUN блокируют фильтры Windows: проходят только клиент, туннель и, если разрешено, локальная сеть. Снять блокировку можно с главной, без прав администратора.</p>
+          </article>
+
+          <article class="card feat f-swap reveal" style="--d:80ms">
+            <div class="feat-visual swap-visual" aria-hidden="true">
+              <div class="sw-list">
+                <span><img src="assets/flags/nl.png" alt="" width="16" height="16">Амстердам</span>
+                <span><img src="assets/flags/fi.png" alt="" width="16" height="16">Хельсинки</span>
+                <span><img src="assets/flags/se.png" alt="" width="16" height="16">Стокгольм</span>
+                <i class="sw-cursor"></i>
+              </div>
+              <div class="sw-badge"><svg class="i"><use href="#i-check"/></svg>switched live · без UAC</div>
+            </div>
+            <h3>Смена узла на лету</h3>
+            <p>Щелчок по узлу — и работающее ядро переезжает на него, без переподключения и без нового окна UAC. Управляющий канал к ядру закрыт случайным паролем. Пока узел меняется, соединения отбрасываются, а не утекают мимо туннеля.</p>
+          </article>
+
+          <article class="card feat f-mode reveal">
+            <div class="feat-visual mode-visual" aria-hidden="true">
+              <div class="mv-seg"><span class="on"><svg class="i"><use href="#i-network"/></svg>TUN</span><span><svg class="i"><use href="#i-globe"/></svg>Прокси</span></div>
+            </div>
+            <h3>TUN или системный прокси</h3>
+            <p>TUN заворачивает весь трафик системы. Системный прокси обходится без прав администратора и возвращает прежние настройки при отключении — и даже после сбоя.</p>
+          </article>
+
+          <article class="card feat f-health reveal" style="--d:80ms">
+            <div class="feat-visual pulse-visual" aria-hidden="true">
+              <svg viewBox="0 0 300 60" preserveAspectRatio="none"><path class="pulse-line" d="M0 30 H70 L82 30 L92 8 L104 52 L114 22 L122 30 H190 L202 30 L212 8 L224 52 L234 22 L242 30 H300"/></svg>
+            </div>
+            <h3>Контроль связи</h3>
+            <p>Каждые 30 секунд клиент проверяет тот путь, по которому идёт настоящий трафик системы. Трафик не проходит — на главной и в трее «Нет связи» с причиной, а не ложное «Подключено».</p>
+          </article>
+
+          <article class="card feat f-subs reveal" style="--d:160ms">
+            <div class="feat-visual subs-visual" aria-hidden="true">
+              <div class="sv-card">
+                <div class="sv-top"><b>Моя подписка</b><span>12 узлов</span></div>
+                <div class="sv-bar"><i style="--p:.62"></i></div>
+                <div class="sv-meta"><span>осталось 62 ГБ из 100</span><span>до 12.12</span></div>
+              </div>
+            </div>
+            <h3>Подписки любых форматов</h3>
+            <p>Ссылки base64 и JSON-конфиги v2rayN, Happ и Remnawave с mux. Имя из <code>Profile-Title</code>, трафик и срок из <code>subscription-userinfo</code>, HWID, шифрование age. Конфиг провайдера можно запустить целиком.</p>
+          </article>
+
+          <article class="card feat f-privacy reveal">
+            <div class="zero" aria-hidden="true">0</div>
+            <div>
+              <h3>аккаунтов, рекламы, аналитики и&nbsp;телеметрии</h3>
+              <p>Клиент не даёт серверов и не ходит никуда сам — только к вашим узлам и подпискам. В журналах нет ссылок, ключей и UUID: клиент вырезает их ещё до записи.</p>
+            </div>
+          </article>
+
+          <article class="card feat f-more reveal" style="--d:80ms">
+            <h3>И ещё</h3>
+            <ul class="more-list">
+              <li><svg class="i"><use href="#i-scissors"/></svg><span><b>Fragment</b> — TLS-рукопожатие частями, кроме REALITY и WireGuard</span></li>
+              <li><svg class="i"><use href="#i-share"/></svg><span><b>Раздача в LAN</b> — SOCKS5 и HTTP только с логином и паролем</span></li>
+              <li><svg class="i"><use href="#i-activity"/></svg><span><b>Проверить соединение</b> — настоящий запрос через туннель, а не пинг сервера</span></li>
+              <li><svg class="i"><use href="#i-archive"/></svg><span><b>Резервная копия</b> одним файлом, например в OneDrive</span></li>
+              <li><svg class="i"><use href="#i-layers"/></svg><span><b>Raw JSON и шаблоны</b> маршрутизации для тех, кому мало кнопок</span></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ МАРШРУТИЗАЦИЯ ============ -->
+    <section class="section" id="routing">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Маршрутизация</p>
+          <h2>Сами решайте, что идёт через&nbsp;VPN</h2>
+          <p>Профили включаются переключателями поверх любого режима, по нескольку сразу, и знают не только сайты, но и программы. Режим «Выборочно» пускает через VPN только то, что названо во включённых профилях. Попробуйте:</p>
+        </header>
+
+        <div class="router card reveal" id="router">
+          <div class="router-controls">
+            <div class="rc-block">
+              <p class="rc-label">Режим</p>
+              <div class="seg" role="radiogroup" aria-label="Режим маршрутизации" id="mode-seg">
+                <button type="button" role="radio" data-mode="smart" aria-checked="true">Умная</button>
+                <button type="button" role="radio" data-mode="selective" aria-checked="false">Выборочно</button>
+                <button type="button" role="radio" data-mode="all" aria-checked="false">Всё через VPN</button>
+              </div>
+              <p class="rc-desc" id="mode-desc"></p>
+            </div>
+            <div class="rc-block">
+              <p class="rc-label">Профили</p>
+              <div class="profiles" id="profiles"></div>
+            </div>
+          </div>
+
+          <div class="flow" id="flow">
+            <ul class="flow-sources" id="flow-sources"></ul>
+            <svg class="flow-paths" id="flow-paths" aria-hidden="true"></svg>
+            <div class="flow-dests">
+              <div class="dest vpn" id="dest-vpn"><img src="assets/flags/nl.png" alt="" width="20" height="20"><span><b>Через VPN</b><small>узел в Амстердаме</small></span><em id="count-vpn">0</em></div>
+              <div class="dest direct" id="dest-direct"><svg class="i"><use href="#i-globe"/></svg><span><b>Напрямую</b><small>как без VPN</small></span><em id="count-direct">0</em></div>
+            </div>
+          </div>
+          <p class="router-note">Пример с упрощённым набором сайтов. Если сайт есть в нескольких профилях, «Через VPN» важнее, чем «Напрямую». Список «Заблокированное в России» — около 75 тыс. доменов и 89 тыс. подсетей от runetfreedom, вшит в сборку и обновляется, только если изменился.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ДОРОЖНАЯ КАРТА ============ -->
+    <section class="section" id="roadmap">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Дорожная карта</p>
+          <h2>Пройдено и&nbsp;впереди</h2>
+          <p>Без обещаний по датам: что сделано — то в релизах, что ещё нет — честно в списке. Подробности и открытые проблемы — в <a href="https://github.com/AnatomikPerq/hp-client/blob/main/ROADMAP.md">ROADMAP.md</a>.</p>
+        </header>
+
+        <div class="roadmap">
+          <ol class="timeline" id="timeline">
+            <li class="tl-item reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">13–14 августа 2026 · beta.1–3</p>
+              <h3>Первые сборки</h3>
+              <p>Клиент отделяется от OneXray. minewire переезжает из отдельного .exe внутрь libXray.</p>
+            </li>
+            <li class="tl-item reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">26 сентября · beta.4</p>
+              <h3>Новая основа и системный прокси</h3>
+              <p>Свежий OneXray и Xray-core, переключатель TUN / системный прокси, смена узла без перезапуска с паролем, установка в Program Files, орб со звёздным полем.</p>
+            </li>
+            <li class="tl-item reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">16 октября · beta.5</p>
+              <h3>Интерфейс ради удобства</h3>
+              <p>Три раздела вместо четырёх, подключение и узлы на одном экране, узел меняется одним нажатием, флаги картинками.</p>
+            </li>
+            <li class="tl-item reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">18 октября · beta.6</p>
+              <h3>Честное «Подключено»</h3>
+              <p>Контроль связи и «Нет связи» с причиной, minewire в TUN, журналы для разбора сбоев, своя шапка окна.</p>
+            </li>
+            <li class="tl-item reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">19 октября · beta.7</p>
+              <h3>AmneziaWG и JSON-подписки</h3>
+              <p>AmneziaWG 3.1 и WireGuard внутри ядра, полные JSON-конфиги с mux, раздача в LAN с паролем, Fragment, UDP в TUN.</p>
+            </li>
+            <li class="tl-item is-now reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">21 октября · beta.8 · сейчас</p>
+              <h3>Kill switch и профили</h3>
+              <p>Kill switch по умолчанию, профили маршрутизации и режим «Выборочно», конфиги провайдера Remnawave, «Подключено» только после старта Xray.</p>
+            </li>
+          </ol>
+
+          <div class="ahead">
+            <article class="card ahead-col reveal">
+              <p class="status cyan"><span class="live-dot"></span>Ближайшее</p>
+              <ul>
+                <li><b>Быстрый DNS ядра в TUN.</b> Свой резолвер ядра теряет запросы на части сетей — переводим его на TCP.</li>
+                <li><b>Проверка связи в «Выборочно»</b> через VPN, а не по прямому пути.</li>
+                <li><b>Автопереключение умершего узла</b> в режиме «Автоматически» живой сменой.</li>
+              </ul>
+            </article>
+            <article class="card ahead-col reveal" style="--d:100ms">
+              <p class="status violet">Дальше</p>
+              <ul>
+                <li><b>Сборки под Linux и Android</b> вместе с нестандартными протоколами.</li>
+                <li><b>Kill switch для TUN на Linux</b> на правилах nftables.</li>
+                <li><b>Автонастройка сервера по SSH:</b> поднять нестандартный протокол на своей машине, не заходя на неё руками.</li>
+                <li><b>Больше нестандартных транспортов.</b></li>
+              </ul>
+            </article>
+            <article class="card ahead-col reveal" style="--d:200ms">
+              <p class="status">Идея</p>
+              <ul>
+                <li><b>Отчёт о сети для авторов протоколов:</b> что режется по DNS, SNI, UDP и рукопожатиям, а что проходит — с маскировкой IP и отправкой только вручную.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ СКАЧАТЬ ============ -->
+    <section class="section" id="download">
+      <div class="container">
+        <div class="download card reveal">
+          <div class="dl-glow" aria-hidden="true"></div>
+          <div class="dl-head">
+            <svg class="dl-logo" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="bm-ring" cx="50" cy="50" r="40"/>
+              <g class="bm-orbit"><circle class="bm-sat" cx="21.7" cy="78.3" r="6.5"/></g>
+              <use href="#i-sparkle" class="bm-star" x="22" y="22" width="56" height="56"/>
+            </svg>
+            <div>
+              <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Скачать</p>
+              <h2 id="dl-title">HYPER CLIENT 0.1.0-beta.8</h2>
+              <p class="dl-sub" id="dl-sub">Windows 10 и 11, x64 · выпущен 21 октября 2026</p>
+            </div>
+          </div>
+
+          <div class="dl-options">
+            <a class="dl-option primary" id="dl-setup" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64-setup.exe">
+              <span class="dlo-icon"><svg class="i"><use href="#i-download"/></svg></span>
+              <span class="dlo-text"><b>Установщик</b><small id="dl-setup-meta">.exe · 40,6&nbsp;МБ · рекомендуем</small></span>
+              <span class="badge">для TUN</span>
+            </a>
+            <a class="dl-option" id="dl-zip" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64.zip">
+              <span class="dlo-icon"><svg class="i"><use href="#i-archive"/></svg></span>
+              <span class="dlo-text"><b>ZIP-архив</b><small id="dl-zip-meta">.zip · 60,4&nbsp;МБ · без установки</small></span>
+            </a>
+          </div>
+
+          <p class="dl-why"><svg class="i"><use href="#i-lock"/></svg><span>Установщик кладёт программу в Program Files и один раз просит права администратора. В режиме TUN ядро запускается с повышенными правами из папки программы, и только так посторонний процесс не подложит туда свой файл. С ZIP безопаснее режим системного прокси.</span></p>
+
+          <div class="dl-hashes" id="dl-hashes">
+            <p class="rc-label">Проверка SHA-256</p>
+            <div class="hash-row"><span class="hash-name">setup.exe</span><code id="hash-setup">5e263e7c5c9ec6ba89188e0739f17cee667afa65447a028fbb50e874b04509b5</code><button class="copy" type="button" data-copy="#hash-setup" aria-label="Скопировать хеш установщика"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">zip</span><code id="hash-zip">3ae50cdba6151e4d5b6510193378b8f049e03814a9f251c46c82e5431cb80e5a</code><button class="copy" type="button" data-copy="#hash-zip" aria-label="Скопировать хеш архива"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row cmd"><span class="hash-name">PowerShell</span><code id="hash-cmd">Get-FileHash .\HyperClient-0.1.0-beta.8-windows-x64-setup.exe</code><button class="copy" type="button" data-copy="#hash-cmd" aria-label="Скопировать команду"><svg class="i"><use href="#i-copy"/></svg></button></div>
+          </div>
+
+          <div class="platforms">
+            <span class="pf on"><svg class="i"><use href="#i-monitor"/></svg>Windows x64<em>есть</em></span>
+            <span class="pf"><svg class="i"><use href="#i-terminal"/></svg>Linux<em>позже</em></span>
+            <span class="pf"><svg class="i"><use href="#i-phone"/></svg>Android<em>позже</em></span>
+            <span class="pf"><svg class="i"><use href="#i-monitor"/></svg>macOS<em>код собирается</em></span>
+            <span class="pf"><svg class="i"><use href="#i-phone"/></svg>iOS<em>код собирается</em></span>
+          </div>
+
+          <details class="older" id="older">
+            <summary><span>Все версии и что в них нового</span><svg class="i"><use href="#i-chevron"/></svg></summary>
+            <ul class="older-list" id="older-list">
+              <li><a href="https://github.com/AnatomikPerq/hp-client/releases">Список релизов на GitHub</a></li>
+            </ul>
+          </details>
+          <p class="dl-update">Обновление: выйдите из клиента (трей → «Выйти») и поставьте новую версию поверх. Узлы, подписки и настройки сохранятся.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ВОПРОСЫ ============ -->
+    <section class="section" id="faq">
+      <div class="container narrow">
+        <header class="section-head reveal">
+          <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Вопросы</p>
+          <h2>Коротко о&nbsp;важном</h2>
+        </header>
+        <div class="faq">
+          <details class="reveal">
+            <summary>Клиент даёт серверы или подписку?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Нет. HYPER CLIENT не предоставляет серверов, подписок и доступа в сеть — он подключается к вашим узлам: из ссылки, подписки провайдера или своего сервера.</p>
+          </details>
+          <details class="reveal">
+            <summary>Какие ссылки и форматы он понимает?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p><code>vless://</code>, <code>vmess://</code>, <code>trojan://</code>, <code>ss://</code>, <code>hysteria2://</code>, <code>mw://</code>, <code>awg://</code>, <code>vpn://</code> AmneziaVPN, <code>wireguard://</code> и <code>wg://</code>; подписки base64 и JSON (v2rayN, Happ, Remnawave); файлы <code>.conf</code> и <code>.vpn</code>; полный Raw JSON Xray. Ссылку можно вставить из буфера одной кнопкой.</p>
+          </details>
+          <details class="reveal">
+            <summary>Зачем ему права администратора?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Только для режима TUN: чтобы создать сетевой адаптер и завернуть в него весь трафик системы. Режим системного прокси работает без прав администратора — но только для программ, которые учитывают системный прокси.</p>
+          </details>
+          <details class="reveal">
+            <summary>Kill switch заблокировал интернет. Что делать?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>На главной будет «Интернет заблокирован»: нажмите на орб, чтобы переподключиться, или «Снять блокировку», чтобы выйти в сеть без VPN. Прав администратора для этого не нужно. Выключить kill switch можно в Настройки → Дополнительно → VPN-туннель.</p>
+          </details>
+          <details class="reveal">
+            <summary>Почему пока только Windows?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Кодовая база собирается под Windows, Linux, Android, iOS и macOS, но нестандартные протоколы пока собраны только под Windows x64. Сборки для других платформ появятся вместе с ними, без обещаний раньше времени.</p>
+          </details>
+          <details class="reveal">
+            <summary>Что клиент знает обо мне?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Ничего не собирает и не отправляет: ни аккаунтов, ни аналитики, ни телеметрии. Сам он ходит только за вашими подписками и GeoData, проверяет новую версию на GitHub и делает короткие проверочные запросы при пинге узлов. Узлы, ключи и настройки хранятся только на устройстве. Подробности — в <a href="https://github.com/AnatomikPerq/hp-client/blob/main/PRIVACY.md">PRIVACY.md</a>.</p>
+          </details>
+          <details class="reveal">
+            <summary>Откуда он взялся?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Начинался как форк <a href="https://github.com/OneXray/OneXray">OneXray</a> (GPL-3.0) и с тех пор развивается отдельно: свой интерфейс, свои протоколы, своя libXray. Авторские права исходной работы сохранены, как того требует лицензия.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="#top">
+            <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="bm-ring" cx="50" cy="50" r="40"/>
+              <g class="bm-orbit"><circle class="bm-sat" cx="21.7" cy="78.3" r="6.5"/></g>
+              <use href="#i-sparkle" class="bm-star" x="22" y="22" width="56" height="56"/>
+            </svg>
+            <span>HYPER CLIENT</span>
+          </a>
+          <p>VPN-клиент для протоколов, которых не понимают обычные клиенты.</p>
+        </div>
+        <nav aria-label="Проект">
+          <p class="f-title">Проект</p>
+          <a href="https://github.com/AnatomikPerq/hp-client">GitHub</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/releases">Релизы</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/ROADMAP.md">ROADMAP.md</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/issues">Сообщить о проблеме</a>
+        </nav>
+        <nav aria-label="Код">
+          <p class="f-title">Код</p>
+          <a href="https://github.com/AnatomikPerq/libXray">libXray (наш форк)</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/protocols/README.md">Как устроены протоколы</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/readme/BUILD.md">Сборка из исходников</a>
+        </nav>
+        <nav aria-label="Лицензии">
+          <p class="f-title">Лицензии</p>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/LICENSE">GPL-3.0</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/LICENSE-THIRD-PARTY.md">Сторонние компоненты</a>
+          <a href="https://github.com/AnatomikPerq/hp-client/blob/main/PRIVACY.md">Приватность</a>
+        </nav>
+      </div>
+      <p class="credits">
+        Сделано на <a href="https://github.com/XTLS/Xray-core">Xray-core</a>, <a href="https://github.com/OneXray/OneXray">OneXray</a>,
+        <a href="https://github.com/dmitrymodder/minewire-cli">minewire</a> (MIT) и <a href="https://github.com/amnezia-vpn/amneziawg-go">amneziawg-go</a> (MIT).
+        Списки «Заблокированное в России» — <a href="https://github.com/runetfreedom">runetfreedom</a>.
+        Флаги — <a href="https://github.com/jdecked/twemoji">Twemoji</a>, CC-BY 4.0. Иконки — <a href="https://lucide.dev">Lucide</a>.
+      </p>
+      <div class="footer-word" aria-hidden="true">HYPER CLIENT</div>
+    </div>
+  </footer>
+</body>
+</html>

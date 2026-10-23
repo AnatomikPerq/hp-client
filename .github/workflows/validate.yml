@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    # The website has its own workflow (pages.yml) and nothing here checks it.
+    paths-ignore:
+      - "website/**"
+      - ".github/workflows/pages.yml"
   pull_request:
 
 concurrency:
