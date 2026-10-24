@@ -14,7 +14,7 @@
   const REPO = "AnatomikPerq/hp-client";
   // Версия, которая вписана в HTML. Если на GitHub вышла новее, страница
   // подставит её сама; без сети остаётся эта.
-  const BAKED_VERSION = "0.1.0-beta.8";
+  const BAKED_VERSION = "0.1.0-beta.9";
 
   /* ================= Звёздное поле ================= */
 

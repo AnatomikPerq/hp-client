@@ -115,9 +115,9 @@
     <section class="hero" id="top">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <a class="news" id="news" href="https://github.com/AnatomikPerq/hp-client/releases/tag/v0.1.0-beta.8">
+          <a class="news" id="news" href="https://github.com/AnatomikPerq/hp-client/releases/tag/v0.1.0-beta.9">
             <span class="news-dot"></span>
-            <span id="news-text">Вышла beta.8: kill switch и профили маршрутизации</span>
+            <span id="news-text">Вышла beta.9: свежее ядро Xray и группы серверов</span>
             <svg class="i"><use href="#i-arrow"/></svg>
           </a>
           <h1 class="hero-title">
@@ -130,9 +130,9 @@
             Один список узлов, один туннель.
           </p>
           <div class="cta">
-            <a class="btn btn-gold btn-lg" id="hero-download" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64-setup.exe">
+            <a class="btn btn-gold btn-lg" id="hero-download" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64-setup.exe">
               <svg class="i"><use href="#i-download"/></svg>
-              <span class="btn-stack"><span>Скачать для Windows</span><small id="hero-download-meta">beta.8 · установщик · 40,6&nbsp;МБ</small></span>
+              <span class="btn-stack"><span>Скачать для Windows</span><small id="hero-download-meta">beta.9 · установщик · 40,6&nbsp;МБ</small></span>
             </a>
             <a class="btn btn-ghost btn-lg" href="https://github.com/AnatomikPerq/hp-client">
               <svg class="i"><use href="#i-github"/></svg><span>Исходники</span>
@@ -152,7 +152,7 @@
           </div>
           <div class="app-window" id="app" data-state="idle" data-mode="proxy">
             <div class="aw-title">
-              <span class="aw-brand">HYPER CLIENT</span><span class="aw-ver" id="aw-ver">v0.1.0-beta.8</span>
+              <span class="aw-brand">HYPER CLIENT</span><span class="aw-ver" id="aw-ver">v0.1.0-beta.9</span>
               <span class="aw-ctrls" aria-hidden="true"><svg class="i"><use href="#i-minus"/></svg><svg class="i"><use href="#i-square"/></svg><svg class="i"><use href="#i-x"/></svg></span>
             </div>
             <div class="aw-body">
@@ -515,11 +515,17 @@
               <h3>AmneziaWG и JSON-подписки</h3>
               <p>AmneziaWG 3.1 и WireGuard внутри ядра, полные JSON-конфиги с mux, раздача в LAN с паролем, Fragment, UDP в TUN.</p>
             </li>
-            <li class="tl-item is-now reveal">
+            <li class="tl-item reveal">
               <span class="tl-dot"></span>
-              <p class="tl-date">21 октября · beta.8 · сейчас</p>
+              <p class="tl-date">21 октября · beta.8</p>
               <h3>Kill switch и профили</h3>
               <p>Kill switch по умолчанию, профили маршрутизации и режим «Выборочно», конфиги провайдера Remnawave, «Подключено» только после старта Xray.</p>
+            </li>
+            <li class="tl-item is-now reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">24 октября · beta.9 · сейчас</p>
+              <h3>Свежее ядро и группы</h3>
+              <p>Xray v26.10.21 с исправленными корневыми сертификатами, группы для своих серверов, проверка связи через VPN в любом режиме, живая кнопка подключения.</p>
             </li>
           </ol>
 
@@ -528,7 +534,6 @@
               <p class="status cyan"><span class="live-dot"></span>Ближайшее</p>
               <ul>
                 <li><b>Быстрый DNS ядра в TUN.</b> Свой резолвер ядра теряет запросы на части сетей — переводим его на TCP.</li>
-                <li><b>Проверка связи в «Выборочно»</b> через VPN, а не по прямому пути.</li>
                 <li><b>Автопереключение умершего узла</b> в режиме «Автоматически» живой сменой.</li>
               </ul>
             </article>
@@ -565,20 +570,20 @@
             </svg>
             <div>
               <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Скачать</p>
-              <h2 id="dl-title">HYPER CLIENT 0.1.0-beta.8</h2>
-              <p class="dl-sub" id="dl-sub">Windows 10 и 11, x64 · выпущен 21 октября 2026</p>
+              <h2 id="dl-title">HYPER CLIENT 0.1.0-beta.9</h2>
+              <p class="dl-sub" id="dl-sub">Windows 10 и 11, x64 · выпущен 24 октября 2026</p>
             </div>
           </div>
 
           <div class="dl-options">
-            <a class="dl-option primary" id="dl-setup" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64-setup.exe">
+            <a class="dl-option primary" id="dl-setup" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64-setup.exe">
               <span class="dlo-icon"><svg class="i"><use href="#i-download"/></svg></span>
               <span class="dlo-text"><b>Установщик</b><small id="dl-setup-meta">.exe · 40,6&nbsp;МБ · рекомендуем</small></span>
               <span class="badge">для TUN</span>
             </a>
-            <a class="dl-option" id="dl-zip" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.8/HyperClient-0.1.0-beta.8-windows-x64.zip">
+            <a class="dl-option" id="dl-zip" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64.zip">
               <span class="dlo-icon"><svg class="i"><use href="#i-archive"/></svg></span>
-              <span class="dlo-text"><b>ZIP-архив</b><small id="dl-zip-meta">.zip · 60,4&nbsp;МБ · без установки</small></span>
+              <span class="dlo-text"><b>ZIP-архив</b><small id="dl-zip-meta">.zip · 60,5&nbsp;МБ · без установки</small></span>
             </a>
           </div>
 
@@ -586,9 +591,9 @@
 
           <div class="dl-hashes" id="dl-hashes">
             <p class="rc-label">Проверка SHA-256</p>
-            <div class="hash-row"><span class="hash-name">setup.exe</span><code id="hash-setup">5e263e7c5c9ec6ba89188e0739f17cee667afa65447a028fbb50e874b04509b5</code><button class="copy" type="button" data-copy="#hash-setup" aria-label="Скопировать хеш установщика"><svg class="i"><use href="#i-copy"/></svg></button></div>
-            <div class="hash-row"><span class="hash-name">zip</span><code id="hash-zip">3ae50cdba6151e4d5b6510193378b8f049e03814a9f251c46c82e5431cb80e5a</code><button class="copy" type="button" data-copy="#hash-zip" aria-label="Скопировать хеш архива"><svg class="i"><use href="#i-copy"/></svg></button></div>
-            <div class="hash-row cmd"><span class="hash-name">PowerShell</span><code id="hash-cmd">Get-FileHash .\HyperClient-0.1.0-beta.8-windows-x64-setup.exe</code><button class="copy" type="button" data-copy="#hash-cmd" aria-label="Скопировать команду"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">setup.exe</span><code id="hash-setup">eaef8474d02878a59a153f7d140d99553fdd5f5e9279ef0bbad1e3313c05d977</code><button class="copy" type="button" data-copy="#hash-setup" aria-label="Скопировать хеш установщика"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">zip</span><code id="hash-zip">e22bdc75e5e5bf4c918d0fb488c79bef752929a7f05fb9e1252c1dbdd9990d3a</code><button class="copy" type="button" data-copy="#hash-zip" aria-label="Скопировать хеш архива"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row cmd"><span class="hash-name">PowerShell</span><code id="hash-cmd">Get-FileHash .\HyperClient-0.1.0-beta.9-windows-x64-setup.exe</code><button class="copy" type="button" data-copy="#hash-cmd" aria-label="Скопировать команду"><svg class="i"><use href="#i-copy"/></svg></button></div>
           </div>
 
           <div class="platforms">
