@@ -84,6 +84,19 @@ abstract final class AmneziaWG {
     return _confNames.keys.any((key) => settings[key] != null);
   }
 
+  /// The servers of the config's `DNS =` line, kept at import as
+  /// `remoteDNS`. They often answer only inside this node's tunnel (the
+  /// AmneziaDNS container of a self-hosted server is a private address).
+  static List<String> remoteDns(Map<String, dynamic> outbound) {
+    if (!isOutbound(outbound)) return const [];
+    final settings = outbound['settings'];
+    if (settings is! Map) return const [];
+    return [
+      for (final server in _strings(settings['remoteDNS']))
+        if (InternetAddress.tryParse(server) != null) server,
+    ];
+  }
+
   /// Whether [text] looks like a `.conf` file: an [Interface] section line.
   static bool looksLikeConf(String text) => RegExp(
     r'^\s*\[interface\]\s*$',

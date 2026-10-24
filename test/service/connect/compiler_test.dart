@@ -7,6 +7,7 @@ import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/service/connect/compiler.dart';
 import 'package:onexray/service/connect/settings.dart';
+import 'package:onexray/service/connect/routing/options.dart';
 import 'package:onexray/service/connect/routing/region_catalog.dart';
 import 'package:onexray/service/connect/routing/custom/state.dart';
 import 'package:onexray/service/connect/routing/custom/advanced.dart';
@@ -1491,6 +1492,88 @@ void main() {
       throwsFormatException,
     );
     _fixture('all-vpn', plan);
+  });
+
+  test('one AmneziaWG node resolves through the DNS of its config', () {
+    ResolvedServer awg(int id, String protocol) => ResolvedServer(
+      id: id,
+      sourceId: 1,
+      outbound: {
+        'tag': 'AWG $id',
+        'protocol': protocol,
+        'settings': {
+          'address': ['10.8.1.3/32'],
+          'secretKey': 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
+          'peers': [
+            {
+              'publicKey': 'AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=',
+              'endpoint': '192.0.2.10:43689',
+            },
+          ],
+          'remoteDNS': ['172.29.172.254', '1.0.0.1', '2606:4700:4700::1111'],
+        },
+      },
+    );
+    List<String> proxyDns(
+      List<ResolvedServer> entries, {
+      SmartRoutingSettings? smart,
+      TrafficMode mode = TrafficMode.smart,
+      bool ipv6 = true,
+    }) {
+      final config = ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          trafficMode: mode,
+          smart: smart ?? SmartRoutingSettings(),
+        ),
+        entries: entries,
+        regions: catalog,
+        options: options(ipv6: ipv6),
+      ).config;
+      return {
+        for (final server in config['dns']['servers'] as List)
+          if (server['tag'] == ConnectionCompiler.dnsProxy)
+            server['address'] as String,
+      }.toList();
+    }
+
+    expect(proxyDns([awg(1, 'amneziawg')]), [
+      '172.29.172.254',
+      '1.0.0.1',
+      '2606:4700:4700::1111',
+    ]);
+    expect(proxyDns([awg(1, 'amneziawg')], mode: TrafficMode.allVpn), [
+      '172.29.172.254',
+      '1.0.0.1',
+      '2606:4700:4700::1111',
+    ]);
+    expect(proxyDns([awg(1, 'amneziawg')], ipv6: false), [
+      '172.29.172.254',
+      '1.0.0.1',
+    ]);
+    // An address the user chose wins over the node's.
+    expect(
+      proxyDns(
+        [awg(1, 'amneziawg')],
+        smart: SmartRoutingSettings(
+          dns: RoutingDnsSettings(
+            proxyResolvers: [RoutingDnsResolver(address: '9.9.9.9')],
+          ),
+        ),
+      ),
+      ['9.9.9.9'],
+    );
+    // Several nodes share the balancer; Xray's own WireGuard is not ours.
+    expect(
+      proxyDns([
+        awg(1, 'amneziawg'),
+        awg(2, 'amneziawg'),
+      ], smart: SmartRoutingSettings(entryCount: 2)),
+      [RoutingDnsSettings.defaultAddress],
+    );
+    expect(proxyDns([awg(1, 'wireguard')]), [
+      RoutingDnsSettings.defaultAddress,
+    ]);
+    expect(proxyDns([node(1)]), [RoutingDnsSettings.defaultAddress]);
   });
 
   test(

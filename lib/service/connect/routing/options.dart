@@ -94,6 +94,12 @@ final class RoutingDnsSettings {
       directResolvers.isEmpty ? defaultResolvers : directResolvers;
   String get directAddress => effectiveDirectResolvers.first.address;
 
+  /// Whether the VPN resolvers are still the App default, which a node's own
+  /// DNS may replace (`ConnectionCompiler`); an address the user chose wins.
+  bool get defaultProxyResolvers =>
+      effectiveProxyResolvers.length == 1 &&
+      effectiveProxyResolvers.single.address.trim() == defaultAddress;
+
   factory RoutingDnsSettings.fromJson(Map<String, dynamic> json) =>
       RoutingDnsSettings(
         proxyResolvers: _resolvers(json['proxyResolvers']),

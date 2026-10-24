@@ -7,6 +7,7 @@ import 'package:onexray/core/ffi/windows/mode.dart';
 import 'package:onexray/core/model/xray_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/tools/json.dart';
+import 'package:onexray/service/amneziawg/conf.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/connect/dialing.dart';
 import 'package:onexray/service/connect/runtime_network_policy.dart';
@@ -498,11 +499,16 @@ class ConnectionCompiler {
           dialerProxy: allVpn ? selector.single : 'direct',
         ).toJson(),
       ]);
-      final dnsSettings = switch (settings.trafficMode) {
-        TrafficMode.smart || TrafficMode.selective => settings.smart.dns,
-        TrafficMode.custom => ordinary!.dns,
-        TrafficMode.allVpn => const RoutingDnsSettings(),
-      };
+      final dnsSettings = _withNodeDns(
+        switch (settings.trafficMode) {
+          TrafficMode.smart || TrafficMode.selective => settings.smart.dns,
+          TrafficMode.custom => ordinary!.dns,
+          TrafficMode.allVpn => const RoutingDnsSettings(),
+        },
+        entries: entries,
+        finalExit: finalExit,
+        ipv6: options.ipv6,
+      );
       final sniffing = switch (settings.trafficMode) {
         TrafficMode.smart || TrafficMode.selective => settings.smart.sniffing,
         TrafficMode.custom => ordinary!.sniffing,
@@ -639,6 +645,37 @@ class ConnectionCompiler {
       nodeTags: nodeTags,
       profile: profile,
     );
+  }
+
+  /// Fork: one AmneziaWG node resolves through the DNS of its own config
+  /// (`DNS =`, such as the server's AmneziaDNS) instead of 8.8.8.8. The
+  /// outbound's netstack already resolves domain targets with `remoteDNS`;
+  /// this covers Xray's own DNS too (TUN system queries, address rules).
+  /// Only for a single node without a final exit, where the `proxy` balancer
+  /// holds that node alone (the address often answers only inside its
+  /// tunnel), and only while the user kept the default VPN resolver.
+  /// Switching to a node with other DNS restarts the Core: `dns` is not
+  /// part of a live swap.
+  static RoutingDnsSettings _withNodeDns(
+    RoutingDnsSettings settings, {
+    required List<ResolvedServer> entries,
+    required ResolvedServer? finalExit,
+    required bool ipv6,
+  }) {
+    if (finalExit != null ||
+        entries.length != 1 ||
+        !settings.defaultProxyResolvers) {
+      return settings;
+    }
+    final servers = [
+      for (final server in AmneziaWG.remoteDns(entries.single.outbound))
+        if (ipv6 ||
+            InternetAddress.tryParse(server)?.type == InternetAddressType.IPv4)
+          RoutingDnsResolver(address: server),
+    ];
+    return servers.isEmpty
+        ? settings
+        : settings.copyWith(proxyResolvers: servers);
   }
 
   static Map<String, dynamic> _node(ResolvedServer node, String tag) {
