@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/db/database/database.dart';
@@ -477,6 +478,44 @@ void main() {
     );
     expect(find.text(l.killSwitchBlocked), findsNothing);
     expect(find.byKey(const ValueKey('home-unblock')), findsNothing);
+  });
+
+  testWidgets('the orb shows no tooltip and comes to rest once connected', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1160, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final orb = find.byKey(const ValueKey('home-connection-orb'));
+    await tester.pumpWidget(app(screen()));
+    await tester.pumpAndSettle();
+    final l = AppLocalizations.of(tester.element(find.byType(ConnectView)))!;
+    final labels = find.text(l.prototypeConnect).evaluate().length;
+    expect(
+      find.ancestor(of: orb, matching: find.byType(Tooltip)),
+      findsNothing,
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: tester.getCenter(orb));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text(l.prototypeConnect), findsNWidgets(labels));
+
+    // The satellite circles while the connection is pending...
+    await tester.pumpWidget(
+      app(
+        screen(view: const ConnectionView(phase: ConnectionPhase.connecting)),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+
+    // ...and glides to rest once connected: nothing keeps running.
+    await tester.pumpWidget(
+      app(screen(view: const ConnectionView(phase: ConnectionPhase.connected))),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   testWidgets('a connection that carries nothing says so, not connected', (

@@ -293,15 +293,11 @@ class ConnectView extends StatelessWidget {
               enabled: canTap,
               label: action,
               onTap: canTap ? onConnection : null,
-              child: Tooltip(
-                message: action,
-                excludeFromSemantics: true,
-                child: ConnectionHero(
-                  key: const ValueKey('home-connection-orb'),
-                  tone: tone,
-                  diameter: mobile ? 96 : 104,
-                  onTap: canTap ? onConnection : null,
-                ),
+              child: ConnectionHero(
+                key: const ValueKey('home-connection-orb'),
+                tone: tone,
+                diameter: mobile ? 96 : 104,
+                onTap: canTap ? onConnection : null,
               ),
             ),
           ),

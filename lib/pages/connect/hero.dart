@@ -36,7 +36,11 @@ class LivePingView {
 ///
 /// It mirrors the connection button below it: the text button stays the
 /// accessible control, so the orb is excluded from semantics.
-class ConnectionHero extends StatelessWidget {
+///
+/// Its motion is finite, like the starfield's: the orb lifts under the
+/// pointer and sinks when pressed, a ring runs out to the orbit on a tap and
+/// on connect, and the satellite circles only while a connection is pending.
+class ConnectionHero extends StatefulWidget {
   const ConnectionHero({
     super.key,
     required this.tone,
@@ -65,25 +69,83 @@ class ConnectionHero extends StatelessWidget {
   };
 
   @override
+  State<ConnectionHero> createState() => _ConnectionHeroState();
+}
+
+class _ConnectionHeroState extends State<ConnectionHero>
+    with SingleTickerProviderStateMixin {
+  /// The ring that runs from the orb out to the orbit.
+  late final AnimationController _ripple = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  );
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  void didUpdateWidget(covariant ConnectionHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tone == ConnectionHeroTone.connected &&
+        oldWidget.tone != ConnectionHeroTone.connected) {
+      _startRipple();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ripple.dispose();
+    super.dispose();
+  }
+
+  void _startRipple() {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+    _ripple.forward(from: 0);
+  }
+
+  void _tap() {
+    _startRipple();
+    widget.onTap?.call();
+  }
+
+  void _press(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = ColorManager.palette(context);
-    final color = accent(palette);
-    final connected = tone == ConnectionHeroTone.connected;
-    final showLivePing = connected && onLivePing != null;
+    final color = widget.accent(palette);
+    final connected = widget.tone == ConnectionHeroTone.connected;
+    final showLivePing = connected && widget.onLivePing != null;
+    final outer = widget.diameter + ConnectionHero.orbitMargin * 2;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(width: showLivePing ? _sideSlot : 0),
+        SizedBox(width: showLivePing ? ConnectionHero._sideSlot : 0),
         ExcludeSemantics(
           child: SizedBox.square(
-            dimension: diameter + orbitMargin * 2,
+            dimension: outer,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 OrbitRing(
-                  diameter: diameter + orbitMargin * 2,
+                  diameter: outer,
                   color: color,
                   active: connected,
+                  spinning: widget.tone == ConnectionHeroTone.busy,
+                ),
+                IgnorePointer(
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      size: Size.square(outer),
+                      painter: _RipplePainter(
+                        progress: _ripple,
+                        color: color,
+                        from: widget.diameter / 2,
+                        to: outer / 2,
+                      ),
+                    ),
+                  ),
                 ),
                 _orb(context, palette, color, connected),
               ],
@@ -91,14 +153,14 @@ class ConnectionHero extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: showLivePing ? _sideSlot : 0,
+          width: showLivePing ? ConnectionHero._sideSlot : 0,
           child: showLivePing
               ? Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: _LivePingButton(
-                    view: livePing,
+                    view: widget.livePing,
                     color: color,
-                    onPressed: onLivePing!,
+                    onPressed: widget.onLivePing!,
                   ),
                 )
               : null,
@@ -116,62 +178,143 @@ class ConnectionHero extends StatelessWidget {
     // The light theme is not a mirror of the dark one: a glow barely reads
     // there, so the orb gets a plain shadow and a denser border instead.
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final borderAlpha = connected ? 1.0 : (dark ? 0.35 : 0.55);
+    final enabled = widget.onTap != null;
+    final pressed = enabled && _pressed;
+    final lifted = enabled && _hovered && !pressed;
+    final borderAlpha = connected
+        ? 1.0
+        : lifted
+        ? (dark ? 0.6 : 0.8)
+        : (dark ? 0.35 : 0.55);
+    final glowAlpha =
+        (connected ? (dark ? 0.42 : 0.30) : 0.12) + (lifted ? 0.10 : 0);
+    final diameter = widget.diameter;
     return MouseRegion(
-      cursor: onTap == null
-          ? SystemMouseCursors.basic
-          : SystemMouseCursors.click,
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 320),
+        onTapDown: enabled ? (_) => _press(true) : null,
+        onTapUp: enabled ? (_) => _press(false) : null,
+        onTapCancel: enabled ? () => _press(false) : null,
+        onTap: enabled ? _tap : null,
+        child: AnimatedScale(
+          scale: pressed
+              ? 0.95
+              : lifted
+              ? 1.04
+              : 1.0,
+          duration: Duration(milliseconds: pressed ? 90 : 200),
           curve: Curves.easeOutCubic,
-          width: diameter,
-          height: diameter,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: palette.card,
-            border: Border.all(
-              color: color.withValues(alpha: borderAlpha),
-              width: 2,
-            ),
-            boxShadow: [
-              if (!dark)
-                BoxShadow(
-                  color: palette.foreground.withValues(alpha: 0.10),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              BoxShadow(
-                color: color.withValues(
-                  alpha: connected ? (dark ? 0.42 : 0.30) : 0.12,
-                ),
-                blurRadius: connected ? 48 : 24,
-                spreadRadius: connected ? 6 : 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            width: diameter,
+            height: diameter,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: palette.card,
+              border: Border.all(
+                color: color.withValues(alpha: borderAlpha),
+                width: 2,
               ),
-            ],
-          ),
-          child: Center(
-            child: tone == ConnectionHeroTone.busy
-                ? SizedBox.square(
+              boxShadow: [
+                if (!dark)
+                  BoxShadow(
+                    color: palette.foreground.withValues(alpha: 0.10),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                BoxShadow(
+                  color: color.withValues(alpha: glowAlpha),
+                  blurRadius: (connected ? 48 : 24) + (lifted ? 12 : 0),
+                  spreadRadius: (connected ? 6 : 1) + (lifted ? 2 : 0),
+                ),
+              ],
+            ),
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween(begin: 0.6, end: 1.0).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutBack,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                ),
+                child: switch (widget.tone) {
+                  ConnectionHeroTone.busy => SizedBox.square(
+                    key: const ValueKey(ConnectionHeroTone.busy),
                     dimension: diameter * 0.3,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
                       color: color,
                     ),
-                  )
-                : Icon(
-                    tone == ConnectionHeroTone.failed
-                        ? LucideIcons.circleAlert
-                        : LucideIcons.power,
+                  ),
+                  ConnectionHeroTone.failed => Icon(
+                    LucideIcons.circleAlert,
+                    key: const ValueKey(ConnectionHeroTone.failed),
                     size: diameter * 0.33,
                     color: color,
                   ),
+                  _ => Icon(
+                    LucideIcons.power,
+                    key: const ValueKey(ConnectionHeroTone.idle),
+                    size: diameter * 0.33,
+                    color: color,
+                  ),
+                },
+              ),
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// A ring that grows from the orb's edge to the orbit and fades out.
+class _RipplePainter extends CustomPainter {
+  _RipplePainter({
+    required this.progress,
+    required this.color,
+    required this.from,
+    required this.to,
+  }) : super(repaint: progress);
+
+  final Animation<double> progress;
+  final Color color;
+  final double from;
+  final double to;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = progress.value;
+    if (t <= 0 || t >= 1) return;
+    final eased = Curves.easeOutCubic.transform(t);
+    canvas.drawCircle(
+      size.center(Offset.zero),
+      from + (to - from) * eased,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5 * (1 - eased) + 0.5
+        ..color = color.withValues(alpha: 0.55 * (1 - t)),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RipplePainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.color != color ||
+      oldDelegate.from != from ||
+      oldDelegate.to != to;
 }
 
 class _LivePingButton extends StatelessWidget {
