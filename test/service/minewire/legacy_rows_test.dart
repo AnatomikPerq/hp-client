@@ -185,6 +185,7 @@ void main() {
       ),
       delay: 0,
       subId: DBConstants.defaultId,
+      manualSortOrder: 0,
       favorite: false,
     );
     final link = readLegacyMinewire(row)!;

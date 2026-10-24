@@ -51,7 +51,11 @@ class HomeServerList extends StatelessWidget {
                       ? l.prototypeServers
                       : l.homeCurrentSubscription,
                 ),
-                ServerGroupCard(controller: controller, group: group),
+                ServerGroupCard(
+                  controller: controller,
+                  group: group,
+                  organize: false,
+                ),
               ],
             ],
           );

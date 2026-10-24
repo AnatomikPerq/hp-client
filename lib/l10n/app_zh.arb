@@ -1024,5 +1024,46 @@
   "trafficProfilePickProgram": "选择程序",
   "trafficProfileDelete": "删除分流配置",
   "trafficProfileNameError": "请输入不超过 40 个字符的名称。",
-  "trafficProfileEmptyError": "请至少添加一个网站、地址或程序。"
+  "trafficProfileEmptyError": "请至少添加一个网站、地址或程序。",
+  "manualGroupUngrouped": "未分组",
+  "manualGroupCount": "{count} 个手动分组",
+  "@manualGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupsTitle": "手动分组",
+  "manualGroupNew": "新建分组",
+  "manualGroupRename": "重命名分组",
+  "manualGroupName": "分组名称",
+  "manualGroupMove": "移动到分组",
+  "manualGroupDissolve": "解散分组",
+  "manualGroupDelete": "删除分组及节点",
+  "manualGroupDissolveWarning": "将 {count} 个节点移至未分组并解散此组？",
+  "manualGroupDeleteWarning": "删除此分组及其中的 {count} 个节点？",
+  "manualGroupEmpty": "添加节点，或将节点移入此组。",
+  "@manualGroupDissolveWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@manualGroupDeleteWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupOrder": "分组排序",
+  "manualServerOrder": "整理节点顺序",
+  "manualOrderDrag": "拖动以排序",
+  "manualOrderMoveUp": "上移",
+  "manualOrderMoveDown": "下移",
+  "manualOrderChanged": "列表已变化，请重新载入后整理。",
+  "manualOrderReload": "重新载入",
+  "manualOrderClearSearch": "清空搜索后可整理顺序。"
 }

@@ -7,22 +7,43 @@ import 'package:onexray/service/connect/settings.dart';
 
 enum ServerGrouping { subscription, location }
 
+/// The section of manual nodes outside the user's groups.
+const manualUngroupedId = 'manual:ungrouped';
+
 class ServerGroup {
   final String id;
   final String name;
   final String? country;
   final SubscriptionData? source;
   final ServerSelection selection;
+
+  /// A section of the manual card that is one of the user's own groups.
+  final int? manualGroupId;
+
+  /// A section of the manual card ("Ungrouped" or a group of the user's).
+  bool get manual => id.startsWith('manual:');
+
+  /// The card of every manual node, the one that holds the sections.
+  bool get manualCard =>
+      !manual && selection == const ServerSelection.source(0);
   final List<CoreConfigData> rows;
   final List<CoreConfigData> visibleRows;
+
+  /// Fork: the manual card shows the user's groups as sections, "Ungrouped"
+  /// first; null when there are no groups (or grouping by location). They
+  /// only arrange the list: the card's selection still takes every manual
+  /// node, as upstream's "all manual nodes" does.
+  final List<ServerGroup>? sections;
   const ServerGroup({
     required this.id,
     required this.name,
     this.country,
     this.source,
     required this.selection,
+    this.manualGroupId,
     required this.rows,
     required this.visibleRows,
+    this.sections,
   });
 }
 
@@ -101,8 +122,15 @@ mixin ServerGroups on ServerLabels {
         : l.countryRegionName(normalized);
   }
 
+  /// A manual node's group, or "Manual additions" when it has none.
   String sourceName(AppLocalizations l, CoreConfigData row) =>
-      catalog.sourcesById[row.subId]?.name ?? l.prototypeManualAdditions;
+      ServerCatalog.isManual(row)
+      ? catalog.manualGroups
+                .where((group) => group.id == row.manualGroupId)
+                .firstOrNull
+                ?.name ??
+            l.prototypeManualAdditions
+      : catalog.sourcesById[row.subId]?.name ?? l.prototypeManualAdditions;
 
   int sourceCount(int id) => servers.where((row) => row.subId == id).length;
 
@@ -141,6 +169,11 @@ mixin ServerGroups on ServerLabels {
 
   List<ServerGroup> groups(AppLocalizations l, {bool filter = true}) {
     final buckets = <String, List<CoreConfigData>>{};
+    final sectioned =
+        grouping == ServerGrouping.subscription &&
+        catalog.manualGroups.isNotEmpty;
+    // The user's own groups stay listed while empty, so their card does too.
+    if (sectioned) buckets['0'] = [];
     for (final row in servers) {
       final key = grouping == ServerGrouping.location
           ? (row.countryCode?.toUpperCase() ?? '')
@@ -157,13 +190,23 @@ mixin ServerGroups on ServerLabels {
           : source?.name ?? l.prototypeManualAdditions;
       final query = this.query.trim().toLowerCase();
       final wholeGroup = !filter || name.toLowerCase().contains(query);
-      final visible = !filter
+      final sections = sectioned && entry.key == '0'
+          ? _manualSections(
+              l,
+              entry.value,
+              filter: filter,
+              wholeCard: wholeGroup,
+            )
+          : null;
+      final visible = sections != null
+          ? [for (final section in sections) ...section.visibleRows]
+          : !filter
           ? entry.value
           : wholeGroup
           ? entry.value.where(matchesFilters).toList()
           : entry.value.where((row) => matches(l, row)).toList();
       if (filter &&
-          visible.isEmpty &&
+          (sections?.isEmpty ?? visible.isEmpty) &&
           ((query.isNotEmpty && !wholeGroup) || filtering)) {
         continue;
       }
@@ -178,6 +221,7 @@ mixin ServerGroups on ServerLabels {
               : ServerSelection.source(int.parse(entry.key)),
           rows: entry.value,
           visibleRows: visible,
+          sections: sections,
         ),
       );
     }
@@ -185,5 +229,58 @@ mixin ServerGroups on ServerLabels {
       result.sort((a, b) => a.selection.id!.compareTo(b.selection.id!));
     }
     return result;
+  }
+
+  /// "Ungrouped" first, then the user's groups in their saved order. A
+  /// section matching the search by name shows all of its nodes.
+  List<ServerGroup> _manualSections(
+    AppLocalizations l,
+    List<CoreConfigData> rows, {
+    required bool filter,
+    required bool wholeCard,
+  }) {
+    final query = this.query.trim().toLowerCase();
+    final known = {for (final group in catalog.manualGroups) group.id};
+    final sections = <ServerGroup>[];
+    void add(String id, String name, int? groupId, List<CoreConfigData> rows) {
+      final whole = !filter || wholeCard || name.toLowerCase().contains(query);
+      final visible = !filter
+          ? rows
+          : whole
+          ? rows.where(matchesFilters).toList()
+          : rows.where((row) => matches(l, row)).toList();
+      if (filter &&
+          visible.isEmpty &&
+          ((query.isNotEmpty && !whole) || filtering)) {
+        return;
+      }
+      sections.add(
+        ServerGroup(
+          id: id,
+          name: name,
+          selection: const ServerSelection.source(0),
+          manualGroupId: groupId,
+          rows: rows,
+          visibleRows: visible,
+        ),
+      );
+    }
+
+    final ungrouped = rows
+        .where((row) => !known.contains(row.manualGroupId))
+        .toList();
+    // Without nodes "Ungrouped" would only be an empty heading.
+    if (ungrouped.isNotEmpty) {
+      add(manualUngroupedId, l.manualGroupUngrouped, null, ungrouped);
+    }
+    for (final group in catalog.orderedManualGroups) {
+      add(
+        'manual:${group.id}',
+        group.name,
+        group.id,
+        rows.where((row) => row.manualGroupId == group.id).toList(),
+      );
+    }
+    return sections;
   }
 }

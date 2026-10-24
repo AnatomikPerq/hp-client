@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/core/db/database/database.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/servers/controller.dart';
+import 'package:onexray/pages/servers/manual_group_dialogs.dart';
 import 'package:onexray/pages/servers/menus.dart';
 import 'package:onexray/pages/servers/node_tile.dart';
 import 'package:onexray/pages/servers/sort.dart';
@@ -24,6 +25,7 @@ import 'package:onexray/pages/shared/widgets/button_progress.dart';
 import 'package:onexray/pages/shared/widgets/page_empty_state.dart';
 import 'package:onexray/service/connect/settings.dart';
 import 'package:onexray/service/servers/subscription/user_info.dart';
+import 'package:onexray/service/servers/catalog.dart';
 
 bool _mobile(BuildContext context) =>
     MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
@@ -43,7 +45,7 @@ class ServerBrowser extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final palette = ColorManager.palette(context);
-    if (controller.servers.isEmpty) {
+    if (controller.servers.isEmpty && controller.catalog.manualGroups.isEmpty) {
       // Sources whose current mode has nothing cached yet.
       if (controller.sources.isNotEmpty) {
         return PageEmptyState(
@@ -525,6 +527,7 @@ class ServerGroupCard extends StatelessWidget {
     required this.group,
     this.favorites = false,
     this.collapsible = true,
+    this.organize = true,
   });
 
   final ServersController controller;
@@ -532,11 +535,44 @@ class ServerGroupCard extends StatelessWidget {
   final bool favorites;
   final bool collapsible;
 
+  /// Offers to make, arrange and edit the user's own groups. Home lists the
+  /// same card without them.
+  final bool organize;
+
   bool get _collapsed => collapsible && controller.collapsed(group.id);
+
+  /// What the card lists under its header: its rows or, on the manual card
+  /// once the user made groups, each section's heading and, unless that
+  /// section is collapsed, its rows.
+  List<Object> _body() {
+    final sections = group.sections;
+    if (sections == null) return group.visibleRows;
+    return [
+      for (final section in sections) ...[
+        section,
+        if (!controller.collapsed(section.id))
+          if (section.visibleRows.isEmpty)
+            const _EmptySection()
+          else
+            ...section.visibleRows,
+      ],
+    ];
+  }
+
+  Widget _item(BuildContext context, Object item) => switch (item) {
+    final CoreConfigData row => _row(context, row),
+    final ServerGroup section => _ManualSectionHeader(
+      controller: controller,
+      section: section,
+      organize: organize,
+    ),
+    _ => const _EmptySection(),
+  };
 
   @override
   Widget build(BuildContext context) {
     final collapsed = _collapsed;
+    final body = _body();
     return Material(
       key: ValueKey('server-group:${group.id}'),
       color: ColorManager.palette(context).card,
@@ -549,8 +585,8 @@ class ServerGroupCard extends StatelessWidget {
           children: [
             _header(context, collapsed),
             if (!collapsed) ...[
-              if (group.visibleRows.isEmpty) _empty(context),
-              for (final row in group.visibleRows) _row(context, row),
+              if (body.isEmpty) _empty(context),
+              for (final item in body) _item(context, item),
             ],
           ],
         ),
@@ -816,6 +852,28 @@ class ServerGroupCard extends StatelessWidget {
             inline: true,
           ),
         ),
+      // A phone has no room for both next to the card's title.
+      if (organize && group.manualCard && mobile)
+        _ManualCardMenu(controller: controller)
+      else if (organize && group.manualCard) ...[
+        _HeaderButton(
+          tooltip: l.manualGroupNew,
+          icon: LucideIcons.folderPlus,
+          onPressed: controller.busy
+              ? null
+              : () => controller.createManualGroup(context),
+        ),
+        if (controller.catalog.manualGroups.length > 1)
+          _HeaderButton(
+            tooltip: controller.query.trim().isEmpty
+                ? l.manualGroupOrder
+                : l.manualOrderClearSearch,
+            icon: LucideIcons.listOrdered,
+            onPressed: controller.query.trim().isEmpty
+                ? () => controller.openGroupOrder(context)
+                : null,
+          ),
+      ],
       if (source != null)
         SizedBox(
           width: 36,
@@ -841,12 +899,13 @@ class ServerGroupSliver extends ServerGroupCard {
     required super.group,
     super.favorites,
     super.collapsible,
+    super.organize,
   });
 
   @override
   Widget build(BuildContext context) {
     final collapsed = _collapsed;
-    final rows = group.visibleRows;
+    final rows = _body();
     return DecoratedSliver(
       key: ValueKey('server-group:${group.id}'),
       decoration: ShapeDecoration(
@@ -864,13 +923,196 @@ class ServerGroupSliver extends ServerGroupCard {
                   : SliverList.builder(
                       itemCount: rows.length,
                       itemBuilder: (context, index) =>
-                          _row(context, rows[index]),
+                          _item(context, rows[index]),
                     ),
           ],
         ),
       ),
     );
   }
+}
+
+/// A heading inside the manual card: "Ungrouped" or one of the user's
+/// groups, collapsible on its own.
+class _ManualSectionHeader extends StatelessWidget {
+  const _ManualSectionHeader({
+    required this.controller,
+    required this.section,
+    required this.organize,
+  });
+
+  final ServersController controller;
+  final ServerGroup section;
+  final bool organize;
+
+  Future<void> _menu(BuildContext context) async {
+    final actions = controller.manualGroupActions(section);
+    final action = _mobile(context)
+        ? await showAppDialog<ManualGroupAction>(
+            context,
+            (_) => ManualGroupActionsDialog(
+              name: section.name,
+              custom: actions.custom,
+              order: actions.order,
+            ),
+          )
+        : await showManualGroupActionsPopup(
+            context,
+            custom: actions.custom,
+            order: actions.order,
+          );
+    if (action != null && context.mounted) {
+      await controller.manualGroupAction(context, section, action);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final palette = ColorManager.palette(context);
+    final collapsed = controller.collapsed(section.id);
+    final actions = controller.manualGroupActions(section);
+    final busy = controller.manualGroupBusy(section);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        key: ValueKey('server-section:${section.id}'),
+        onTap: () => controller.toggleGroup(section.id),
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(8, 2, 0, 2),
+          child: Row(
+            children: [
+              Icon(
+                collapsed
+                    ? LucideIcons.chevronRightDir
+                    : LucideIcons.chevronDown,
+                size: 14,
+                color: palette.mutedForeground,
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                section.manualGroupId == null
+                    ? LucideIcons.inbox
+                    : collapsed
+                    ? LucideIcons.folder
+                    : LucideIcons.folderOpen,
+                size: 16,
+                color: palette.mutedStrong,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        section.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.rowTitle.copyWith(
+                          color: palette.foreground,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    _CountBadge(count: section.rows.length),
+                  ],
+                ),
+              ),
+              // The same height with or without the menu.
+              if (organize && (actions.custom || actions.order))
+                Builder(
+                  builder: (anchor) => _HeaderButton(
+                    tooltip: '${l.prototypeMoreActions}: ${section.name}',
+                    icon: LucideIcons.ellipsis,
+                    // Busy from the confirmation on: disabled, no spinner.
+                    onPressed: busy ? null : () => _menu(anchor),
+                  ),
+                )
+              else
+                const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _ManualCardAction { newGroup, groupOrder }
+
+/// The manual card's own actions behind one button, on a phone.
+class _ManualCardMenu extends StatelessWidget {
+  const _ManualCardMenu({required this.controller});
+
+  final ServersController controller;
+
+  Future<void> _open(BuildContext anchor) async {
+    final l = AppLocalizations.of(anchor)!;
+    final order =
+        controller.catalog.manualGroups.length > 1 &&
+        controller.query.trim().isEmpty;
+    final action = await showAppDialog<_ManualCardAction>(
+      anchor,
+      (context) => AppDialog(
+        title: l.prototypeManualAdditions,
+        body: Column(
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.folderPlus),
+              title: Text(l.manualGroupNew),
+              onTap: () =>
+                  Navigator.of(context).pop(_ManualCardAction.newGroup),
+            ),
+            if (order)
+              ListTile(
+                leading: const Icon(LucideIcons.listOrdered),
+                title: Text(l.manualGroupOrder),
+                onTap: () =>
+                    Navigator.of(context).pop(_ManualCardAction.groupOrder),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!anchor.mounted) return;
+    switch (action) {
+      case _ManualCardAction.newGroup:
+        await controller.createManualGroup(anchor);
+      case _ManualCardAction.groupOrder:
+        await controller.openGroupOrder(anchor);
+      case null:
+        return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    return Builder(
+      builder: (anchor) => _HeaderButton(
+        tooltip: '${l.prototypeMoreActions}: ${l.prototypeManualAdditions}',
+        icon: LucideIcons.ellipsis,
+        onPressed: controller.busy ? null : () => _open(anchor),
+      ),
+    );
+  }
+}
+
+/// A group of the user's own without nodes in it.
+class _EmptySection extends StatelessWidget {
+  const _EmptySection();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.fromSTEB(36, 4, 12, 10),
+    child: Text(
+      AppLocalizations.of(context)!.manualGroupEmpty,
+      style: AppTypography.groupMeta.copyWith(
+        color: ColorManager.palette(context).mutedForeground,
+      ),
+    ),
+  );
 }
 
 class _CountBadge extends StatelessWidget {
@@ -1170,11 +1412,13 @@ class ServerMenu extends StatelessWidget {
             source: controller.sourceName(l, row),
             favorite: row.favorite,
             provider: controller.providerRow(row),
+            canMove: ServerCatalog.isManual(row),
           )
         : await showServerActionsPopup(
             context,
             favorite: row.favorite,
             provider: controller.providerRow(row),
+            canMove: ServerCatalog.isManual(row),
           );
     if (context.mounted && action != null) {
       await controller.serverAction(context, row, action);

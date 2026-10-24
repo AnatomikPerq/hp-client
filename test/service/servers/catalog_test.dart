@@ -27,6 +27,7 @@ CoreConfigData _row(int id, String tag, {int delay = -1, String? country}) =>
       ),
       delay: delay,
       subId: 0,
+      manualSortOrder: 0,
       countryCode: country,
       favorite: false,
     );
@@ -58,6 +59,42 @@ void main() {
     expect(updated.servers.map((row) => row.id), [1, 3, 8]);
     expect(updated.servers.last.delay, 200);
     expect(catalog.servers.last.delay, 0);
+  });
+
+  test('saved manual order keeps subscription slots and survives name and delay sorting', () {
+    final catalog = ServerCatalog(
+      servers: [
+        _outbound(
+          id: 1,
+          name: 'Zulu',
+          delay: 100,
+        ).copyWith(manualGroupId: const Value(3), manualSortOrder: 1),
+        _outbound(id: 2, subId: 7),
+        _outbound(
+          id: 3,
+          name: 'Alpha',
+          delay: 10,
+        ).copyWith(manualGroupId: const Value(3), manualSortOrder: 0),
+        _outbound(id: 4, subId: 7),
+        _outbound(id: 5, name: 'Default'),
+      ],
+      manualGroups: const [
+        ManualServerGroupData(id: 3, name: 'Cloud', sortOrder: 0),
+      ],
+    );
+    expect(catalog.servers.map((row) => row.id), [5, 2, 3, 4, 1]);
+    for (final order in [ServerSortOrder.name, ServerSortOrder.delay]) {
+      final sorted = catalog.copyWith(sortOrder: order);
+      expect(
+        sorted
+            .copyWith(sortOrder: ServerSortOrder.defaultOrder)
+            .servers
+            .map((row) => row.id),
+        [5, 2, 3, 4, 1],
+      );
+    }
+    final regrouped = catalog.copyWith(manualGroups: []);
+    expect(regrouped.servers.map((row) => row.id), [3, 2, 5, 4, 1]);
   });
 
   test(
@@ -315,6 +352,7 @@ CoreConfigData _provider({
   tags: '',
   delay: delay,
   subId: subId,
+  manualSortOrder: 0,
   favorite: false,
   data: base64Encode(
     utf8.encode(
@@ -350,6 +388,7 @@ CoreConfigData _outbound({
   tags: '',
   delay: delay,
   subId: subId,
+  manualSortOrder: 0,
   favorite: false,
   data: base64Encode(
     utf8.encode(

@@ -214,6 +214,7 @@ void main() {
         'last',
         'direct',
         'block',
+        'app-vpn-dns-direct',
         'app-remna-dns',
       ]);
       expect(
@@ -1087,9 +1088,16 @@ void main() {
         interfaceName: 'eth0',
       ),
     );
+    final rawOutbounds = {
+      for (final outbound in raw.config['outbounds'] as List)
+        outbound['tag']: outbound,
+    };
+    expect(rawOutbounds['local'].containsKey('streamSettings'), false);
+    // Upstream's default DNS for a Raw config without servers dials direct,
+    // so it is bound like `direct`.
     expect(
-      (raw.config['outbounds'] as List).single.containsKey('streamSettings'),
-      false,
+      rawOutbounds['app-vpn-dns-direct']['streamSettings']['sockopt']['interface'],
+      'eth0',
     );
   });
 
@@ -1123,8 +1131,11 @@ void main() {
       ...source['inbounds'].single as Map,
       'listen': '127.0.0.1',
     });
-    expect(plan.config['outbounds'], source['outbounds']);
-    expect(plan.config['routing'], source['routing']);
+    expect(plan.config['outbounds'].first, source['outbounds'].single);
+    expect(
+      plan.config['routing']['rules'].last,
+      source['routing']['rules'].single,
+    );
     expect(plan.config['inbounds'].first['tag'], 'tunIn');
     expect(plan.config['metrics']['listen'], '127.0.0.1:18186');
     expect(jsonEncode(source), before);
@@ -1911,7 +1922,7 @@ void main() {
     expect(advanced.toJson()['inbounds'].single['sniffing'], sniffing);
   });
 
-  test('Raw keeps the default outbound and routing untouched', () {
+  test('Raw keeps the default outbound and supplements tunnel DNS routing', () {
     final plan = ConnectionCompiler.compile(
       settings: ConnectionSettings(expert: true),
       entries: [],
@@ -1925,7 +1936,8 @@ void main() {
     );
 
     expect(plan.config['outbounds'].first.containsKey('tag'), false);
-    expect(plan.config, isNot(contains('routing')));
+    expect(plan.config['routing']['rules'].last['inboundTag'], ['tunIn']);
+    expect(plan.config['routing']['rules'].last['outboundTag'], 'app-vpn-dns');
   });
 
   test('Raw reserved tags/ports conflict clearly, rather than renaming user references', () {

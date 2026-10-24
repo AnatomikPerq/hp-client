@@ -1,6 +1,7 @@
 import 'package:onexray/core/tools/json.dart';
 import 'package:onexray/service/shared/xray/fake_dns.dart';
 import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
+import 'package:onexray/service/shared/xray/vpn_config.dart';
 
 /// Supplements the App tunnel and DNS ingress on a disposable provider graph.
 /// Platform runtime fields and Core validation use the shared Raw path.
@@ -73,40 +74,6 @@ abstract final class RemnawaveAdapter {
         outbounds.add({...outbound});
       }
     }
-    // An explicit port-53 rule is a provider policy declaration. Do not infer
-    // its coverage or equivalence from network/domain/IP conditions or order.
-    final hasDnsRule = rules.whereType<Map>().any((rule) {
-      final tags = rule['inboundTag'];
-      return '${rule['port']}' == '53' &&
-          (tags == null ||
-              (tags is List && (tags.isEmpty || tags.contains(tunnelTag))));
-    });
-    if (!hasDnsRule) {
-      Map<String, dynamic>? dnsOutbound;
-      for (final outbound in outbounds) {
-        if (outbound is Map<String, dynamic> && outbound['protocol'] == 'dns') {
-          dnsOutbound = outbound;
-          break;
-        }
-      }
-      if (dnsOutbound == null) {
-        dnsOutbound = {
-          'tag': dnsTag,
-          'protocol': 'dns',
-          'settings': <String, dynamic>{},
-        };
-        outbounds.add(dnsOutbound);
-      } else if (dnsOutbound['tag'] == null || dnsOutbound['tag'] == '') {
-        dnsOutbound['tag'] = dnsTag;
-      }
-      rules.insert(0, {
-        'type': 'field',
-        'inboundTag': [tunnelTag],
-        'network': 'tcp,udp',
-        'port': '53',
-        'outboundTag': dnsOutbound['tag'],
-      });
-    }
     // Fork: the provider's own local SOCKS/HTTP ports (10808/10809 in most
     // panels) are dropped. Other clients on the machine already hold them,
     // and the App's tunnel or system proxy port is the way in; the rules
@@ -120,6 +87,6 @@ abstract final class RemnawaveAdapter {
     config['inbounds'] = inbounds;
     config['outbounds'] = outbounds;
     config['routing'] = {...routing, 'rules': rules};
-    return config;
+    return VpnConfigAdapter.adapt(config, dnsOutboundTag: dnsTag);
   }
 }

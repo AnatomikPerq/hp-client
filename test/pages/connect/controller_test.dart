@@ -416,6 +416,7 @@ void main() {
       );
       controller.servers = [
         CoreConfigData(
+          manualSortOrder: 0,
           id: 1,
           name: 'new name',
           type: 'outbound',
@@ -425,6 +426,7 @@ void main() {
           favorite: false,
         ),
         CoreConfigData(
+          manualSortOrder: 0,
           id: 99,
           name: 'unrelated fastest',
           type: 'outbound',
@@ -670,6 +672,7 @@ void main() {
     );
     controller.servers = [
       CoreConfigData(
+        manualSortOrder: 0,
         id: 1,
         name: 'Renamed after connection',
         type: 'outbound',

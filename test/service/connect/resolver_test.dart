@@ -295,6 +295,7 @@ CoreConfigData _row(
   String name = 'Same name',
   String? region,
 }) => CoreConfigData(
+  manualSortOrder: 0,
   id: id,
   name: name,
   type: type,

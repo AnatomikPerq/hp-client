@@ -18,13 +18,16 @@ import 'package:onexray/pages/theme/layout.dart';
 import 'package:onexray/pages/shared/widgets/responsive_content.dart';
 
 class ServersPage extends StatefulWidget {
-  const ServersPage({super.key});
+  const ServersPage({super.key, this.controller});
+
+  /// An injected controller remains owned by the caller.
+  final ServersController? controller;
   @override
   State<ServersPage> createState() => _ServersPageState();
 }
 
 class _ServersPageState extends State<ServersPage> {
-  final controller = ServersController();
+  late final controller = widget.controller ?? ServersController();
   final scroll = ScrollController();
   @override
   void initState() {
@@ -37,7 +40,7 @@ class _ServersPageState extends State<ServersPage> {
   @override
   void dispose() {
     scroll.dispose();
-    unawaited(controller.close());
+    if (widget.controller == null) unawaited(controller.close());
     super.dispose();
   }
 
@@ -50,7 +53,11 @@ class _ServersPageState extends State<ServersPage> {
         final palette = ColorManager.palette(context);
         final mobile =
             MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
-        final empty = state.ready && !state.failed && state.servers.isEmpty;
+        final empty =
+            state.ready &&
+            !state.failed &&
+            state.servers.isEmpty &&
+            state.catalog.manualGroups.isEmpty;
         final groups = controller.groups(l, filter: false);
         final collapsed = controller.allCollapsed(groups);
         return Scaffold(
@@ -150,7 +157,7 @@ class ServerGroupPage extends StatelessWidget {
         builder: (context, _) {
           final l = AppLocalizations.of(context)!;
           var group = controller
-              .groups(l)
+              .groups(l, filter: false)
               .where((row) => row.id == params.groupId)
               .firstOrNull;
           if (group == null) {
@@ -174,7 +181,11 @@ class ServerGroupPage extends StatelessWidget {
           }
           return Scaffold(
             appBar: PageAppBar(
-              title: Text(group?.name ?? l.prototypeServers),
+              title: Text(
+                group?.name ?? l.prototypeServers,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               actions: [
                 ServerSortButton(controller: controller),
                 const AppActivityIndicator(pinging: false),

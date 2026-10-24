@@ -161,6 +161,60 @@ void main() {
     },
   );
 
+  test(
+    'manual groups are sections of the one manual card, empty ones included',
+    () async {
+      final local = await server('Local');
+      final loose = await server('Loose');
+      controller.manualGroups = [
+        const ManualServerGroupData(id: 3, name: 'Cloud', sortOrder: 1),
+        const ManualServerGroupData(id: 8, name: 'Home', sortOrder: 0),
+      ];
+      controller.servers = [local.copyWith(manualGroupId: const Value(3))];
+      var card = controller.groups(l).single;
+      // Fork: the card keeps its selection; groups only arrange the list.
+      expect(card.selection, const ServerSelection.source(0));
+      expect(card.name, l.prototypeManualAdditions);
+      // "Ungrouped" without nodes is left out.
+      expect(card.sections!.map((section) => section.id), [
+        'manual:8',
+        'manual:3',
+      ]);
+      expect(card.sections!.first.rows, isEmpty);
+      expect(card.sections!.last.manualGroupId, 3);
+
+      controller.servers = [
+        local.copyWith(manualGroupId: const Value(3)),
+        loose,
+      ];
+      card = controller.groups(l).single;
+      expect(card.sections!.map((section) => section.id), [
+        manualUngroupedId,
+        'manual:8',
+        'manual:3',
+      ]);
+      expect(card.visibleRows, [
+        loose,
+        local.copyWith(manualGroupId: const Value(3)),
+      ]);
+
+      controller.search.text = 'Home';
+      card = controller.groups(l).single;
+      expect(card.sections!.single.id, 'manual:8');
+      controller.search.text = 'Local';
+      expect(controller.groups(l).single.sections!.single.id, 'manual:3');
+
+      controller.search.clear();
+      controller.servers = [];
+      expect(
+        controller.groups(l).single.sections!.map((section) => section.id),
+        ['manual:8', 'manual:3'],
+      );
+      controller.groupBy(ServerGrouping.location);
+      expect(controller.groups(l), isEmpty);
+    },
+  );
+
   test('subscription grouping omits sources without nodes', () async {
     final one = await server('Tokyo', source: 4);
     controller.servers = [one];
@@ -251,21 +305,27 @@ void main() {
       ),
     );
     final group = controller.groups(l).single;
-    expect(controller.entryCount(group.selection), 2);
+    expect(controller.entryCount(const ServerSelection.source(0)), 2);
     expect(
-      controller.canUse(group),
+      controller.canUseSelection(const ServerSelection.source(0), group.rows),
       true,
     ); // Unmeasured candidates are eligible.
     expect(controller.canChoose(exit), false);
     controller.servers = [one, exit];
-    expect(controller.canUse(controller.groups(l).single), false);
+    expect(
+      controller.canUseSelection(
+        const ServerSelection.source(0),
+        controller.groups(l).single.rows,
+      ),
+      false,
+    );
     controller.configuration = ConnectionConfiguration(
       connection: ConnectionSettings(
         trafficMode: TrafficMode.allVpn,
         smart: SmartRoutingSettings(entryCount: 3),
       ),
     );
-    expect(controller.entryCount(group.selection), 1);
+    expect(controller.entryCount(const ServerSelection.source(0)), 1);
   });
 
   test('delay alone distinguishes untested, successful, failed and timed-out nodes', () async {
@@ -323,8 +383,11 @@ void main() {
     );
     controller.servers = [one, two.copyWith(delay: PingDelayConstants.error)];
     final group = controller.groups(l).single;
-    expect(controller.entryCount(group.selection), 2);
-    expect(controller.canUse(group), false);
+    expect(controller.entryCount(const ServerSelection.source(0)), 2);
+    expect(
+      controller.canUseSelection(const ServerSelection.source(0), group.rows),
+      false,
+    );
     expect(controller.health(l, one), l.prototypeNotTested);
     expect(
       controller.health(l, controller.servers.last),

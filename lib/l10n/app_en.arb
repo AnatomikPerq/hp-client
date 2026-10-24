@@ -3253,5 +3253,46 @@
   "trafficProfilePickProgram": "Choose a program",
   "trafficProfileDelete": "Delete profile",
   "trafficProfileNameError": "Enter a name of up to 40 characters.",
-  "trafficProfileEmptyError": "Add at least one site, address or program."
+  "trafficProfileEmptyError": "Add at least one site, address or program.",
+  "manualGroupUngrouped": "Ungrouped",
+  "manualGroupCount": "{count} manual groups",
+  "@manualGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupsTitle": "Manual groups",
+  "manualGroupNew": "New group",
+  "manualGroupRename": "Rename group",
+  "manualGroupName": "Group name",
+  "manualGroupMove": "Move to group",
+  "manualGroupDissolve": "Dissolve group",
+  "manualGroupDelete": "Delete group and servers",
+  "manualGroupDissolveWarning": "Move {count} servers to Ungrouped and remove this group?",
+  "manualGroupDeleteWarning": "Delete this group and its {count} servers?",
+  "manualGroupEmpty": "Add a server or move one into this group.",
+  "@manualGroupDissolveWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@manualGroupDeleteWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "manualGroupOrder": "Arrange groups",
+  "manualServerOrder": "Arrange servers",
+  "manualOrderDrag": "Drag to reorder",
+  "manualOrderMoveUp": "Move up",
+  "manualOrderMoveDown": "Move down",
+  "manualOrderChanged": "The list changed. Reload it before arranging again.",
+  "manualOrderReload": "Reload order",
+  "manualOrderClearSearch": "Clear search to arrange."
 }

@@ -84,6 +84,7 @@ CoreConfigData _server(
   }).data.value,
   delay: id * 20,
   subId: 0,
+  manualSortOrder: 0,
   countryCode: country,
   favorite: favorite,
 );

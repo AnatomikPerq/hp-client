@@ -634,6 +634,7 @@ void main() {
       final raws = List.generate(
         4,
         (index) => CoreConfigData(
+          manualSortOrder: 0,
           id: index + 1,
           name: 'Legacy ${index + 1}',
           type: 'raw',

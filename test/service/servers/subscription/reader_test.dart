@@ -62,6 +62,34 @@ void main() {
     mode: SubscriptionMode.providerManaged,
   );
 
+  test('provider import skips a default DNS tag collision and keeps usable profiles', () async {
+    // Fork: the provider adapter drops SOCKS/HTTP inbounds, so the
+    // collision is an inbound it keeps.
+    final invalid = _config('Reserved DNS tag')
+      ..['inbounds'] = [
+        {
+          'tag': 'app-vpn-default-dns',
+          'protocol': 'dokodemo-door',
+          'port': 1081,
+        },
+      ];
+    final valid = _config('Usable');
+    final result = await _reader().read(
+      jsonEncode([invalid, valid]),
+      remnawave,
+    );
+    expect(result.count, 1);
+    expect(result.rows, hasLength(2));
+    final profile = result.rows.singleWhere(
+      (row) => row.type.value == CoreConfigType.Remnawave.name,
+    );
+    expect(_saved(profile), valid);
+    await expectLater(
+      _reader().read(jsonEncode(invalid), remnawave),
+      throwsFormatException,
+    );
+  });
+
   test(
     'Remnawave JSON uses complete parsing even with only outbounds',
     () async {

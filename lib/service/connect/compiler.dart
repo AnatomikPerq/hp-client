@@ -25,6 +25,7 @@ import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
 import 'package:onexray/service/shared/xray/fake_dns.dart';
 import 'package:onexray/service/shared/xray/fragment.dart';
 import 'package:onexray/service/shared/xray/remnawave.dart';
+import 'package:onexray/service/shared/xray/vpn_config.dart';
 import 'package:onexray/service/shared/xray/server_dialing.dart';
 
 /// A complete provider graph selected as one subscription asset.
@@ -224,7 +225,7 @@ class ConnectionCompiler {
     RuntimeOptions options,
   ) {
     final value = JsonTool.copyMap(source)..remove('name');
-    return _rawRuntimeMap(value, options);
+    return _fullRuntimeMap(VpnConfigAdapter.adapt(value), options);
   }
 
   static const dnsProxy = RoutingDns.proxyTag;
@@ -315,14 +316,14 @@ class ConnectionCompiler {
         );
       }
       final adapted = RemnawaveAdapter.adapt(profile.config);
-      config = _rawRuntimeMap(adapted, options);
+      config = _fullRuntimeMap(adapted, options);
     } else if (settings.expert) {
       if (raw == null || entries.isNotEmpty || finalExit != null) {
         throw const FormatException(
           'Raw configuration is required without normal nodes',
         );
       }
-      config = _rawRuntimeMap(raw, options);
+      config = _fullRuntimeMap(VpnConfigAdapter.adapt(raw), options);
     } else {
       final required = settings.requiredEntries(
         customEntryCount: custom?.entryCount,
@@ -726,6 +727,18 @@ class ConnectionCompiler {
     statsOutboundDownlink: false,
   );
 
+  static Map<String, dynamic> _fullRuntimeMap(
+    Map<String, dynamic> source,
+    RuntimeOptions options,
+  ) => _rawRuntimeMap(
+    VpnConfigAdapter.withDefaultDns(
+      source,
+      ipv4Address: options.tunDnsIpv4Address,
+      ipv6Address: options.ipv6 ? options.tunDnsIpv6Address : null,
+    ),
+    options,
+  );
+
   static Map<String, dynamic> _rawRuntimeMap(
     Map<String, dynamic> source,
     RuntimeOptions options, {
@@ -821,7 +834,12 @@ class ConnectionCompiler {
     final env = _object(config, 'env')
       // `env` becomes process environment of the Core, which may run as
       // admin. Only Xray's own options; nothing like GODEBUG or HTTP_PROXY.
-      ..removeWhere((key, _) => !key.toLowerCase().startsWith('xray.'));
+      // File descriptors belong to this native session, never an imported
+      // graph. Windows compares environment names without case.
+      ..removeWhere((key, _) {
+        final name = key.toLowerCase();
+        return !name.startsWith('xray.') || name == 'xray.tun.fd';
+      });
     env['xray.location.asset'] = VpnConstants.datDir;
     env['xray.location.cert'] = VpnConstants.datDir;
     config.remove(

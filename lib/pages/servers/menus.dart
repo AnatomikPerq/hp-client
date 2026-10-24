@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/servers/controller.dart';
+import 'package:onexray/pages/servers/manual_group_dialogs.dart';
 import 'package:onexray/pages/theme/color.dart';
 import 'package:onexray/pages/theme/font.dart';
 import 'package:onexray/pages/theme/layout.dart';
@@ -13,6 +14,7 @@ Future<ServerAction?> showServerActionsMenu(
   required String source,
   bool favorite = false,
   bool provider = false,
+  bool canMove = false,
 }) => showAppDialog<ServerAction>(
   context,
   (_) => ServerActionsMenu(
@@ -20,6 +22,7 @@ Future<ServerAction?> showServerActionsMenu(
     source: source,
     favorite: favorite,
     provider: provider,
+    canMove: canMove,
   ),
 );
 
@@ -28,6 +31,7 @@ Future<ServerAction?> showServerActionsPopup(
   BuildContext anchor, {
   bool favorite = false,
   bool provider = false,
+  bool canMove = false,
 }) {
   final l = AppLocalizations.of(anchor)!;
   return _popup<ServerAction>(anchor, [
@@ -62,6 +66,13 @@ Future<ServerAction?> showServerActionsPopup(
       LucideIcons.share2,
       provider ? l.prototypeShare : l.prototypeShareServer,
     ),
+    if (canMove)
+      _popupItem(
+        anchor,
+        ServerAction.move,
+        LucideIcons.folderInput,
+        l.manualGroupMove,
+      ),
     const PopupMenuDivider(),
     _popupItem(
       anchor,
@@ -112,6 +123,46 @@ Future<SourceAction?> showSourceActionsPopup(
       l.prototypeDelete,
       destructive: true,
     ),
+  ]);
+}
+
+/// Desktop: a section of the manual card, as a popup at its button.
+Future<ManualGroupAction?> showManualGroupActionsPopup(
+  BuildContext anchor, {
+  required bool custom,
+  required bool order,
+}) {
+  final l = AppLocalizations.of(anchor)!;
+  return _popup<ManualGroupAction>(anchor, [
+    if (order)
+      _popupItem(
+        anchor,
+        ManualGroupAction.order,
+        LucideIcons.listOrdered,
+        l.manualServerOrder,
+      ),
+    if (custom) ...[
+      _popupItem(
+        anchor,
+        ManualGroupAction.rename,
+        LucideIcons.pencil,
+        l.manualGroupRename,
+      ),
+      _popupItem(
+        anchor,
+        ManualGroupAction.dissolve,
+        LucideIcons.folderMinus,
+        l.manualGroupDissolve,
+      ),
+      const PopupMenuDivider(),
+      _popupItem(
+        anchor,
+        ManualGroupAction.delete,
+        LucideIcons.trash2,
+        l.manualGroupDelete,
+        destructive: true,
+      ),
+    ],
   ]);
 }
 
@@ -194,12 +245,14 @@ class ServerActionsMenu extends StatelessWidget {
     required this.source,
     this.favorite = false,
     this.provider = false,
+    this.canMove = false,
   });
 
   final String name;
   final String source;
   final bool favorite;
   final bool provider;
+  final bool canMove;
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +288,13 @@ class ServerActionsMenu extends StatelessWidget {
             provider ? l.providerCopyAsRaw : l.prototypeSaveAsLocalServer,
             hint: provider ? l.providerCopyAsRawHint : l.prototypeLocalCopyHint,
           ),
+          if (canMove)
+            _menuRow(
+              context,
+              ServerAction.move,
+              LucideIcons.folderInput,
+              l.manualGroupMove,
+            ),
           _menuRow(
             context,
             ServerAction.share,
