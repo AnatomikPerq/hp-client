@@ -20,6 +20,7 @@ import 'package:onexray/service/connect/routing/profiles/catalog.dart';
 import 'package:onexray/service/connect/routing/profiles/profile.dart';
 import 'package:onexray/service/servers/outbound/map.dart';
 import 'package:onexray/service/servers/outbound/state_db.dart';
+import 'package:onexray/service/shared/ping/live_probe.dart';
 import 'package:onexray/service/shared/xray/runtime_inbounds.dart';
 import 'package:onexray/service/shared/xray/runtime_outbounds.dart';
 import 'package:onexray/service/shared/xray/fake_dns.dart';
@@ -231,6 +232,9 @@ class ConnectionCompiler {
   static const dnsProxy = RoutingDns.proxyTag;
   static const dnsDirect = RoutingDns.directTag;
   static const dnsOutbound = 'dnsOut';
+
+  /// The rule that sends [LivePingProbe]'s hosts through the VPN.
+  static const liveProbeRuleTag = 'app-live-probe';
 
   /// Checks only collisions with the enabled App-managed LAN listener.
   static void validateLanProxyInbounds(List<dynamic> inbounds, int port) {
@@ -593,6 +597,15 @@ class ConnectionCompiler {
               ruleTag: 'app-tunnel-dot',
               inboundTag: ['tunIn'],
               port: '853',
+              balancerTag: 'proxy',
+            ),
+            // Fork: "Check connection" and the health monitor measure the VPN
+            // in every mode. Selective, a direct profile or a custom rule
+            // sent their hosts direct, and the check timed the direct path.
+            XrayRoutingRule(
+              ruleTag: liveProbeRuleTag,
+              inboundTag: ['tunIn'],
+              domain: [for (final host in LivePingProbe.hosts) 'full:$host'],
               balancerTag: 'proxy',
             ),
             ...rules,

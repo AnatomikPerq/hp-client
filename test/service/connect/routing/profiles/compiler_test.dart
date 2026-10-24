@@ -340,6 +340,77 @@ void main() {
     );
   });
 
+  test('the live check goes through the VPN in every mode, Raw aside', () {
+    final probeRule = {
+      'inboundTag': ['tunIn'],
+      'domain': ['full:cp.cloudflare.com', 'full:www.gstatic.com'],
+      'balancerTag': 'proxy',
+      'ruleTag': ConnectionCompiler.liveProbeRuleTag,
+    };
+    for (final mode in TrafficMode.values) {
+      final settings = _settings(
+        mode,
+        [TrafficProfiles.discord, TrafficProfiles.games],
+        smart: SmartRoutingSettings(
+          directRegions: const ['RU'],
+          blockAds: true,
+        ),
+      );
+      final config = ConnectionCompiler.compile(
+        settings: settings,
+        entries: [_node(1)],
+        // A route that sends the check's own host direct.
+        custom: mode == TrafficMode.custom
+            ? RoutingProfileState(
+                name: 'Custom',
+                rules: [
+                  RoutingRuleState(
+                    domain: ['domain:gstatic.com'],
+                    action: RoutingRuleAction.direct,
+                  ),
+                ],
+              )
+            : null,
+        regions: _regions,
+        options: _options(),
+        profileContext: _context,
+      ).config;
+      final tags = _tags(config);
+      expect(
+        _rule(config, ConnectionCompiler.liveProbeRuleTag),
+        probeRule,
+        reason: '$mode',
+      );
+      // Above whatever the mode, a profile or the user sends direct.
+      final probe = tags.indexOf(ConnectionCompiler.liveProbeRuleTag);
+      for (final (index, tag) in tags.indexed) {
+        if (tag.startsWith('app-profiles') ||
+            tag.startsWith('app-smart') ||
+            tag.startsWith('app-selective') ||
+            tag.startsWith('app-custom')) {
+          expect(probe, lessThan(index), reason: '$mode: $tag');
+        }
+      }
+    }
+
+    // Raw keeps its own routing: the App cannot know its VPN target.
+    final raw = ConnectionCompiler.compile(
+      settings: ConnectionSettings(expert: true),
+      raw: {
+        'outbounds': [
+          {'tag': 'proxy', 'protocol': 'freedom'},
+        ],
+      },
+      entries: const [],
+      regions: _regions,
+      options: _options(),
+    ).config;
+    expect(
+      _rules(raw).map((rule) => rule['ruleTag']),
+      isNot(contains(ConnectionCompiler.liveProbeRuleTag)),
+    );
+  });
+
   test('no profiles leave every mode as before', () {
     for (final mode in [TrafficMode.smart, TrafficMode.allVpn]) {
       final settings = ConnectionSettings(

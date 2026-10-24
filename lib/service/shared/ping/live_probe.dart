@@ -33,6 +33,12 @@ final class LivePingProbe {
     'https://www.gstatic.com/generate_204',
   ];
 
+  /// The hosts of [defaultTargets]. The App's routing sends them through the
+  /// VPN in every mode, so the check measures the VPN, not the direct path.
+  static final hosts = List<String>.unmodifiable({
+    for (final target in defaultTargets) Uri.parse(target).host,
+  });
+
   static const _timeout = Duration(seconds: 8);
 
   /// The App's local proxy in system proxy mode; null in TUN mode.
