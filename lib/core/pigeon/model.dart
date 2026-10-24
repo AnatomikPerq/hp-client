@@ -265,6 +265,12 @@ enum LibXrayMethod {
   liftKillSwitch,
   @JsonValue("resolveHost")
   resolveHost,
+  @JsonValue("startNetworkReport")
+  startNetworkReport,
+  @JsonValue("networkReportState")
+  networkReportState,
+  @JsonValue("cancelNetworkReport")
+  cancelNetworkReport,
 }
 
 /// Starts one embedded minewire engine (HYPER CLIENT libXray fork). The server
@@ -369,6 +375,99 @@ class ResolveHostResponse {
       _$ResolveHostResponseFromJson(json);
 
   Map<String, dynamic> toJson() => _$ResolveHostResponseToJson(this);
+}
+
+/// Starts a network report in libXray's background (HYPER CLIENT fork). The
+/// run binds every probe to [interfaceName] and polls through
+/// [AppHostApi.networkReportState].
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartNetworkReportRequest {
+  @JsonKey(name: 'interface')
+  final String? interfaceName;
+
+  /// The network's own resolvers, for platforms that hide them from Go.
+  final List<String>? systemDns;
+  final List<String>? sections;
+  final List<String>? sites;
+  final int? maxBytes;
+  final bool? bypass;
+
+  const StartNetworkReportRequest({
+    this.interfaceName,
+    this.systemDns,
+    this.sections,
+    this.sites,
+    this.maxBytes,
+    this.bypass,
+  });
+
+  factory StartNetworkReportRequest.fromJson(Map<String, dynamic> json) =>
+      _$StartNetworkReportRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartNetworkReportRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class StartNetworkReportResponse {
+  final String id;
+
+  const StartNetworkReportResponse(this.id);
+
+  factory StartNetworkReportResponse.fromJson(Map<String, dynamic> json) =>
+      _$StartNetworkReportResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$StartNetworkReportResponseToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class NetworkReportRequest {
+  final String id;
+
+  const NetworkReportRequest(this.id);
+
+  factory NetworkReportRequest.fromJson(Map<String, dynamic> json) =>
+      _$NetworkReportRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$NetworkReportRequestToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class NetworkReportProgress {
+  final String? section;
+  @JsonKey(defaultValue: 0)
+  final int done;
+  @JsonKey(defaultValue: 0)
+  final int total;
+
+  const NetworkReportProgress({this.section, this.done = 0, this.total = 0});
+
+  factory NetworkReportProgress.fromJson(Map<String, dynamic> json) =>
+      _$NetworkReportProgressFromJson(json);
+
+  Map<String, dynamic> toJson() => _$NetworkReportProgressToJson(this);
+}
+
+/// A run's snapshot; [report] is the report so far in libXray's format,
+/// read by the service layer.
+@JsonSerializable(explicitToJson: true, includeIfNull: false)
+class NetworkReportStateResponse {
+  @JsonKey(defaultValue: false)
+  final bool running;
+  final NetworkReportProgress? progress;
+  final String? error;
+  final Map<String, dynamic>? report;
+
+  const NetworkReportStateResponse({
+    this.running = false,
+    this.progress,
+    this.error,
+    this.report,
+  });
+
+  factory NetworkReportStateResponse.fromJson(Map<String, dynamic> json) =>
+      _$NetworkReportStateResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$NetworkReportStateResponseToJson(this);
 }
 
 /// The user's session as libXray reads it: the boot and the logon.

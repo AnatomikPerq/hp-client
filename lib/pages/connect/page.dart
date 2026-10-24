@@ -117,6 +117,8 @@ class _ConnectPageState extends State<ConnectPage> {
                 onRunMode: (mode) => controller.setRunMode(context, mode),
                 livePing: state.livePing,
                 onLivePing: controller.measureLivePing,
+                onNetworkReport: () =>
+                    context.pushScoped(AppPageDestination.networkReport),
                 health: state.health,
                 killSwitchBlocking: state.killSwitchBlocking,
                 onUnblock: () => controller.unblock(context),

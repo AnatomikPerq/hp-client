@@ -3294,5 +3294,327 @@
   "manualOrderMoveDown": "Move down",
   "manualOrderChanged": "The list changed. Reload it before arranging again.",
   "manualOrderReload": "Reload order",
-  "manualOrderClearSearch": "Clear search to arrange."
+  "manualOrderClearSearch": "Clear search to arrange.",
+  "netReportSection": "Diagnostics",
+  "netReportTitle": "Network report",
+  "netReportHint": "What your network blocks and which VPN gets through",
+  "netReportSettingsTitle": "Report data",
+  "netReportSettingsHint": "What a report contains, checks and shows",
+  "netReportStart": "Check network",
+  "netReportRerun": "Check again",
+  "netReportStop": "Stop",
+  "netReportShareText": "Share text",
+  "netReportCopyText": "Copy text",
+  "netReportSaveJson": "Save JSON",
+  "netReportCopied": "Report copied",
+  "netReportInterface": "Network",
+  "netReportIntro": "The check takes one to three minutes and downloads up to {megabytes} MB. It goes past the VPN and the system proxy, straight through the chosen network.",
+  "@netReportIntro": {
+    "placeholders": {
+      "megabytes": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportVpnConnected": "Disconnect the VPN first: on a phone the check would measure the VPN itself.",
+  "netReportDisconnect": "Disconnect",
+  "netReportUnsupported": "This build's libXray cannot check the network. Update the app.",
+  "netReportFailed": "The check failed: {reason}",
+  "@netReportFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportProgress": "{section} · {done} of {total}",
+  "@netReportProgress": {
+    "placeholders": {
+      "section": {
+        "type": "String"
+      },
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportPreparing": "Preparing…",
+  "netReportDuration": "Took {seconds} s",
+  "@netReportDuration": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportNoChecks": "Turn on at least one check in Report data.",
+  "netReportSectionNetwork": "Network",
+  "netReportSectionDns": "DNS",
+  "netReportSectionSites": "Sites and services",
+  "netReportSectionHosting": "VPN hosting",
+  "netReportSectionSni": "Server names (SNI)",
+  "netReportSectionUdp": "UDP and QUIC",
+  "netReportModeWhitelist": "White list by address",
+  "netReportModeWhitelistDetail": "Only allowed networks answer; a VPN server outside them cannot be reached either, and cutting up the hello does not help. A relay inside an allowed network is the way through.",
+  "netReportModeFiltered": "Some services are blocked",
+  "netReportModeOpen": "No restrictions found",
+  "netReportModeOffline": "No internet access",
+  "netReportKindEthernet": "Ethernet",
+  "netReportKindWifi": "Wi-Fi",
+  "netReportKindUsbTethering": "USB tethering",
+  "netReportKindCellular": "Mobile network",
+  "netReportKindVirtual": "Virtual adapter",
+  "netReportKindOther": "Other",
+  "netReportWorks": "Will get through",
+  "netReportFails": "Won't get through",
+  "netReportNotes": "Also found",
+  "netReportDnsClean": "No spoofing found",
+  "netReportDnsForged": "Spoofed by {resolvers}",
+  "@netReportDnsForged": {
+    "placeholders": {
+      "resolvers": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportSitesSummary": "{blocked} of {total} blocked",
+  "@netReportSitesSummary": {
+    "placeholders": {
+      "blocked": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportHostingSummary": "{open} open · {white} with an allowed name · {closed} closed",
+  "@netReportHostingSummary": {
+    "placeholders": {
+      "open": {
+        "type": "int"
+      },
+      "white": {
+        "type": "int"
+      },
+      "closed": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportSniPassed": "Pass: {names}",
+  "@netReportSniPassed": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportSniFailed": "Cut: {names}",
+  "@netReportSniFailed": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportSniNotFiltered": "Not filtered by name",
+  "netReportSniNone": "None of the checked names pass",
+  "netReportNat": "Symmetric NAT: calls and games need a relay",
+  "netReportProvider": "Provider",
+  "netReportAddress": "Address",
+  "netReportConnection": "Connection",
+  "netReportAdapter": "Adapter",
+  "netReportDnsServers": "DNS servers",
+  "netReportLoss": "{percent}% lost",
+  "@netReportLoss": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportIntercepted": "intercepted",
+  "netReportPort53": "Every DNS query is answered by the network itself",
+  "netReportSystemResolver": "Network's DNS",
+  "netReportApp": "App",
+  "netReportStatusOk": "Works",
+  "netReportStatusDnsOnly": "DNS spoofed",
+  "netReportStatusIpBlocked": "Blocked by address",
+  "netReportStatusSniBlocked": "Blocked by name",
+  "netReportStatusSniWhitelist": "Allowed names only",
+  "netReportStatusNoSniOnly": "Only without a name",
+  "netReportStatusTlsBlocked": "TLS cut",
+  "netReportStatusMitm": "Certificate replaced",
+  "netReportStatusGeo": "Refuses the country",
+  "netReportStatusFrozen": "Freezes after ~16 KB",
+  "netReportStatusSlow": "Slow",
+  "netReportStatusStalled": "Stalls",
+  "netReportStatusTimeout": "No answer",
+  "netReportStatusReset": "Reset",
+  "netReportStatusRefused": "Refused",
+  "netReportStatusUnreachable": "Unreachable",
+  "netReportStatusClosed": "Closed",
+  "netReportStatusAlert": "Server answered",
+  "netReportStatusCertInvalid": "Wrong certificate",
+  "netReportStatusError": "Error",
+  "netReportStatusSkipped": "Not checked",
+  "netReportStatusSpoofed": "Fake address",
+  "netReportStatusInjected": "Fake answer first",
+  "netReportStatusNxdomain": "Fake “no such site”",
+  "netReportStatusEmpty": "Empty answer",
+  "netReportStatusBlocked": "Blocked",
+  "netReportStatusPartial": "Partly",
+  "netReportAdviceRealityWhite": "REALITY borrowing {names}, on {hosts}",
+  "@netReportAdviceRealityWhite": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      },
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceRealityWhiteAny": "REALITY borrowing {names}, on hosting that lets it through",
+  "@netReportAdviceRealityWhiteAny": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceTls": "VLESS or Trojan with TLS, REALITY: {hosts}",
+  "@netReportAdviceTls": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceTlsBlocked": "TLS servers with their own name on {hosts}",
+  "@netReportAdviceTlsBlocked": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceCdn": "XHTTP or WebSocket through Cloudflare",
+  "netReportAdviceUdp": "Hysteria2 and AmneziaWG: UDP gets through (plain WireGuard is often cut by its signature)",
+  "netReportAdviceUdpPartial": "UDP passes to some addresses only: try Hysteria2 and AmneziaWG on your own server",
+  "netReportAdviceUdpBlocked": "UDP protocols: Hysteria2, WireGuard, AmneziaWG",
+  "netReportAdviceRelay": "A relay in a Russian network ({hosts}) with the exit abroad",
+  "@netReportAdviceRelay": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceNoSni": "TLS without a server name passes to {hosts}",
+  "@netReportAdviceNoSni": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceFrozen": "Transfers freeze after ~16 KB: {hosts}",
+  "@netReportAdviceFrozen": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceDns": "DNS is spoofed ({resolvers}): the VPN must resolve names itself (DoH or FakeDNS)",
+  "@netReportAdviceDns": {
+    "placeholders": {
+      "resolvers": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceDnsLoss": "{resolver} loses {percent}% of UDP queries",
+  "@netReportAdviceDnsLoss": {
+    "placeholders": {
+      "resolver": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportAdviceSplit": "Two TCP packets in place of one ClientHello already open {sites}",
+  "@netReportAdviceSplit": {
+    "placeholders": {
+      "sites": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceGeo": "These services refuse the country themselves and need a VPN exit abroad: {names}",
+  "@netReportAdviceGeo": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportSettingsContent": "In the report",
+  "netReportSettingsAddress": "Your IP address",
+  "netReportHidden": "Hidden",
+  "netReportAddressNetwork": "Network only",
+  "netReportAddressFull": "Full",
+  "netReportSettingsProvider": "Provider and AS number",
+  "netReportSettingsLocation": "Location",
+  "netReportLocationCountry": "Country",
+  "netReportLocationCity": "Country and city",
+  "netReportSettingsConnection": "Connection type",
+  "netReportSettingsAdapter": "Adapter name and local addresses",
+  "netReportSettingsDns": "DNS server addresses",
+  "netReportSettingsDevice": "App version and system",
+  "netReportSettingsChecks": "Checks",
+  "netReportSettingsBypass": "Try DPI bypass",
+  "netReportSettingsBypassHint": "Retries blocked sites with the ClientHello cut up, as the app's Fragment and tools like zapret do, without running them. Adds time on blocked sites.",
+  "netReportSettingsSaveTraffic": "Save traffic",
+  "netReportSettingsSaveTrafficHint": "Downloads 64 KB instead of 256 KB from each provider.",
+  "netReportSettingsSites": "Extra sites",
+  "netReportSettingsSitesHint": "One per line, checked like the built-in services (up to {count}).",
+  "@netReportSettingsSitesHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "netReportSettingsShow": "On screen",
+  "netReportSettingsHidePassed": "Hide checks that passed",
+  "netReportSettingsDetails": "Technical details",
+  "netReportSettingsPrivacy": "The report stays on this device until you share it. The screen shows exactly what gets shared.",
+  "netReportTextTitle": "HYPER CLIENT · network report",
+  "netReportAdviceFragment": "Fragment (the ClientHello cut into small TLS records) opens {sites}; tools like zapret would help too",
+  "@netReportAdviceFragment": {
+    "placeholders": {
+      "sites": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceFragmentHosting": "VLESS or Trojan with TLS and Fragment on: {hosts}",
+  "@netReportAdviceFragmentHosting": {
+    "placeholders": {
+      "hosts": {
+        "type": "String"
+      }
+    }
+  },
+  "netReportAdviceBypassUseless": "Cutting up the ClientHello opens nothing here: the filter reassembles it, so Fragment or zapret will not help",
+  "netReportModeSniWhitelist": "White list of server names",
+  "netReportModeSniWhitelistDetail": "The addresses answer, but DPI passes only allowed server names (SNI). Not a white list by address: a VPN gets through with an allowed name or with the hello cut up."
 }

@@ -147,6 +147,21 @@ class PreferencesKey {
   Future<void> saveLocalApi(Map<String, dynamic> value) =>
       _prefs.setString(_localApi, JsonTool.encoder.convert(value));
 
+  static const _networkReport = '${_namespace}networkReport';
+
+  Future<Map<String, dynamic>?> readNetworkReport() async {
+    final value = await _prefs.getString(_networkReport);
+    if (value == null) return null;
+    final json = JsonTool.decoder.convert(value);
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Invalid network report settings');
+    }
+    return json;
+  }
+
+  Future<void> saveNetworkReport(Map<String, dynamic> value) =>
+      _prefs.setString(_networkReport, JsonTool.encoder.convert(value));
+
   Future<Map<String, dynamic>?> readBackup() async {
     final value = await _prefs.getString(_backup);
     return value == null ? null : JsonTool.decodeBase64ToJson(value);
@@ -204,6 +219,7 @@ class PreferencesKey {
       _prefs.remove(_autoUpdate),
       _prefs.remove(_backup),
       _prefs.remove(_localApi),
+      _prefs.remove(_networkReport),
       _prefs.remove(_automaticBackup),
       _prefs.remove(_backupInterval),
       _prefs.remove(_serverSort),

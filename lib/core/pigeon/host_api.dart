@@ -280,6 +280,44 @@ class AppHostApi {
     return ResolveHostResponse.fromJson(response.data!).addresses ?? const [];
   }
 
+  /// Starts a network report and returns its id. libXray runs it in the
+  /// background; an older libXray answers "unknown method".
+  Future<String> startNetworkReport(StartNetworkReportRequest request) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.startNetworkReport,
+        payload: request.toJson(),
+      ),
+    );
+    if (!response.success || response.data == null) {
+      throw LibXrayInvokeException(response.error);
+    }
+    return StartNetworkReportResponse.fromJson(response.data!).id;
+  }
+
+  Future<NetworkReportStateResponse> networkReportState(String id) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.networkReportState,
+        payload: NetworkReportRequest(id).toJson(),
+      ),
+    );
+    if (!response.success || response.data == null) {
+      throw LibXrayInvokeException(response.error);
+    }
+    return NetworkReportStateResponse.fromJson(response.data!);
+  }
+
+  Future<void> cancelNetworkReport(String id) async {
+    final response = await _invoke(
+      LibXrayInvokeRequest(
+        method: LibXrayMethod.cancelNetworkReport,
+        payload: NetworkReportRequest(id).toJson(),
+      ),
+    );
+    if (!response.success) throw LibXrayInvokeException(response.error);
+  }
+
   Future<List<MinewireEngineState>> minewireState() async {
     final response = await _invoke(
       LibXrayInvokeRequest(method: LibXrayMethod.minewireState),

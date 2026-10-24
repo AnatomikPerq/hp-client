@@ -42,6 +42,8 @@ import 'package:onexray/pages/servers/order/controller.dart';
 import 'package:onexray/pages/servers/order/page.dart';
 import 'package:onexray/pages/connect/page.dart';
 import 'package:onexray/pages/settings/page.dart';
+import 'package:onexray/pages/settings/network_report/page.dart';
+import 'package:onexray/pages/settings/network_report/settings_page.dart';
 import 'package:onexray/pages/connect/routing/smart/exit_picker.dart';
 import 'package:onexray/pages/servers/controller.dart';
 import 'package:onexray/pages/connect/routing/smart/exit_picker_controller.dart';
@@ -419,6 +421,11 @@ final _pageRoutes = <_PageRoute>[
   _route(AppPageDestination.theme, (_, _) => const ThemePage()),
   _route(AppPageDestination.language, (_, _) => const LanguagePage()),
   _route(AppPageDestination.aboutOneXray, (_, _) => const AboutOneXrayPage()),
+  _route(AppPageDestination.networkReport, (_, _) => const NetworkReportPage()),
+  _route(
+    AppPageDestination.networkReportSettings,
+    (_, _) => const NetworkReportSettingsPage(),
+  ),
   _route(
     AppPageDestination.appUpdate,
     (_, state) => _withDialogExtra<AppUpdateDialogParams>(

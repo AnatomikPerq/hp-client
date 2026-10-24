@@ -62,6 +62,7 @@ class ConnectView extends StatelessWidget {
     this.onRunMode,
     this.livePing = LivePingView.idle,
     this.onLivePing,
+    this.onNetworkReport,
     this.health = ConnectionHealth.none,
     this.killSwitchBlocking = false,
     this.onUnblock,
@@ -107,6 +108,10 @@ class ConnectView extends StatelessWidget {
   /// "Check connection" below the orb; null hides it.
   final LivePingView livePing;
   final VoidCallback? onLivePing;
+
+  /// "Check network" beside it once the connection fails or carries no
+  /// traffic: the report tells what the network blocks. Null hides it.
+  final VoidCallback? onNetworkReport;
 
   /// The background check: a connection that stopped carrying traffic
   /// says so instead of "connected".
@@ -459,6 +464,26 @@ class ConnectView extends StatelessWidget {
               color: livePing.failed ? palette.destructive : palette.running,
             ),
           ),
+        if (onNetworkReport != null &&
+            (livePing.failed ||
+                view.failed ||
+                connected &&
+                    health.unreachable &&
+                    health.appliesTo(view.runtime))) ...[
+          Text(' · ', style: AppTypography.homeLink),
+          TextButton(
+            key: const ValueKey('home-network-report'),
+            onPressed: onNetworkReport,
+            style: TextButton.styleFrom(
+              foregroundColor: palette.primary,
+              textStyle: AppTypography.homeLink,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 34),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(l.netReportStart),
+          ),
+        ],
       ],
     );
     final routing = Row(

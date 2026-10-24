@@ -73,6 +73,8 @@ enum AppPageDestination {
   theme("theme"),
   language("language"),
   aboutOneXray("about-onexray"),
+  networkReport("network-report"),
+  networkReportSettings("network-report-settings"),
   appUpdate("app-update");
 
   final String segment;

@@ -109,6 +109,52 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ],
                 );
+                // Fork: the network report and what it carries.
+                final diagnostics = SettingSection(
+                  title: l10n.netReportSection,
+                  icon: LucideIcons.stethoscope,
+                  padding: EdgeInsets.zero,
+                  dividerIndent: 0,
+                  children: [
+                    SettingRow(
+                      key: const ValueKey('settings-network-report'),
+                      title: l10n.netReportTitle,
+                      subtitle: l10n.netReportHint,
+                      minHeight: mobile ? 58 : 64,
+                      contentPadding: rowPadding,
+                      titleStyle: AppTypography.settingsRow,
+                      subtitleStyle:
+                          (mobile
+                                  ? AppTypography.settingsHint
+                                  : AppTypography.desktopSettingsHint)
+                              .copyWith(color: palette.mutedForeground),
+                      leading: const Icon(LucideIcons.radar),
+                      showChevron: true,
+                      onTap: () => controller.openSetting(
+                        context,
+                        AppPageDestination.networkReport,
+                      ),
+                    ),
+                    SettingRow(
+                      title: l10n.netReportSettingsTitle,
+                      subtitle: l10n.netReportSettingsHint,
+                      minHeight: mobile ? 58 : 64,
+                      contentPadding: rowPadding,
+                      titleStyle: AppTypography.settingsRow,
+                      subtitleStyle:
+                          (mobile
+                                  ? AppTypography.settingsHint
+                                  : AppTypography.desktopSettingsHint)
+                              .copyWith(color: palette.mutedForeground),
+                      leading: const Icon(LucideIcons.fileText),
+                      showChevron: true,
+                      onTap: () => controller.openSetting(
+                        context,
+                        AppPageDestination.networkReportSettings,
+                      ),
+                    ),
+                  ],
+                );
                 final appearance = SettingSection(
                   title: l10n.prototypeAppearance,
                   icon: LucideIcons.palette,
@@ -299,6 +345,8 @@ class SettingsPage extends StatelessWidget {
                         startup,
                         SizedBox(height: sectionGap),
                         advanced,
+                        SizedBox(height: sectionGap),
+                        diagnostics,
                         SizedBox(height: sectionGap),
                         data,
                         SizedBox(height: sectionGap),

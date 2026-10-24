@@ -256,6 +256,86 @@ Map<String, dynamic> _$ResolveHostResponseToJson(
   ResolveHostResponse instance,
 ) => <String, dynamic>{'addresses': ?instance.addresses};
 
+StartNetworkReportRequest _$StartNetworkReportRequestFromJson(
+  Map<String, dynamic> json,
+) => StartNetworkReportRequest(
+  interfaceName: json['interface'] as String?,
+  systemDns: (json['systemDns'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  sections: (json['sections'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  sites: (json['sites'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  maxBytes: (json['maxBytes'] as num?)?.toInt(),
+  bypass: json['bypass'] as bool?,
+);
+
+Map<String, dynamic> _$StartNetworkReportRequestToJson(
+  StartNetworkReportRequest instance,
+) => <String, dynamic>{
+  'interface': ?instance.interfaceName,
+  'systemDns': ?instance.systemDns,
+  'sections': ?instance.sections,
+  'sites': ?instance.sites,
+  'maxBytes': ?instance.maxBytes,
+  'bypass': ?instance.bypass,
+};
+
+StartNetworkReportResponse _$StartNetworkReportResponseFromJson(
+  Map<String, dynamic> json,
+) => StartNetworkReportResponse(json['id'] as String);
+
+Map<String, dynamic> _$StartNetworkReportResponseToJson(
+  StartNetworkReportResponse instance,
+) => <String, dynamic>{'id': instance.id};
+
+NetworkReportRequest _$NetworkReportRequestFromJson(
+  Map<String, dynamic> json,
+) => NetworkReportRequest(json['id'] as String);
+
+Map<String, dynamic> _$NetworkReportRequestToJson(
+  NetworkReportRequest instance,
+) => <String, dynamic>{'id': instance.id};
+
+NetworkReportProgress _$NetworkReportProgressFromJson(
+  Map<String, dynamic> json,
+) => NetworkReportProgress(
+  section: json['section'] as String?,
+  done: (json['done'] as num?)?.toInt() ?? 0,
+  total: (json['total'] as num?)?.toInt() ?? 0,
+);
+
+Map<String, dynamic> _$NetworkReportProgressToJson(
+  NetworkReportProgress instance,
+) => <String, dynamic>{
+  'section': ?instance.section,
+  'done': instance.done,
+  'total': instance.total,
+};
+
+NetworkReportStateResponse _$NetworkReportStateResponseFromJson(
+  Map<String, dynamic> json,
+) => NetworkReportStateResponse(
+  running: json['running'] as bool? ?? false,
+  progress: json['progress'] == null
+      ? null
+      : NetworkReportProgress.fromJson(
+          json['progress'] as Map<String, dynamic>,
+        ),
+  error: json['error'] as String?,
+  report: json['report'] as Map<String, dynamic>?,
+);
+
+Map<String, dynamic> _$NetworkReportStateResponseToJson(
+  NetworkReportStateResponse instance,
+) => <String, dynamic>{
+  'running': instance.running,
+  'progress': ?instance.progress?.toJson(),
+  'error': ?instance.error,
+  'report': ?instance.report,
+};
+
 KillSwitchSession _$KillSwitchSessionFromJson(Map<String, dynamic> json) =>
     KillSwitchSession(
       bootedAt: (json['bootedAt'] as num).toInt(),
@@ -369,6 +449,9 @@ const _$LibXrayMethodEnumMap = {
   LibXrayMethod.killSwitchState: 'killSwitchState',
   LibXrayMethod.liftKillSwitch: 'liftKillSwitch',
   LibXrayMethod.resolveHost: 'resolveHost',
+  LibXrayMethod.startNetworkReport: 'startNetworkReport',
+  LibXrayMethod.networkReportState: 'networkReportState',
+  LibXrayMethod.cancelNetworkReport: 'cancelNetworkReport',
 };
 
 GetFreePortsRequest _$GetFreePortsRequestFromJson(Map<String, dynamic> json) =>
