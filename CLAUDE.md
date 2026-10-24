@@ -203,7 +203,7 @@ App state is faster to read from `%APPDATA%\HYPER CLIENT\HYPER CLIENT\db.sqlite`
 
 Push straight to `main`; do not create branches. Every full version gets a GitHub release with binaries. Merging upstream: `git fetch upstream` in both repositories; in the app, resolve conflicts toward upstream's architecture and re-port fork behavior (this file lists it). Merge in stages (one merge commit per upstream PR group, tests between them); a detached worktree at an ASCII path (`git worktree add --detach C:\Users\BADAB\dev\hp-merge HEAD`, then fast-forward `main`) keeps the main tree free for builds and needs no branch.
 
-The app is merged up to upstream `27f06f4` (#231, 21.10.2026). #220 is a squash of about 30 commits; its original branch is `refs/pull/220/head` on upstream, which is how one sub-commit (the location removal) could be reverted alone. Upstream's build scripts, workflows and installer are never taken: the fork's keep the wintun hash check and provenance receipts.
+The app is merged up to upstream `72b7c54b` (#238, 24.10.2026). #220 is a squash of about 30 commits; its original branch is `refs/pull/220/head` on upstream, which is how one sub-commit (the location removal) could be reverted alone. Upstream's build scripts, workflows and installer are never taken: the fork's keep the wintun hash check and provenance receipts.
 
 Two GitHub quirks cost real time here:
 

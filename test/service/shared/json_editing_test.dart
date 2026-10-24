@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:onexray/core/tools/json_document.dart';
 import 'package:onexray/service/shared/json_editing.dart';
@@ -275,9 +277,10 @@ void main() {
           'service',
           'secrets',
           'segmentBytes',
+          'sessionTtlSeconds',
         ]);
         expect(labels(source('"xdriveSettings":{"service":"G|"}'), kind), [
-          'Google Drive',
+          'google-drive',
         ]);
         expect(
           labels(source('"xdriveSettings":{"secrets":["|"]}'), kind),
@@ -298,6 +301,208 @@ void main() {
       }
     },
   );
+
+  test('XMUX and XDrive timing hints follow their transport owner', () {
+    for (final (kind, template) in [
+      (JsonEditorKind.outbound, '{"streamSettings":{BODY}}'),
+      (JsonEditorKind.outbound, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"inbounds":[{"streamSettings":{BODY}}]}'),
+    ]) {
+      for (final transport in ['masqueSettings', 'xdriveSettings']) {
+        String source(String body) =>
+            template.replaceFirst('BODY', '"$transport":{$body}');
+        expect(labels(source('"xm|"'), kind), ['xmux']);
+        expect(labels(source('"xmux":{"max|"}'), kind), [
+          'maxConcurrency',
+          'maxConnections',
+        ]);
+        expect(labels(source('"xmux":{"h|"}'), kind), [
+          'hMaxRequestTimes',
+          'hMaxReusableSecs',
+          'hKeepAlivePeriod',
+        ]);
+        expect(labels(source('"xmux":{"cM|"}'), kind), ['cMaxReuseTimes']);
+        expect(labels(source('"xmux":{"maxConnections":"|"}'), kind), isEmpty);
+      }
+      for (final field in [
+        'maxPollIntervalMs',
+        'sessionTtlSeconds',
+        'eagerWindowMs',
+        'holeTimeoutMs',
+      ]) {
+        final body = '"xdriveSettings":{"${field.substring(0, 4)}|"}';
+        expect(labels(template.replaceFirst('BODY', body), kind), [field]);
+      }
+    }
+    for (final kind in [
+      JsonEditorKind.customRouting,
+      JsonEditorKind.advancedRouting,
+    ]) {
+      expect(
+        labels(
+          '{"outbounds":[{"streamSettings":{"xdriveSettings":{"xmux":{"max|"}}}}]}',
+          kind,
+        ),
+        isEmpty,
+      );
+    }
+    for (final marked in [
+      '{"future":{"xdriveSettings":{"ser|"}}}',
+      '{"future":{"xdriveSettings":{"service":"goo|"}}}',
+      '{"future":{"masqueSettings":{"xmux":{"max|"}}}}',
+      '{"streamSettings":{"xhttpSettings":{"xmux":{"max|"}}}}',
+    ]) {
+      expect(labels(marked, JsonEditorKind.outbound), isEmpty);
+    }
+  });
+
+  test('XDrive template keys and enums follow their exact storage owner', () {
+    for (final (kind, wrapper) in [
+      (JsonEditorKind.outbound, '{"streamSettings":{BODY}}'),
+      (JsonEditorKind.outbound, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"inbounds":[{"streamSettings":{BODY}}]}'),
+    ]) {
+      String source(String body) =>
+          wrapper.replaceFirst('BODY', '"xdriveSettings":{"template":{$body}}');
+      expect(labels(source('"|"'), kind), [
+        'flatten',
+        'concurrency',
+        'auth',
+        'put',
+        'get',
+        'delete',
+        'list',
+        'retry',
+      ]);
+      expect(labels(source('"auth":{"|"}'), kind), [
+        'type',
+        'header',
+        'username',
+        'password',
+        'tokenUrl',
+        'form',
+        'tokenPath',
+        'expiryPath',
+      ]);
+      expect(labels(source('"auth":{"type":"|"}'), kind), [
+        'none',
+        'static',
+        'oauth2',
+        'basic',
+      ]);
+      expect(labels(source('"retry":{"|"}'), kind), ['status', 'rateReason']);
+      for (final operation in ['put', 'get', 'delete', 'list']) {
+        expect(labels(source('"$operation":{"|"}'), kind), [
+          'method',
+          'url',
+          'headers',
+          'body',
+          'namesRegex',
+          'hrefPath',
+          'hrefMethod',
+        ]);
+        for (final field in ['method', 'hrefMethod']) {
+          expect(labels(source('"$operation":{"$field":"P|"}'), kind), [
+            'POST',
+            'PUT',
+            'PATCH',
+          ]);
+        }
+      }
+      expect(labels(source('"get":{"hrefPath":"reply.url","href|"}'), kind), [
+        'hrefMethod',
+      ]);
+    }
+  });
+
+  test(
+    'template hints avoid lookalike owners and leave free text unconstrained',
+    () {
+      String source(String body) =>
+          '{"streamSettings":{"xdriveSettings":{"template":{$body}}}}';
+      for (final body in [
+        '"href|"',
+        '"auth":{"href|"}',
+        '"retry":{"href|"}',
+        '"future":{"href|"}',
+        '"future":{"get":{"href|"}}',
+        '"get":{"headers":{"href|"}}',
+        '"auth":{"header":{"ty|"}}',
+        '"auth":{"form":{"ty|"}}',
+        '"auth":{"username":"|"}',
+        '"auth":{"password":"|"}',
+        '"auth":{"tokenPath":"|"}',
+        '"get":{"url":"|"}',
+        '"get":{"body":"|"}',
+        '"list":{"namesRegex":"|"}',
+        '"get":{"hrefPath":"|"}',
+        '"get":{"headers":{"method":"P|"}}',
+        '"auth":{"form":{"type":"o|"}}',
+        '"get":{"method":"CUSTOM|"}',
+      ]) {
+        expect(labels(source(body), JsonEditorKind.outbound), isEmpty);
+      }
+      for (final kind in [
+        JsonEditorKind.customRouting,
+        JsonEditorKind.advancedRouting,
+      ]) {
+        for (final body in [
+          '"con|"',
+          '"auth":{"type":"o|"}',
+          '"get":{"href|"}',
+          '"get":{"method":"G|"}',
+        ]) {
+          expect(labels('{"outbounds":[${source(body)}]}', kind), isEmpty);
+        }
+      }
+      for (final marked in [
+        '{"template":{"auth":{"type":"o|"}}}',
+        '{"future":{"streamSettings":{"xdriveSettings":{"template":{"get":{"href|"}}}}}}',
+        '{"streamSettings":{"future":{"xdriveSettings":{"template":{"get":{"href|"}}}}}}',
+        '{"streamSettings":{"masqueSettings":{"template":{"get":{"method":"G|"}}}}}',
+      ]) {
+        expect(labels(marked, JsonEditorKind.raw), isEmpty);
+        expect(labels(marked, JsonEditorKind.outbound), isEmpty);
+      }
+    },
+  );
+
+  test('template completion replaces only the selected key string', () {
+    const marked =
+        '{"streamSettings":{"xdriveSettings":{"template":{"get":{"hrefP|":"result.url","method":"CUSTOM","url":"https://example.test/{name}","headers":{"Authorization":"{secret0}"},"future":{"keep":true}},"auth":{"type":"static","header":{"X-Token":"{secret0}"}}}}}}';
+    final completion = completions(marked, JsonEditorKind.outbound).single;
+    final edited = marked
+        .replaceFirst('|', '')
+        .replaceRange(completion.start, completion.end, completion.insertText);
+    expect(edited, marked.replaceFirst('hrefP|', 'hrefPath'));
+    expect(JsonDocument(edited).syntaxError, isNull);
+  });
+
+  test('XDrive service completion preserves surrounding user JSON', () {
+    const marked =
+        '{"streamSettings":{"xdriveSettings":{"service":"goo|","secrets":["user-value"],"future":{"a":1}}}}';
+    final completion = completions(marked, JsonEditorKind.outbound).single;
+    final source = marked.replaceFirst('|', '');
+    final edited = source.replaceRange(
+      completion.start,
+      completion.end,
+      completion.insertText,
+    );
+    expect(edited, marked.replaceFirst('goo|', 'google-drive'));
+    expect(JsonDocument(edited).syntaxError, isNull);
+    expect(jsonDecode(edited)['streamSettings']['xdriveSettings']['future'], {
+      'a': 1,
+    });
+    expect(
+      labels(
+        '{"streamSettings":{"xdriveSettings":{"xmux":{"maxConnections":1,"max|"}}}}',
+        JsonEditorKind.outbound,
+      ),
+      ['maxConcurrency'],
+    );
+  });
 
   test('XDNS completes names and addrs in UDP masks without old fields', () {
     String source(String settings) =>
@@ -377,6 +582,129 @@ void main() {
     expect(
       labels(source('UDPHOP', '"sockopt":{"in|"}'), JsonEditorKind.outbound),
       isEmpty,
+    );
+  });
+
+  test('XDNS resolves nested TLS ECH and QUIC completion contexts', () {
+    for (final (kind, wrapper) in [
+      (JsonEditorKind.outbound, '{"streamSettings":{BODY}}'),
+      (JsonEditorKind.outbound, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"inbounds":[{"streamSettings":{BODY}}]}'),
+      (JsonEditorKind.raw, '{"outbounds":[{"streamSettings":{BODY}}]}'),
+    ]) {
+      String resolver(
+        String body, {
+        String type = 'XDNS',
+        String net = 'udp',
+      }) => wrapper.replaceFirst(
+        'BODY',
+        '"finalmask":{"$net":[{"type":"$type","settings":{"resolvers":[{$body}]}}]}',
+      );
+      expect(labels(resolver('"|"'), kind), [
+        'addrs',
+        'worker',
+        'tlsConfig',
+        'quicConfig',
+      ]);
+      expect(labels(resolver('"tlsConfig":{"ech|"}'), kind), [
+        'echConfigList',
+        'echSockopt',
+      ]);
+      expect(labels(resolver('"tlsConfig":{"alpn":["h|"]}'), kind), [
+        'h2',
+        'http/1.1',
+        'h3',
+      ]);
+      expect(labels(resolver('"tlsConfig":{"echSockopt":{"hap|"}}'), kind), [
+        'happyEyeballs',
+      ]);
+      expect(
+        labels(
+          resolver('"tlsConfig":{"echSockopt":{"domainStrategy":"ForceI|"}}'),
+          kind,
+        ),
+        containsAll(['ForceIP', 'ForceIPv4', 'ForceIPv6']),
+      );
+      expect(
+        labels(
+          resolver('"tlsConfig":{"echSockopt":{"happyEyeballs":{"try|"}}}'),
+          kind,
+        ),
+        ['tryDelayMs'],
+      );
+      expect(labels(resolver('"quicConfig":{"disable|"}'), kind), [
+        'disablePathMTUDiscovery',
+        'disableChromeParrot',
+        'disableGSO',
+        'disableStatelessReset',
+      ]);
+      expect(labels(resolver('"quicConfig":{"congestion":"b|"}'), kind), [
+        'bbr',
+        'brutal',
+      ]);
+      expect(labels(resolver('"quicConfig":{"bbrProfile":"a|"}'), kind), [
+        'aggressive',
+      ]);
+      expect(labels(resolver('"quicConfig":{"maxIncoming|"}'), kind), [
+        'maxIncomingStreams',
+      ]);
+      expect(
+        labels(resolver('"tlsConfig":{"|"}', type: 'noise'), kind),
+        isEmpty,
+      );
+      expect(labels(resolver('"wo|"', net: 'tcp'), kind), isEmpty);
+    }
+    for (final kind in [
+      JsonEditorKind.customRouting,
+      JsonEditorKind.advancedRouting,
+    ]) {
+      expect(
+        labels(
+          '{"outbounds":[{"streamSettings":{"finalmask":{"quicParams":{"con|"}}}}]}',
+          kind,
+        ),
+        isEmpty,
+      );
+    }
+    for (final marked in [
+      '{"future":{"tlsConfig":{"ech|"}}}',
+      '{"future":{"streamSettings":{"finalmask":{"quicParams":{"con|"}}}}}',
+      '{"streamSettings":{"future":{"resolvers":[{"wo|"}]}}}',
+      '{"streamSettings":{"tlsSettings":{"future":{"echSockopt":{"hap|"}}}}}',
+      '{"future":{"realitySettings":{"mld|"}}}',
+    ]) {
+      expect(labels(marked, JsonEditorKind.outbound), isEmpty);
+    }
+  });
+
+  test('stream TLS and QUIC reuse nested field and value suggestions', () {
+    expect(
+      labels(
+        '{"streamSettings":{"tlsSettings":{"echSockopt":{"hap|"}}}}',
+        JsonEditorKind.outbound,
+      ),
+      ['happyEyeballs'],
+    );
+    expect(
+      labels(
+        '{"streamSettings":{"realitySettings":{"mld|"}}}',
+        JsonEditorKind.outbound,
+      ),
+      ['mldsa65Verify'],
+    );
+    expect(
+      labels(
+        '{"streamSettings":{"finalmask":{"quicParams":{"congestion":"r|"}}}}',
+        JsonEditorKind.outbound,
+      ),
+      ['reno'],
+    );
+    expect(
+      labels(
+        '{"streamSettings":{"finalmask":{"quicParams":{"disableG|"}}}}',
+        JsonEditorKind.outbound,
+      ),
+      ['disableGSO'],
     );
   });
 
