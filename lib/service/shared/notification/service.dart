@@ -13,8 +13,9 @@ final class NotificationService {
   final _localNotification = FlutterLocalNotificationsPlugin();
 
   Future<void> asyncInit() async {
+    // A status bar icon is a mask; the colored launcher icon shows as a blob.
     const initializationSettingsAndroid = AndroidInitializationSettings(
-      'ic_launcher',
+      'ic_notification',
     );
     const initializationSettingsDarwin = DarwinInitializationSettings(
       requestAlertPermission: false,

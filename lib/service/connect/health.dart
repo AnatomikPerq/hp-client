@@ -103,7 +103,9 @@ final class ConnectionHealthMonitor {
            notify ??
            ((message) => NotificationService().pushNotification(message)),
        _proxyTakenOver = proxyTakenOver ?? _systemProxyTakenOver,
-       _enabled = enabled ?? AppPlatform.isDesktop;
+       // Android too: the App's own requests go through its VPN, so the
+       // plain probe takes the path every other app takes.
+       _enabled = enabled ?? (AppPlatform.isDesktop || AppPlatform.isAndroid);
 
   final ConnectionCoordinator? _coordinatorOverride;
   ConnectionCoordinator get _coordinator =>

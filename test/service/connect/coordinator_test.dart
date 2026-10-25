@@ -1729,6 +1729,50 @@ void main() {
   );
 
   group('kill switch', () {
+    for (final (host, reconnect, calls) in [
+      (
+        HostConnection(VpnStatus.connected, runtime: _runtime('a')),
+        true,
+        ['stopForRestart'],
+      ),
+      (
+        const HostConnection(VpnStatus.disconnected, killSwitchBlocking: true),
+        true,
+        <String>[],
+      ),
+      (const HostConnection(VpnStatus.disconnected), false, <String>[]),
+    ]) {
+      test(
+        'an App update keeps a wanted tunnel wanted '
+        '(${host.status.name}, blocking ${host.killSwitchBlocking})',
+        () async {
+          var current = host;
+          final stops = <String>[];
+          final coordinator = await _initialize(
+            ConnectionCoordinator(
+              database: db,
+              readRuntime: () async => current.runtime,
+              inspect: (_, {observedStatus}) async => current,
+              stop: () async {
+                stops.add('stop');
+                return current = const HostConnection(VpnStatus.disconnected);
+              },
+              stopForRestart: () async {
+                stops.add('stopForRestart');
+                return current = const HostConnection(
+                  VpnStatus.disconnected,
+                  killSwitchBlocking: true,
+                );
+              },
+            ),
+          );
+
+          expect(await coordinator.suspendForUpdate(), reconnect);
+          expect(stops, calls);
+        },
+      );
+    }
+
     test('a reconnect stops the old Core without lifting the block', () async {
       final old = _runtime('a');
       final next = _runtime('b', entryIds: const [2]);

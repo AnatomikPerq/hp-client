@@ -208,6 +208,17 @@ enum class VpnStatus(val raw: Int) {
   }
 }
 
+enum class AndroidUpdateInstallState(val raw: Int) {
+  STARTED(0),
+  PERMISSION_REQUIRED(1);
+
+  companion object {
+    fun ofRaw(raw: Int): AndroidUpdateInstallState? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 enum class PlatformPermissionKind(val raw: Int) {
   NONE(0),
   ANDROID_VPN(1),
@@ -571,55 +582,60 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
       }
       130.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          PlatformPermissionKind.ofRaw(it.toInt())
+          AndroidUpdateInstallState.ofRaw(it.toInt())
         }
       }
       131.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          PlatformPermissionState.ofRaw(it.toInt())
+          PlatformPermissionKind.ofRaw(it.toInt())
         }
       }
       132.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          NativeVpnCommandState.ofRaw(it.toInt())
+          PlatformPermissionState.ofRaw(it.toInt())
         }
       }
       133.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          NativeLaunchAtLoginState.ofRaw(it.toInt())
+          NativeVpnCommandState.ofRaw(it.toInt())
         }
       }
       134.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          AndroidAutomationSettings.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          NativeLaunchAtLoginState.ofRaw(it.toInt())
         }
       }
       135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          BackupLocation.fromList(it)
+          AndroidAutomationSettings.fromList(it)
         }
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          AppleVpnCapabilities.fromList(it)
+          BackupLocation.fromList(it)
         }
       }
       137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          NativeLaunchAtLoginResult.fromList(it)
+          AppleVpnCapabilities.fromList(it)
         }
       }
       138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          PlatformPermissionResult.fromList(it)
+          NativeLaunchAtLoginResult.fromList(it)
         }
       }
       139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          NativeVpnCommandResult.fromList(it)
+          PlatformPermissionResult.fromList(it)
         }
       }
       140.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          NativeVpnCommandResult.fromList(it)
+        }
+      }
+      141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           AndroidAppInfo.fromList(it)
         }
@@ -633,48 +649,52 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
       }
-      is PlatformPermissionKind -> {
+      is AndroidUpdateInstallState -> {
         stream.write(130)
         writeValue(stream, value.raw.toLong())
       }
-      is PlatformPermissionState -> {
+      is PlatformPermissionKind -> {
         stream.write(131)
         writeValue(stream, value.raw.toLong())
       }
-      is NativeVpnCommandState -> {
+      is PlatformPermissionState -> {
         stream.write(132)
         writeValue(stream, value.raw.toLong())
       }
-      is NativeLaunchAtLoginState -> {
+      is NativeVpnCommandState -> {
         stream.write(133)
         writeValue(stream, value.raw.toLong())
       }
-      is AndroidAutomationSettings -> {
+      is NativeLaunchAtLoginState -> {
         stream.write(134)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is BackupLocation -> {
+      is AndroidAutomationSettings -> {
         stream.write(135)
         writeValue(stream, value.toList())
       }
-      is AppleVpnCapabilities -> {
+      is BackupLocation -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is NativeLaunchAtLoginResult -> {
+      is AppleVpnCapabilities -> {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is PlatformPermissionResult -> {
+      is NativeLaunchAtLoginResult -> {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is NativeVpnCommandResult -> {
+      is PlatformPermissionResult -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is AndroidAppInfo -> {
+      is NativeVpnCommandResult -> {
         stream.write(140)
+        writeValue(stream, value.toList())
+      }
+      is AndroidAppInfo -> {
+        stream.write(141)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -1112,6 +1132,113 @@ interface AndroidAutomationHostApi {
                 reply.reply(MessagesPigeonUtils.wrapError(error))
               } else {
                 reply.reply(MessagesPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+/** Generated interface from Pigeon that represents a handler of messages from Flutter. */
+interface AndroidSystemHostApi {
+  /** Whether the App may open the system installer ("install unknown apps"). */
+  fun canInstallUpdates(callback: (Result<Boolean>) -> Unit)
+  /**
+   * Opens the system installer for a verified APK in the App's update
+   * folder. With [reconnect] the VPN starts again once the package was
+   * replaced (MY_PACKAGE_REPLACED); false clears an earlier request.
+   */
+  fun installUpdate(path: String, reconnect: Boolean, callback: (Result<AndroidUpdateInstallState>) -> Unit)
+  /**
+   * Forgets a reconnect [installUpdate] asked for: the user cancelled the
+   * installer and the App, still running, connects again itself.
+   */
+  fun clearUpdateReconnect(callback: (Result<Unit>) -> Unit)
+  /**
+   * The system VPN settings, where Always-on VPN and "Block connections
+   * without VPN" (Android's kill switch) are turned on.
+   */
+  fun openVpnSettings(callback: (Result<Boolean>) -> Unit)
+
+  companion object {
+    /** The codec used by AndroidSystemHostApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      MessagesPigeonCodec()
+    }
+    /** Sets up an instance of `AndroidSystemHostApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: AndroidSystemHostApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.onexray.AndroidSystemHostApi.canInstallUpdates$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.canInstallUpdates{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.onexray.AndroidSystemHostApi.installUpdate$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathArg = args[0] as String
+            val reconnectArg = args[1] as Boolean
+            api.installUpdate(pathArg, reconnectArg) { result: Result<AndroidUpdateInstallState> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.onexray.AndroidSystemHostApi.clearUpdateReconnect$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.clearUpdateReconnect{ result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(MessagesPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.onexray.AndroidSystemHostApi.openVpnSettings$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.openVpnSettings{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
               }
             }
           }

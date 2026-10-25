@@ -1198,5 +1198,17 @@
   "netReportAdviceFragmentHosting": "VLESS یا Trojan با TLS و Fragment روشن روی {hosts}",
   "netReportAdviceBypassUseless": "بریدن ClientHello اینجا چیزی را باز نمی‌کند: فیلتر آن را کامل بازسازی می‌کند، پس Fragment یا zapret کمکی نمی‌کنند",
   "netReportModeSniWhitelist": "فهرست سفید نام سرورها",
-  "netReportModeSniWhitelistDetail": "آدرس‌ها پاسخ می‌دهند، اما DPI فقط نام‌های مجاز سرور (SNI) را عبور می‌دهد. این فهرست سفید بر اساس آدرس نیست: VPN با نام مجاز یا با ClientHello بریده‌شده عبور می‌کند."
+  "netReportModeSniWhitelistDetail": "آدرس‌ها پاسخ می‌دهند، اما DPI فقط نام‌های مجاز سرور (SNI) را عبور می‌دهد. این فهرست سفید بر اساس آدرس نیست: VPN با نام مجاز یا با ClientHello بریده‌شده عبور می‌کند.",
+  "appUpdateInstall": "به‌روزرسانی",
+  "appUpdateDownloading": "در حال دانلود: {received} از {total}",
+  "appUpdateInstallRestart": "نصب و راه‌اندازی دوباره",
+  "appUpdateInstallNow": "نصب",
+  "appUpdateWaitingWindows": "نصب را در پنجره ویندوز تأیید کنید. HYPER CLIENT بسته، به‌روزرسانی و دوباره اجرا می‌شود.",
+  "appUpdateWaitingAndroid": "نصب را در پنجره سیستم تأیید کنید.",
+  "appUpdateHashMismatch": "فایل دانلودشده با چک‌سام انتشار مطابقت ندارد و نصب نشد.",
+  "appUpdateInstallerCancelled": "نصب لغو شد.",
+  "appUpdateInstallPermission": "در پنجره باز شده به HYPER CLIENT اجازه نصب برنامه بدهید، سپس دوباره «نصب» را بزنید.",
+  "appUpdateFailed": "به‌روزرسانی دانلود یا نصب نشد.",
+  "androidKillSwitchDescription": "اندروید خودش برنامه‌ها را بدون VPN مسدود می‌کند: در تنظیمات VPN سیستم، «VPN همیشه روشن» و «مسدود کردن اتصال‌های بدون VPN» را برای HYPER CLIENT روشن کنید.",
+  "androidKillSwitchOpen": "باز کردن تنظیمات VPN"
 }

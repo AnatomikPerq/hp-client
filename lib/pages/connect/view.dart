@@ -268,22 +268,27 @@ class ConnectView extends StatelessWidget {
             compact: true,
           );
     final content = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      padding: EdgeInsets.fromLTRB(12, runModeSwitch == null ? 4 : 12, 12, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 34,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                ?runModeSwitch,
-                if (activity != null)
-                  PositionedDirectional(end: 0, child: activity!),
-              ],
+          // The run mode row exists only where there is a run mode (desktop);
+          // a phone starts with the metrics, and the background activity
+          // moves next to the orb.
+          if (runModeSwitch != null) ...[
+            SizedBox(
+              height: 34,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  runModeSwitch,
+                  if (activity != null)
+                    PositionedDirectional(end: 0, child: activity!),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           // Speeds and the session clock change every second; without a
           // boundary each tick repainted the whole page, node list included.
           RepaintBoundary(
@@ -291,20 +296,26 @@ class ConnectView extends StatelessWidget {
                 trafficBuilder?.call(!mobile) ??
                 TrafficReadout(view: view, desktop: !mobile),
           ),
-          const SizedBox(height: 6),
-          Center(
-            child: Semantics(
-              button: true,
-              enabled: canTap,
-              label: action,
-              onTap: canTap ? onConnection : null,
-              child: ConnectionHero(
-                key: const ValueKey('home-connection-orb'),
-                tone: tone,
-                diameter: mobile ? 96 : 104,
-                onTap: canTap ? onConnection : null,
+          SizedBox(height: mobile ? 12 : 6),
+          Stack(
+            children: [
+              Center(
+                child: Semantics(
+                  button: true,
+                  enabled: canTap,
+                  label: action,
+                  onTap: canTap ? onConnection : null,
+                  child: ConnectionHero(
+                    key: const ValueKey('home-connection-orb'),
+                    tone: tone,
+                    diameter: mobile ? 136 : 104,
+                    onTap: canTap ? onConnection : null,
+                  ),
+                ),
               ),
-            ),
+              if (runModeSwitch == null && activity != null)
+                PositionedDirectional(top: 0, end: 0, child: activity!),
+            ],
           ),
           Text(
             title,

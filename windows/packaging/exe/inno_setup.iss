@@ -60,6 +60,62 @@ Filename: "{app}\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY
 Filename: "{app}\HyperClientCore.exe"; Parameters: "unblock"; Flags: runhidden waituntilterminated; RunOnceId: "LiftKillSwitch"
 
 [Code]
+{ Update mode (/HCUPDATE=1), started by the App's update button. Once UAC
+  was accepted this creates HyperClientUpdating; the App waits for it, then
+  stops the VPN (keeping the kill switch) and exits. InitializeSetup runs
+  before the AppMutex check, so Setup waits here instead of refusing. The App
+  is started again as the original user whether or not the update went in. }
+var
+  AppClosedForUpdate: Boolean;
+
+function CreateMutexW(Attributes: Cardinal; InitialOwner: Boolean;
+  Name: String): THandle;
+  external 'CreateMutexW@kernel32.dll stdcall';
+
+function IsAppUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:HCUPDATE|0}') = '1';
+end;
+
+function InitializeSetup: Boolean;
+var
+  Waited: Integer;
+begin
+  Result := True;
+  if not IsAppUpdate then
+    Exit;
+  { Closed by Windows when Setup exits. }
+  CreateMutexW(0, False, 'HyperClientUpdating');
+  Waited := 0;
+  while CheckForMutexes('HyperClientAppRunning,Global\HyperClientAppRunning') and
+        (Waited < 120000) do
+  begin
+    Sleep(250);
+    Waited := Waited + 250;
+  end;
+  AppClosedForUpdate :=
+    not CheckForMutexes('HyperClientAppRunning,Global\HyperClientAppRunning');
+  { A line that starts with a bracket would open a new section. }
+  Log(Format('Update mode: waited %d ms for the App to exit, closed: %d', [
+    Waited, Ord(AppClosedForUpdate)]));
+end;
+
+procedure DeinitializeSetup;
+var
+  ResultCode: Integer;
+begin
+  if not AppClosedForUpdate then
+    Exit;
+  try
+    if not ExecAsOriginalUser(ExpandConstant('{app}\{{EXECUTABLE_NAME}}'), '',
+        '', SW_SHOWNORMAL, ewNoWait, ResultCode) then
+      Log('Unable to start HYPER CLIENT after the update: ' +
+        SysErrorMessage(ResultCode));
+  except
+    Log('Unable to start HYPER CLIENT after the update.');
+  end;
+end;
+
 function StartupShortcutTargetsCurrentInstall(const ShortcutPath,
   ExpectedTarget: String): Boolean;
 var

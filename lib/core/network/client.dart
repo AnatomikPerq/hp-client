@@ -197,6 +197,41 @@ class NetClient {
     return utf8.decode(bytes.takeBytes(), allowMalformed: true);
   }
 
+  /// Streams a large binary (an App update) to [path]. Redirects may leave
+  /// the origin, as GitHub's asset links do; the caller checks the hash.
+  Future<void> downloadFile(
+    Uri uri,
+    String path, {
+    required int maxBytes,
+    CancelToken? cancelToken,
+    void Function(int received)? onProgress,
+  }) async {
+    await asyncInit();
+    final response = await _downloadClient.getUri<ResponseBody>(
+      uri,
+      options: Options(responseType: ResponseType.stream),
+      cancelToken: cancelToken,
+    );
+    final sink = File(path).openWrite();
+    try {
+      var received = 0;
+      await for (final chunk in response.data!.stream) {
+        received += chunk.length;
+        if (received > maxBytes) {
+          throw const AppFailure(
+            FailureCategory.network,
+            'downloadTooLarge',
+            cause: 'The download is larger than announced',
+          );
+        }
+        sink.add(chunk);
+        onProgress?.call(received);
+      }
+    } finally {
+      await sink.close();
+    }
+  }
+
   Future<Map<String, dynamic>?> getJson(String url) async {
     try {
       await asyncInit();

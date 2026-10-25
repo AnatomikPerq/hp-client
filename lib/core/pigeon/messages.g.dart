@@ -113,6 +113,8 @@ int _deepHash(Object? value) {
 
 enum VpnStatus { disconnecting, disconnected, connecting, connected }
 
+enum AndroidUpdateInstallState { started, permissionRequired }
+
 enum PlatformPermissionKind {
   none,
   androidVpn,
@@ -499,38 +501,41 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is VpnStatus) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is PlatformPermissionKind) {
+    } else if (value is AndroidUpdateInstallState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is PlatformPermissionState) {
+    } else if (value is PlatformPermissionKind) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    } else if (value is NativeVpnCommandState) {
+    } else if (value is PlatformPermissionState) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    } else if (value is NativeLaunchAtLoginState) {
+    } else if (value is NativeVpnCommandState) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    } else if (value is AndroidAutomationSettings) {
+    } else if (value is NativeLaunchAtLoginState) {
       buffer.putUint8(134);
-      writeValue(buffer, value.encode());
-    } else if (value is BackupLocation) {
+      writeValue(buffer, value.index);
+    } else if (value is AndroidAutomationSettings) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    } else if (value is AppleVpnCapabilities) {
+    } else if (value is BackupLocation) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    } else if (value is NativeLaunchAtLoginResult) {
+    } else if (value is AppleVpnCapabilities) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    } else if (value is PlatformPermissionResult) {
+    } else if (value is NativeLaunchAtLoginResult) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is NativeVpnCommandResult) {
+    } else if (value is PlatformPermissionResult) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is AndroidAppInfo) {
+    } else if (value is NativeVpnCommandResult) {
       buffer.putUint8(140);
+      writeValue(buffer, value.encode());
+    } else if (value is AndroidAppInfo) {
+      buffer.putUint8(141);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -545,29 +550,32 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : VpnStatus.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : PlatformPermissionKind.values[value];
+        return value == null ? null : AndroidUpdateInstallState.values[value];
       case 131:
         final value = readValue(buffer) as int?;
-        return value == null ? null : PlatformPermissionState.values[value];
+        return value == null ? null : PlatformPermissionKind.values[value];
       case 132:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeVpnCommandState.values[value];
+        return value == null ? null : PlatformPermissionState.values[value];
       case 133:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeLaunchAtLoginState.values[value];
+        return value == null ? null : NativeVpnCommandState.values[value];
       case 134:
-        return AndroidAutomationSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeLaunchAtLoginState.values[value];
       case 135:
-        return BackupLocation.decode(readValue(buffer)!);
+        return AndroidAutomationSettings.decode(readValue(buffer)!);
       case 136:
-        return AppleVpnCapabilities.decode(readValue(buffer)!);
+        return BackupLocation.decode(readValue(buffer)!);
       case 137:
-        return NativeLaunchAtLoginResult.decode(readValue(buffer)!);
+        return AppleVpnCapabilities.decode(readValue(buffer)!);
       case 138:
-        return PlatformPermissionResult.decode(readValue(buffer)!);
+        return NativeLaunchAtLoginResult.decode(readValue(buffer)!);
       case 139:
-        return NativeVpnCommandResult.decode(readValue(buffer)!);
+        return PlatformPermissionResult.decode(readValue(buffer)!);
       case 140:
+        return NativeVpnCommandResult.decode(readValue(buffer)!);
+      case 141:
         return AndroidAppInfo.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1017,6 +1025,112 @@ class AndroidAutomationHostApi {
       pigeonVar_channelName,
       isNullValid: true,
     );
+  }
+}
+
+class AndroidSystemHostApi {
+  /// Constructor for [AndroidSystemHostApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  AndroidSystemHostApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
+
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  /// Whether the App may open the system installer ("install unknown apps").
+  Future<bool> canInstallUpdates() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.onexray.AndroidSystemHostApi.canInstallUpdates$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
+  }
+
+  /// Opens the system installer for a verified APK in the App's update
+  /// folder. With [reconnect] the VPN starts again once the package was
+  /// replaced (MY_PACKAGE_REPLACED); false clears an earlier request.
+  Future<AndroidUpdateInstallState> installUpdate(
+    String path,
+    bool reconnect,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.onexray.AndroidSystemHostApi.installUpdate$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[path, reconnect],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as AndroidUpdateInstallState;
+  }
+
+  /// Forgets a reconnect [installUpdate] asked for: the user cancelled the
+  /// installer and the App, still running, connects again itself.
+  Future<void> clearUpdateReconnect() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.onexray.AndroidSystemHostApi.clearUpdateReconnect$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// The system VPN settings, where Always-on VPN and "Block connections
+  /// without VPN" (Android's kill switch) are turned on.
+  Future<bool> openVpnSettings() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.onexray.AndroidSystemHostApi.openVpnSettings$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
   }
 }
 

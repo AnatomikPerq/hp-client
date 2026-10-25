@@ -19,6 +19,8 @@ import net.yuandev.onexray.pigeon.BackupApi
 import net.yuandev.onexray.vpn.OneVpnService
 import net.yuandev.onexray.automation.AutomationApi
 import net.yuandev.onexray.pigeon.AndroidAutomationHostApi
+import net.yuandev.onexray.pigeon.AndroidSystemHostApi
+import net.yuandev.onexray.system.AndroidSystemApi
 
 class MainActivity : FlutterFragmentActivity() {
 
@@ -39,6 +41,7 @@ class MainActivity : FlutterFragmentActivity() {
         BridgeHostApi.setUp(flutterEngine.dartExecutor, hostApi)
         BackupHostApi.setUp(flutterEngine.dartExecutor, backupApi)
         AndroidAutomationHostApi.setUp(flutterEngine.dartExecutor, AutomationApi(this))
+        AndroidSystemHostApi.setUp(flutterEngine.dartExecutor, AndroidSystemApi(this))
 
         hostApi.onInit(flutterApi)
     }

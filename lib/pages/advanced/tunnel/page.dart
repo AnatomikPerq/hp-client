@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:onexray/pages/shared/widgets/page_help.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:onexray/core/pigeon/messages.g.dart';
+import 'package:onexray/core/tools/platform.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/advanced/tunnel/controller.dart';
 import 'package:onexray/pages/advanced/tunnel/excluded_networks.dart';
@@ -161,6 +165,23 @@ class VpnTunnelPane extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // Android's kill switch belongs to the system; the App can
+                  // only take the user to it.
+                  if (AppPlatform.isAndroid)
+                    _section(
+                      icon: LucideIcons.shieldBan,
+                      title: l.killSwitchTitle,
+                      description: l.androidKillSwitchDescription,
+                      children: [
+                        SettingRow(
+                          title: l.androidKillSwitchOpen,
+                          showChevron: true,
+                          onTap: () => unawaited(
+                            AndroidSystemHostApi().openVpnSettings(),
+                          ),
+                        ),
+                      ],
+                    ),
                   if (controller.service.requiresInterface)
                     _section(
                       icon: LucideIcons.shieldBan,

@@ -1198,5 +1198,17 @@
   "netReportAdviceFragmentHosting": "开启 Fragment 的带 TLS 的 VLESS 或 Trojan，位于 {hosts}",
   "netReportAdviceBypassUseless": "切分 ClientHello 在这里打不开任何东西：过滤器会把它重新拼接，Fragment 和 zapret 都没用",
   "netReportModeSniWhitelist": "服务器名称白名单",
-  "netReportModeSniWhitelistDetail": "地址有响应，但 DPI 只放行允许的服务器名称（SNI）。这不是按地址的白名单：用允许的名称或切分后的 ClientHello，VPN 可以通过。"
+  "netReportModeSniWhitelistDetail": "地址有响应，但 DPI 只放行允许的服务器名称（SNI）。这不是按地址的白名单：用允许的名称或切分后的 ClientHello，VPN 可以通过。",
+  "appUpdateInstall": "更新",
+  "appUpdateDownloading": "正在下载：{received} / {total}",
+  "appUpdateInstallRestart": "安装并重启",
+  "appUpdateInstallNow": "安装",
+  "appUpdateWaitingWindows": "请在 Windows 提示中确认安装。HYPER CLIENT 将关闭、更新并重新启动。",
+  "appUpdateWaitingAndroid": "请在系统窗口中确认安装。",
+  "appUpdateHashMismatch": "下载的文件与发布的校验和不一致，未安装。",
+  "appUpdateInstallerCancelled": "安装已取消。",
+  "appUpdateInstallPermission": "请在打开的窗口中允许 HYPER CLIENT 安装应用，然后再次点击“安装”。",
+  "appUpdateFailed": "无法下载或安装更新。",
+  "androidKillSwitchDescription": "Android 可自行阻止未经 VPN 的应用：在系统 VPN 设置中为 HYPER CLIENT 开启“始终开启的 VPN”和“屏蔽未使用 VPN 的连接”。",
+  "androidKillSwitchOpen": "打开 VPN 设置"
 }

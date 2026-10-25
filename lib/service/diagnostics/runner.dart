@@ -88,8 +88,11 @@ class NetworkReportRunner {
 
   bool get running => _timer != null;
 
+  /// iOS measures its own tunnel while it runs. Android keeps the probes
+  /// out of it (libXray `registerSocketProtector`), like a desktop binds them
+  /// to the physical interface.
   static NetworkReportBlocker? blocker() {
-    if (!AppPlatform.isMobile) return null;
+    if (!AppPlatform.isIOS) return null;
     final phase = ConnectionCoordinator.instance.state.value.phase;
     return phase == ConnectionPhase.disconnected
         ? null

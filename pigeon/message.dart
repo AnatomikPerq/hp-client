@@ -94,6 +94,31 @@ abstract class AndroidAutomationHostApi {
   void clear();
 }
 
+enum AndroidUpdateInstallState { started, permissionRequired }
+
+@HostApi()
+abstract class AndroidSystemHostApi {
+  /// Whether the App may open the system installer ("install unknown apps").
+  @asyncCallback
+  bool canInstallUpdates();
+
+  /// Opens the system installer for a verified APK in the App's update
+  /// folder. With [reconnect] the VPN starts again once the package was
+  /// replaced (MY_PACKAGE_REPLACED); false clears an earlier request.
+  @asyncCallback
+  AndroidUpdateInstallState installUpdate(String path, bool reconnect);
+
+  /// Forgets a reconnect [installUpdate] asked for: the user cancelled the
+  /// installer and the App, still running, connects again itself.
+  @asyncCallback
+  void clearUpdateReconnect();
+
+  /// The system VPN settings, where Always-on VPN and "Block connections
+  /// without VPN" (Android's kill switch) are turned on.
+  @asyncCallback
+  bool openVpnSettings();
+}
+
 class BackupLocation {
   BackupLocation({required this.identifier, required this.label});
   final String identifier;

@@ -85,7 +85,7 @@ def begin_build(builder, target: str) -> dict:
         ),
         "targetArchitectures": {
             "ios": ["arm64"], "macos": ["arm64", "x86_64"],
-            "macos_se": ["arm64", "x86_64"], "android": ["arm64", "x86_64"],
+            "macos_se": ["arm64", "x86_64"], "android": ["arm64", "arm", "x86_64"],
         }.get(target, [getattr(
             builder.builder, "target_architecture", platform.machine().lower(),
         )]),
@@ -133,7 +133,7 @@ def finish_build(builder, receipt: dict) -> Path:
                   ("fastlane", "--version"), ("ruby", "--version")),
         "macos_se": (("xcodebuild", "-version"), ("pod", "--version"),
                      ("fastlane", "--version"), ("ruby", "--version")),
-        "android": (("java", "-version"), ("fastlane", "--version")),
+        "android": (("java", "-version"),),
         "windows": (("rustc", "-Vv"), ("cargo", "--version"),
                     ("cmake", "--version"), ("gcc", "--version")),
         "linux": (("clang", "--version"), ("cmake", "--version"),
@@ -185,7 +185,7 @@ def finish_build(builder, receipt: dict) -> Path:
         "ios": (f"{project}-ios*.ipa",),
         "macos": ("*.pkg",),
         "macos_se": (f"{project}-macos-universal*.zip",),
-        "android": (f"{project}-android-universal*.apk", "app-release.aab"),
+        "android": (f"{project}-*-android-*.apk",),
         "linux": (f"{project}-{builder.builder.package_suffix}.zip",
                   f"{project}-{builder.builder.package_suffix}.deb"),
     }

@@ -94,7 +94,8 @@ class FlutterBuilder(Builder):
         run_command([dart_command(), "run", "tool/ffigen.dart"], cwd=self.root_dir)
 
     def build_app(self):
-        if self.system in ("ios", "macos") or (
+        # HYPER CLIENT: Android builds its signed split APKs itself.
+        if self.system in ("ios", "macos", "android") or (
             self.system == "windows" and self.builder.mode == "exe"
         ):
             self.builder.build_app()

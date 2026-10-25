@@ -25,7 +25,11 @@ final class AppStartupService {
   Future<void> prepare() async {
     final preferences = PreferencesKey();
     try {
-      _connectOnAppLaunch = await preferences.readConnectOnAppLaunch();
+      // Read both: the update flag is one-shot and must not survive a launch
+      // where "connect on launch" already applies.
+      final afterUpdate = await preferences.takeAppUpdateReconnect();
+      _connectOnAppLaunch =
+          await preferences.readConnectOnAppLaunch() || afterUpdate;
     } catch (error, stackTrace) {
       ygLogger("read connect on app launch failed: $error\n$stackTrace");
       _connectOnAppLaunch = false;

@@ -843,6 +843,28 @@ class ConnectionCoordinator with WidgetsBindingObserver {
     return _run(_stopForMaintenance);
   }
 
+  /// Stops the Core before the App replaces itself and tells whether the
+  /// updated App should connect again. A tunnel the user wants stays wanted:
+  /// like a restart, this keeps the kill switch blocking (and the system
+  /// proxy on the dead port) until the new App reconnects.
+  Future<bool> suspendForUpdate() async {
+    cancel();
+    var reconnect = false;
+    await _run(() async {
+      final current = await _inspect(await _currentRuntime());
+      reconnect = current.connected || current.killSwitchBlocking;
+      if (current.status == VpnStatus.disconnected) return;
+      state.value = ConnectionView(
+        phase: ConnectionPhase.disconnecting,
+        runtime: current.runtime,
+        traffic: current.traffic,
+      );
+      _publish(await _stopForRestart());
+      AppLog.info('stopped for an App update');
+    });
+    return reconnect;
+  }
+
   Future<void> pauseForDataClear() {
     cancel();
     return _commands.pause();

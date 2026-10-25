@@ -72,8 +72,8 @@ class NetworkReportController extends PageCubit<NetworkReportPageState> {
        _share = share ?? OutgoingShare(),
        _interfaces = interfaces ?? NetworkReportRunner.interfaces,
        super(const NetworkReportPageState()) {
-    // Only a phone waits for the VPN to go down (see NetworkReportBlocker).
-    if (AppPlatform.isMobile) {
+    // Only iOS waits for the VPN to go down (see NetworkReportBlocker).
+    if (AppPlatform.isIOS) {
       ConnectionCoordinator.instance.state.addListener(_connectionChanged);
     }
     load();
@@ -203,7 +203,7 @@ class NetworkReportController extends PageCubit<NetworkReportPageState> {
 
   @override
   void disposePageResources() {
-    if (AppPlatform.isMobile) {
+    if (AppPlatform.isIOS) {
       ConnectionCoordinator.instance.state.removeListener(_connectionChanged);
     }
     _runner.dispose();

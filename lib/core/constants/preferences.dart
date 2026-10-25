@@ -68,6 +68,20 @@ class PreferencesKey {
     await _prefs.setString(_appUpdateSkippedVersion, value);
   }
 
+  static const _appUpdateReconnect = "${_namespace}appUpdateReconnect";
+
+  /// Written right before the App exits for its own update while a tunnel
+  /// was wanted; the App the installer starts reads it once and connects.
+  Future<bool> takeAppUpdateReconnect() async {
+    final value = await _prefs.getBool(_appUpdateReconnect) ?? false;
+    if (value) await _prefs.remove(_appUpdateReconnect);
+    return value;
+  }
+
+  Future<void> saveAppUpdateReconnect() async {
+    await _prefs.setBool(_appUpdateReconnect, true);
+  }
+
   static const _pingState = "${_namespace}pingState";
 
   Future<Map<String, dynamic>?> readPingState() async {
@@ -215,6 +229,7 @@ class PreferencesKey {
       _prefs.remove('app2.vpnStartTimestamp'),
       _prefs.remove(_appUpdateLastCheckTimestamp),
       _prefs.remove(_appUpdateSkippedVersion),
+      _prefs.remove(_appUpdateReconnect),
       _prefs.remove(_pingState),
       _prefs.remove(_autoUpdate),
       _prefs.remove(_backup),

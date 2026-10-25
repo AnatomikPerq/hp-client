@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="one_xray_blue">#007AFF</color>
+    <!-- The fork's night background (website/assets/favicon.svg). -->
+    <color name="hyper_night">#070B14</color>
 </resources>

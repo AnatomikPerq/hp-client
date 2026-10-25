@@ -408,13 +408,16 @@ class ConnectionPreparation {
             int.parse(reuse.request.metricsPort!),
           ];
     // Desktop Cores outlive UAC prompts; switching nodes on them goes through
-    // their API instead of a restart. Raw keeps its own API setup, if any.
-    // A provider configuration owns its graph like Raw does.
+    // their API instead of a restart. On Android a restart rebuilds the
+    // tunnel and drops every connection; the App reaches the Core in :native
+    // over loopback, which the VPN never captures. Raw keeps its own API
+    // setup, if any. A provider configuration owns its graph like Raw does.
     LiveControl? control;
     if (!settings.expert &&
         profile == null &&
         (platform == ConnectionPlatform.windows ||
-            platform == ConnectionPlatform.linux)) {
+            platform == ConnectionPlatform.linux ||
+            platform == ConnectionPlatform.android)) {
       control =
           reuse?.control ??
           LiveControl.create(

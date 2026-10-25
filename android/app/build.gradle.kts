@@ -31,7 +31,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "net.yuandev.onexray"
+        // The fork's own id: it installs next to upstream's Play build, whose
+        // signature differs. Kotlin packages and the namespace stay upstream's.
+        applicationId = "io.github.anatomikperq.hyperclient"
         minSdk = 29
         targetSdk = 37
         versionCode = flutter.versionCode
@@ -39,7 +41,7 @@ android {
         if (!splitPerAbi) {
             ndk {
                 abiFilters.clear()
-                abiFilters += listOf("arm64-v8a", "x86_64")
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
             }
         }
     }
@@ -50,7 +52,7 @@ android {
                 reset()
                 isEnable = true
                 isUniversalApk = false
-                include("arm64-v8a", "x86_64")
+                include("arm64-v8a", "armeabi-v7a", "x86_64")
             }
         }
     }

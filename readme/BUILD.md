@@ -116,6 +116,50 @@ python build_scripts/main.py HyperClient windows --windows-mode exe
 этой защиты не даёт (её можно распаковать куда угодно) — для TUN только
 установщик.
 
+## Android
+
+| Что | Где на машине владельца | Зачем |
+|---|---|---|
+| Android SDK | `%LOCALAPPDATA%\Android\sdk`: platform 37.0, build-tools 37, `cmdline-tools\latest` | `compileSdk = 37` |
+| NDK 30.0.16248370 | там же, `ndk\30.0.16248370` | `gomobile bind` (`ANDROID_NDK_HOME`) и `ndkVersion` приложения; NDK 28 Gradle докачивает сам для плагинов |
+| JDK | `C:\Program Files\Android\Android Studio\jbr` (`JAVA_HOME`) | Gradle, `keytool` |
+| gomobile | `%USERPROFILE%\go\bin`, ставит сам `build/main.py android` | `libXray.aar` |
+| Ключ подписи | `C:\Users\BADAB\dev\keys\hyperclient-release.jks`, пароль в `hyperclient-release.properties` рядом | **хранить копию**: обновление встаёт поверх только с тем же ключом |
+
+`applicationId` форка — `io.github.anatomikperq.hyperclient` (рядом с
+OneXray из Google Play), а пространство имён Kotlin осталось апстримовским.
+`android/keystore/keystore.properties` (в `.gitignore`) — копия файла с
+паролем; без неё релизный скрипт отказывается собирать: Gradle подписал бы
+отладочным ключом, и такой APK нельзя обновить подписанным.
+
+Gradle не собирает из пути с кириллицей и раскрывает junction обратно, поэтому
+Android собирается с **подставленного диска** (`subst` Java не раскрывает).
+Исходники плагинов при этом лежат на `C:` (pub cache), а сборка на `P:`, и
+инкрементальная компиляция Kotlin падает («different roots») — её
+выключает `--android-project-arg kotlin.incremental=false`:
+
+```powershell
+subst P: "C:\Users\BADAB\Рабочий стол\projects"   # до перезагрузки
+$env:Path = "C:\Users\BADAB\flutter\stable\bin;$env:USERPROFILE\go\bin;" + $env:Path
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\sdk"
+$env:ANDROID_NDK_HOME = "$env:ANDROID_HOME\ndk\30.0.16248370"
+$env:GOTOOLCHAIN = "auto"; $env:BUILD_NUMBER = "10"; $env:PYTHONUTF8 = "1"
+Set-Location P:\hp-client
+python build_scripts/main.py HyperClient android
+```
+
+Скрипт собирает `libXray.aar` (`gomobile bind`, все ABI), кладёт его в
+`android/app/libs/` и собирает три подписанных APK:
+`..\output\HyperClient-<версия>-android-{arm64-v8a,armeabi-v7a,x86_64}.apk`.
+Под этими именами они и выкладываются в релиз: обновление внутри приложения
+ищет APK своего ABI по имени.
+
+Отладочная сборка для эмулятора — `flutter build apk --debug
+--target-platform android-x64 --android-project-arg kotlin.incremental=false`
+с того же диска `P:`. Эмулятор `hc-test` (Android 16, x86_64) лежит на
+`D:\VMs\android\avd`: запускать с `ANDROID_AVD_HOME=D:\VMs\android\avd`.
+
 ## Сборка в CI
 
 `.github/workflows/build.yml` собирает то же самое на `windows-2025`: на

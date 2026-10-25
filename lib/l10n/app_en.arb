@@ -3616,5 +3616,27 @@
   },
   "netReportAdviceBypassUseless": "Cutting up the ClientHello opens nothing here: the filter reassembles it, so Fragment or zapret will not help",
   "netReportModeSniWhitelist": "White list of server names",
-  "netReportModeSniWhitelistDetail": "The addresses answer, but DPI passes only allowed server names (SNI). Not a white list by address: a VPN gets through with an allowed name or with the hello cut up."
+  "netReportModeSniWhitelistDetail": "The addresses answer, but DPI passes only allowed server names (SNI). Not a white list by address: a VPN gets through with an allowed name or with the hello cut up.",
+  "appUpdateInstall": "Update",
+  "appUpdateDownloading": "Downloading: {received} of {total}",
+  "@appUpdateDownloading": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "appUpdateInstallRestart": "Install and restart",
+  "appUpdateInstallNow": "Install",
+  "appUpdateWaitingWindows": "Confirm the installation in the Windows prompt. HYPER CLIENT closes, updates and starts again.",
+  "appUpdateWaitingAndroid": "Confirm the installation in the system window.",
+  "appUpdateHashMismatch": "The downloaded file does not match the release checksum and was not installed.",
+  "appUpdateInstallerCancelled": "The installation was cancelled.",
+  "appUpdateInstallPermission": "Allow HYPER CLIENT to install apps in the window that opened, then press Install again.",
+  "appUpdateFailed": "The update could not be downloaded or installed.",
+  "androidKillSwitchDescription": "Android blocks apps without the VPN itself: in the system VPN settings turn on Always-on VPN and Block connections without VPN for HYPER CLIENT.",
+  "androidKillSwitchOpen": "Open VPN settings"
 }

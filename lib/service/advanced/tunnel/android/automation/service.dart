@@ -10,10 +10,13 @@ class AndroidAutomationService {
   final AndroidAutomationHostApi _api;
   final bool _supported;
 
-  static const packageName = 'net.yuandev.onexray';
-  static const receiver = '$packageName.automation.VpnAutomationReceiver';
-  static const startAction = '$packageName.action.START_VPN';
-  static const stopAction = '$packageName.action.STOP_VPN';
+  /// The fork's applicationId; class names and actions keep upstream's
+  /// namespace (`android/app/build.gradle.kts`).
+  static const packageName = 'io.github.anatomikperq.hyperclient';
+  static const _namespace = 'net.yuandev.onexray';
+  static const receiver = '$_namespace.automation.VpnAutomationReceiver';
+  static const startAction = '$_namespace.action.START_VPN';
+  static const stopAction = '$_namespace.action.STOP_VPN';
   static const parameters =
       'Target: Broadcast Receiver\n'
       'Package: $packageName\nClass: $receiver\n'

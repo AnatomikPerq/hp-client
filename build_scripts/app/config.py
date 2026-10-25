@@ -18,7 +18,6 @@ PROJECT_CONFIG = {
         "core.bin.src.file.windows": "bin/xray.exe",
         "core.bin.dst.file.linux": "app/HyperClientCore",
         "core.bin.dst.file.windows": "app/HyperClientCore.exe",
-        "app.release.dir.android": "../build/app/outputs",
         "app.release.dir.linux": "../dist",
     },
 }

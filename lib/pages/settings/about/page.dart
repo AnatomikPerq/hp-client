@@ -155,7 +155,9 @@ class AboutOneXrayPage extends StatelessWidget {
                           icon: LucideIcons.bookOpen,
                           link: SettingsLink.documentation,
                         ),
-                        if (AppPlatform.isMobile || AppPlatform.isMacOS)
+                        // Store reviews only: the fork's Android build ships
+                        // from GitHub releases, not Google Play.
+                        if (AppPlatform.isIOS || AppPlatform.isMacOS)
                           _LinkRow(
                             label: l10n.prototypeRateOneXray,
                             icon: LucideIcons.star,

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:onexray/core/tools/traffic_format.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/settings/app_update/controller.dart';
 import 'package:onexray/pages/settings/app_update/params.dart';
@@ -22,13 +23,20 @@ class AppUpdateDialog extends StatelessWidget {
       child: BlocBuilder<AppUpdateDialogController, AppUpdateDialogAction?>(
         builder: (context, action) {
           final controller = context.read<AppUpdateDialogController>();
-          return AppUpdateDialogView(
-            updateInfo: params.updateInfo,
-            action: action,
-            onLater: () => controller.later(context),
-            onSkip: () => controller.skip(context),
-            onUpdate: () => controller.update(context),
-            onOpenLink: (href) => controller.openLink(context, href),
+          return ValueListenableBuilder(
+            valueListenable: controller.transfer,
+            builder: (context, transfer, _) => AppUpdateDialogView(
+              updateInfo: params.updateInfo,
+              action: action,
+              transfer: transfer.isFor(params.updateInfo)
+                  ? transfer
+                  : const AppUpdateTransfer.idle(),
+              onLater: () => controller.later(context),
+              onSkip: () => controller.skip(context),
+              onUpdate: () => controller.update(context),
+              onCancelDownload: controller.cancelDownload,
+              onOpenLink: (href) => controller.openLink(context, href),
+            ),
           );
         },
       ),
@@ -39,18 +47,22 @@ class AppUpdateDialog extends StatelessWidget {
 class AppUpdateDialogView extends StatelessWidget {
   final AppUpdateInfo updateInfo;
   final AppUpdateDialogAction? action;
+  final AppUpdateTransfer transfer;
   final VoidCallback onLater;
   final VoidCallback onSkip;
   final VoidCallback onUpdate;
+  final VoidCallback? onCancelDownload;
   final ValueChanged<String?> onOpenLink;
 
   const AppUpdateDialogView({
     super.key,
     required this.updateInfo,
     this.action,
+    this.transfer = const AppUpdateTransfer.idle(),
     required this.onLater,
     required this.onSkip,
     required this.onUpdate,
+    this.onCancelDownload,
     required this.onOpenLink,
   });
 
@@ -128,19 +140,80 @@ class AppUpdateDialogView extends StatelessWidget {
                   ),
                 ),
               ],
+              if (_status(l10n) case final status?) ...[
+                Divider(height: 1, color: ColorManager.border(context)),
+                _UpdateStatus(transfer: transfer, text: status),
+              ],
               Divider(height: 1, color: ColorManager.border(context)),
               _UpdateActions(
-                laterLabel: l10n.appUpdateLater,
-                skipLabel: l10n.appUpdateSkipVersion,
-                updateLabel: l10n.appUpdateOpen,
+                updateInfo: updateInfo,
+                transfer: transfer,
                 action: action,
                 onLater: onLater,
                 onSkip: onSkip,
                 onUpdate: onUpdate,
+                onCancelDownload: onCancelDownload,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+extension on AppUpdateDialogView {
+  String? _status(AppLocalizations l10n) => switch (transfer.phase) {
+    AppUpdateTransferPhase.idle || AppUpdateTransferPhase.ready => null,
+    AppUpdateTransferPhase.downloading => l10n.appUpdateDownloading(
+      formatTraffic(transfer.received, connection: true),
+      formatTraffic(transfer.total, connection: true),
+    ),
+    AppUpdateTransferPhase.installing =>
+      updateInfo.package?.kind == AppUpdatePackageKind.androidApk
+          ? l10n.appUpdateWaitingAndroid
+          : l10n.appUpdateWaitingWindows,
+    AppUpdateTransferPhase.failed => updateFailureMessage(l10n, transfer.error),
+  };
+}
+
+class _UpdateStatus extends StatelessWidget {
+  final AppUpdateTransfer transfer;
+  final String text;
+
+  const _UpdateStatus({required this.transfer, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final downloading = transfer.phase == AppUpdateTransferPhase.downloading;
+    final failed = transfer.phase == AppUpdateTransferPhase.failed;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            text,
+            style: failed
+                ? AppTypography.updateNotes.copyWith(
+                    color: ColorManager.palette(context).destructive,
+                  )
+                : AppTypography.updateNotes,
+          ),
+          if (downloading ||
+              transfer.phase == AppUpdateTransferPhase.installing) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                minHeight: 4,
+                value: downloading && transfer.total > 0
+                    ? transfer.received / transfer.total
+                    : null,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -184,49 +257,90 @@ class _VersionGrid extends StatelessWidget {
 }
 
 class _UpdateActions extends StatelessWidget {
-  final String laterLabel;
-  final String skipLabel;
-  final String updateLabel;
+  final AppUpdateInfo updateInfo;
+  final AppUpdateTransfer transfer;
   final AppUpdateDialogAction? action;
   final VoidCallback onLater;
   final VoidCallback onSkip;
   final VoidCallback onUpdate;
+  final VoidCallback? onCancelDownload;
 
   const _UpdateActions({
-    required this.laterLabel,
-    required this.skipLabel,
-    required this.updateLabel,
+    required this.updateInfo,
+    required this.transfer,
     required this.action,
     required this.onLater,
     required this.onSkip,
     required this.onUpdate,
+    required this.onCancelDownload,
   });
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final package = updateInfo.package;
+    final phase = transfer.phase;
+    final skipping = action == AppUpdateDialogAction.skip;
+    final later = ShadButton.outline(
+      height: 40,
+      onPressed: onLater,
+      child: Text(l10n.appUpdateLater),
+    );
+    final actions = switch (phase) {
+      AppUpdateTransferPhase.downloading => [
+        later,
+        ShadButton.outline(
+          height: 40,
+          onPressed: onCancelDownload,
+          child: Text(l10n.buttonCancel),
+        ),
+      ],
+      AppUpdateTransferPhase.installing => [
+        later,
+        ShadButton(
+          enabled: false,
+          child: ButtonProgress(
+            busy: true,
+            child: Text(_installLabel(l10n, package)),
+          ),
+        ),
+      ],
+      AppUpdateTransferPhase.ready => [
+        later,
+        ShadButton(
+          onPressed: onUpdate,
+          child: Text(_installLabel(l10n, package)),
+        ),
+      ],
+      AppUpdateTransferPhase.idle || AppUpdateTransferPhase.failed => [
+        later,
+        ShadButton.outline(
+          height: 40,
+          enabled: !skipping,
+          onPressed: skipping ? null : onSkip,
+          child: ButtonProgress(
+            busy: skipping,
+            child: Text(l10n.appUpdateSkipVersion),
+          ),
+        ),
+        ShadButton(
+          onPressed: onUpdate,
+          child: Text(
+            package == null
+                ? l10n.appUpdateOpen
+                : phase == AppUpdateTransferPhase.failed
+                ? l10n.buttonRetry
+                : l10n.appUpdateInstall,
+          ),
+        ),
+      ],
+    };
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       color: ColorManager.palette(context).muted,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final actions = [
-            ShadButton.outline(
-              height: 40,
-              onPressed: onLater,
-              child: Text(laterLabel),
-            ),
-            ShadButton.outline(
-              height: 40,
-              enabled: action != AppUpdateDialogAction.skip,
-              onPressed: action == AppUpdateDialogAction.skip ? null : onSkip,
-              child: ButtonProgress(
-                busy: action == AppUpdateDialogAction.skip,
-                child: Text(skipLabel),
-              ),
-            ),
-            ShadButton(onPressed: onUpdate, child: Text(updateLabel)),
-          ];
           if (constraints.maxWidth < 460) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -251,4 +365,9 @@ class _UpdateActions extends StatelessWidget {
       ),
     );
   }
+
+  static String _installLabel(AppLocalizations l10n, AppUpdatePackage? p) =>
+      p?.kind == AppUpdatePackageKind.androidApk
+      ? l10n.appUpdateInstallNow
+      : l10n.appUpdateInstallRestart;
 }

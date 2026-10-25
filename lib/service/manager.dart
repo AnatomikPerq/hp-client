@@ -109,6 +109,7 @@ abstract final class ServiceManager {
   static Future<void> _checkUpdate() async {
     try {
       final service = AppUpdateService();
+      await service.removeDownloads();
       if (!await service.shouldRunAutomaticCheck()) return;
       await service.recordAutomaticCheck();
       final result = await service.checkForUpdate();

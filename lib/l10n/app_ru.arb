@@ -1198,5 +1198,17 @@
   "netReportAdviceFragmentHosting": "VLESS или Trojan с TLS и включённым Fragment на {hosts}",
   "netReportAdviceBypassUseless": "Разрезанный ClientHello здесь ничего не открывает: фильтр собирает его целиком, Fragment и zapret не помогут",
   "netReportModeSniWhitelist": "Белый список имён серверов",
-  "netReportModeSniWhitelistDetail": "Адреса отвечают, но DPI пропускает только разрешённые имена серверов (SNI). Это не белый список по адресам: VPN проходит с разрешённым именем или с разрезанным ClientHello."
+  "netReportModeSniWhitelistDetail": "Адреса отвечают, но DPI пропускает только разрешённые имена серверов (SNI). Это не белый список по адресам: VPN проходит с разрешённым именем или с разрезанным ClientHello.",
+  "appUpdateInstall": "Обновить",
+  "appUpdateDownloading": "Скачивание: {received} из {total}",
+  "appUpdateInstallRestart": "Установить и перезапустить",
+  "appUpdateInstallNow": "Установить",
+  "appUpdateWaitingWindows": "Подтвердите установку в окне Windows. HYPER CLIENT закроется, обновится и запустится снова.",
+  "appUpdateWaitingAndroid": "Подтвердите установку в системном окне.",
+  "appUpdateHashMismatch": "Скачанный файл не совпал с контрольной суммой релиза и не установлен.",
+  "appUpdateInstallerCancelled": "Установка отменена.",
+  "appUpdateInstallPermission": "Разрешите HYPER CLIENT устанавливать приложения в открывшемся окне и нажмите «Установить» ещё раз.",
+  "appUpdateFailed": "Не удалось скачать или установить обновление.",
+  "androidKillSwitchDescription": "Android сам блокирует приложения без VPN: в системных настройках VPN включите для HYPER CLIENT «Постоянная VPN» и «Блокировать соединения без VPN».",
+  "androidKillSwitchOpen": "Открыть настройки VPN"
 }

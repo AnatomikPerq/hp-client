@@ -195,6 +195,11 @@ enum VpnStatus: Int, CaseIterable {
   case connected = 3
 }
 
+enum AndroidUpdateInstallState: Int, CaseIterable {
+  case started = 0
+  case permissionRequired = 1
+}
+
 enum PlatformPermissionKind: Int, CaseIterable {
   case none = 0
   case androidVpn = 1
@@ -533,40 +538,46 @@ private class MessagesPigeonCodecReader: FlutterStandardReader {
     case 130:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return PlatformPermissionKind(rawValue: enumResultAsInt)
+        return AndroidUpdateInstallState(rawValue: enumResultAsInt)
       }
       return nil
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return PlatformPermissionState(rawValue: enumResultAsInt)
+        return PlatformPermissionKind(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeVpnCommandState(rawValue: enumResultAsInt)
+        return PlatformPermissionState(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeLaunchAtLoginState(rawValue: enumResultAsInt)
+        return NativeVpnCommandState(rawValue: enumResultAsInt)
       }
       return nil
     case 134:
-      return AndroidAutomationSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeLaunchAtLoginState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 135:
-      return BackupLocation.fromList(self.readValue() as! [Any?])
+      return AndroidAutomationSettings.fromList(self.readValue() as! [Any?])
     case 136:
-      return AppleVpnCapabilities.fromList(self.readValue() as! [Any?])
+      return BackupLocation.fromList(self.readValue() as! [Any?])
     case 137:
-      return NativeLaunchAtLoginResult.fromList(self.readValue() as! [Any?])
+      return AppleVpnCapabilities.fromList(self.readValue() as! [Any?])
     case 138:
-      return PlatformPermissionResult.fromList(self.readValue() as! [Any?])
+      return NativeLaunchAtLoginResult.fromList(self.readValue() as! [Any?])
     case 139:
-      return NativeVpnCommandResult.fromList(self.readValue() as! [Any?])
+      return PlatformPermissionResult.fromList(self.readValue() as! [Any?])
     case 140:
+      return NativeVpnCommandResult.fromList(self.readValue() as! [Any?])
+    case 141:
       return AndroidAppInfo.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -579,38 +590,41 @@ private class MessagesPigeonCodecWriter: FlutterStandardWriter {
     if let value = value as? VpnStatus {
       super.writeByte(129)
       super.writeValue(value.rawValue)
-    } else if let value = value as? PlatformPermissionKind {
+    } else if let value = value as? AndroidUpdateInstallState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? PlatformPermissionState {
+    } else if let value = value as? PlatformPermissionKind {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeVpnCommandState {
+    } else if let value = value as? PlatformPermissionState {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeLaunchAtLoginState {
+    } else if let value = value as? NativeVpnCommandState {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? AndroidAutomationSettings {
+    } else if let value = value as? NativeLaunchAtLoginState {
       super.writeByte(134)
-      super.writeValue(value.toList())
-    } else if let value = value as? BackupLocation {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? AndroidAutomationSettings {
       super.writeByte(135)
       super.writeValue(value.toList())
-    } else if let value = value as? AppleVpnCapabilities {
+    } else if let value = value as? BackupLocation {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeLaunchAtLoginResult {
+    } else if let value = value as? AppleVpnCapabilities {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? PlatformPermissionResult {
+    } else if let value = value as? NativeLaunchAtLoginResult {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeVpnCommandResult {
+    } else if let value = value as? PlatformPermissionResult {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? AndroidAppInfo {
+    } else if let value = value as? NativeVpnCommandResult {
       super.writeByte(140)
+      super.writeValue(value.toList())
+    } else if let value = value as? AndroidAppInfo {
+      super.writeByte(141)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -1002,6 +1016,101 @@ class AndroidAutomationHostApiSetup {
       }
     } else {
       clearChannel.setMessageHandler(nil)
+    }
+  }
+}
+/// Generated protocol from Pigeon that represents a handler of messages from Flutter.
+protocol AndroidSystemHostApi {
+  /// Whether the App may open the system installer ("install unknown apps").
+  func canInstallUpdates(completion: @escaping (Result<Bool, Error>) -> Void)
+  /// Opens the system installer for a verified APK in the App's update
+  /// folder. With [reconnect] the VPN starts again once the package was
+  /// replaced (MY_PACKAGE_REPLACED); false clears an earlier request.
+  func installUpdate(path: String, reconnect: Bool, completion: @escaping (Result<AndroidUpdateInstallState, Error>) -> Void)
+  /// Forgets a reconnect [installUpdate] asked for: the user cancelled the
+  /// installer and the App, still running, connects again itself.
+  func clearUpdateReconnect(completion: @escaping (Result<Void, Error>) -> Void)
+  /// The system VPN settings, where Always-on VPN and "Block connections
+  /// without VPN" (Android's kill switch) are turned on.
+  func openVpnSettings(completion: @escaping (Result<Bool, Error>) -> Void)
+}
+
+/// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
+class AndroidSystemHostApiSetup {
+  static var codec: FlutterStandardMessageCodec { MessagesPigeonCodec.shared }
+  /// Sets up an instance of `AndroidSystemHostApi` to handle messages through the `binaryMessenger`.
+  static func setUp(binaryMessenger: FlutterBinaryMessenger, api: AndroidSystemHostApi?, messageChannelSuffix: String = "") {
+    let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// Whether the App may open the system installer ("install unknown apps").
+    let canInstallUpdatesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.onexray.AndroidSystemHostApi.canInstallUpdates\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      canInstallUpdatesChannel.setMessageHandler { _, reply in
+        api.canInstallUpdates { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      canInstallUpdatesChannel.setMessageHandler(nil)
+    }
+    /// Opens the system installer for a verified APK in the App's update
+    /// folder. With [reconnect] the VPN starts again once the package was
+    /// replaced (MY_PACKAGE_REPLACED); false clears an earlier request.
+    let installUpdateChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.onexray.AndroidSystemHostApi.installUpdate\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      installUpdateChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pathArg = args[0] as! String
+        let reconnectArg = args[1] as! Bool
+        api.installUpdate(path: pathArg, reconnect: reconnectArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      installUpdateChannel.setMessageHandler(nil)
+    }
+    /// Forgets a reconnect [installUpdate] asked for: the user cancelled the
+    /// installer and the App, still running, connects again itself.
+    let clearUpdateReconnectChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.onexray.AndroidSystemHostApi.clearUpdateReconnect\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearUpdateReconnectChannel.setMessageHandler { _, reply in
+        api.clearUpdateReconnect { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      clearUpdateReconnectChannel.setMessageHandler(nil)
+    }
+    /// The system VPN settings, where Always-on VPN and "Block connections
+    /// without VPN" (Android's kill switch) are turned on.
+    let openVpnSettingsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.onexray.AndroidSystemHostApi.openVpnSettings\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      openVpnSettingsChannel.setMessageHandler { _, reply in
+        api.openVpnSettings { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      openVpnSettingsChannel.setMessageHandler(nil)
     }
   }
 }

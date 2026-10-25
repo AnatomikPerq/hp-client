@@ -19,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import libXray.DialerController
 import libXray.LibXray
 import net.yuandev.onexray.vpn.VpnController
 import net.yuandev.onexray.vpn.VpnStatusConnection
@@ -59,10 +60,17 @@ class AppHostApi(
     }
 
     private var flutterApi: AppFlutterApi? = null
+    private val socketProtector = VpnService()
 
     fun onInit(api: AppFlutterApi) {
         XLog.init()
         flutterApi = api
+        // minewire engines and network report probes run in this process.
+        // VpnService.protect works in every process of the VPN app, not only
+        // in the service's, so their sockets can leave outside the tunnel.
+        LibXray.registerSocketProtector(object : DialerController {
+            override fun protectFd(p0: Long): Boolean = socketProtector.protect(p0.toInt())
+        })
         scope.launch {
             try { api.vpnStatusChanged(vpnStatus.read()) }
             catch (error: Exception) { XLog.e("Initial VPN status failed", error) }

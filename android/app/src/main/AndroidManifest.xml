@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- One-click update: the APK is opened with the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"
         tools:ignore="ForegroundServicesPolicy" />
@@ -22,7 +24,7 @@
         android:name="${applicationName}"
         android:enableOnBackInvokedCallback="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="OneXray"
+        android:label="HYPER CLIENT"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         tools:targetApi="tiramisu">
@@ -59,6 +61,24 @@
                     android:scheme="hyperclient" />
             </intent-filter>
         </activity>
+        <!-- Starts the VPN again after an in-App update replaced the package. -->
+        <receiver
+            android:name=".system.UpdateReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- The downloaded update, handed to the system installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.update"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
         <receiver
             android:name=".automation.VpnAutomationReceiver"
             android:exported="true"
