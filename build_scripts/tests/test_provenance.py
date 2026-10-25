@@ -261,11 +261,16 @@ class ProvenanceTest(unittest.TestCase):
     def test_build_records_libxray_revision_and_uploads_receipt(self):
         build = (Path(__file__).resolve().parents[2] / ".github/workflows/build.yml").read_text()
         record = 'echo "ONEXRAY_LIBXRAY_SHA=$libxray_sha" >> "$GITHUB_ENV"'
-        self.assertIn(record, build)
-        # begin_build checks the libXray checkout against this revision.
-        self.assertLess(build.index(record), build.index("      - name: Build\n"))
-        self.assertEqual(build.count("name: Upload build provenance"), 1)
-        self.assertIn("path: output/provenance-windows-x64-exe.json", build)
+        jobs = build.split("\n  android:\n")
+        self.assertEqual(len(jobs), 2)
+        receipts = ("output/provenance-windows-x64-exe.json", "output/provenance-android-*.json")
+        for job, receipt in zip(jobs, receipts):
+            with self.subTest(receipt=receipt):
+                self.assertIn(record, job)
+                # begin_build checks the libXray checkout against this revision.
+                self.assertLess(job.index(record), job.index("      - name: Build\n"))
+                self.assertEqual(job.count("name: Upload build provenance"), 1)
+                self.assertIn(f"path: {receipt}", job)
 
     def test_receipt_records_actual_files_and_keeps_other_platform_packages_out(self):
         root = self.artifacts / "OneXray"
