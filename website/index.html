@@ -115,9 +115,9 @@
     <section class="hero" id="top">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <a class="news" id="news" href="https://github.com/AnatomikPerq/hp-client/releases/tag/v0.1.0-beta.9">
+          <a class="news" id="news" href="https://github.com/AnatomikPerq/hp-client/releases/tag/v1.0.0">
             <span class="news-dot"></span>
-            <span id="news-text">Вышла beta.9: свежее ядро Xray и группы серверов</span>
+            <span id="news-text">Вышла 1.0: Android и обновление одной кнопкой</span>
             <svg class="i"><use href="#i-arrow"/></svg>
           </a>
           <h1 class="hero-title">
@@ -130,9 +130,13 @@
             Один список узлов, один туннель.
           </p>
           <div class="cta">
-            <a class="btn btn-gold btn-lg" id="hero-download" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64-setup.exe">
+            <a class="btn btn-gold btn-lg" id="hero-download" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-windows-x64-setup.exe">
               <svg class="i"><use href="#i-download"/></svg>
-              <span class="btn-stack"><span>Скачать для Windows</span><small id="hero-download-meta">beta.9 · установщик · 40,6&nbsp;МБ</small></span>
+              <span class="btn-stack"><span>Скачать для Windows</span><small id="hero-download-meta">1.0.0 · установщик · 40,8&nbsp;МБ</small></span>
+            </a>
+            <a class="btn btn-ghost btn-lg" id="hero-android" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-android-arm64-v8a.apk">
+              <svg class="i"><use href="#i-phone"/></svg>
+              <span class="btn-stack"><span>Для Android</span><small id="hero-android-meta">APK · 86,1&nbsp;МБ</small></span>
             </a>
             <a class="btn btn-ghost btn-lg" href="https://github.com/AnatomikPerq/hp-client">
               <svg class="i"><use href="#i-github"/></svg><span>Исходники</span>
@@ -152,7 +156,7 @@
           </div>
           <div class="app-window" id="app" data-state="idle" data-mode="proxy">
             <div class="aw-title">
-              <span class="aw-brand">HYPER CLIENT</span><span class="aw-ver" id="aw-ver">v0.1.0-beta.9</span>
+              <span class="aw-brand">HYPER CLIENT</span><span class="aw-ver" id="aw-ver">v1.0.0</span>
               <span class="aw-ctrls" aria-hidden="true"><svg class="i"><use href="#i-minus"/></svg><svg class="i"><use href="#i-square"/></svg><svg class="i"><use href="#i-x"/></svg></span>
             </div>
             <div class="aw-body">
@@ -521,11 +525,17 @@
               <h3>Kill switch и профили</h3>
               <p>Kill switch по умолчанию, профили маршрутизации и режим «Выборочно», конфиги провайдера Remnawave, «Подключено» только после старта Xray.</p>
             </li>
-            <li class="tl-item is-now reveal">
+            <li class="tl-item reveal">
               <span class="tl-dot"></span>
-              <p class="tl-date">24 октября · beta.9 · сейчас</p>
+              <p class="tl-date">24 октября · beta.9</p>
               <h3>Свежее ядро и группы</h3>
               <p>Xray v26.10.21 с исправленными корневыми сертификатами, группы для своих серверов, проверка связи через VPN в любом режиме, живая кнопка подключения.</p>
+            </li>
+            <li class="tl-item is-now reveal">
+              <span class="tl-dot"></span>
+              <p class="tl-date">25 октября · 1.0 · сейчас</p>
+              <h3>Android и обновление кнопкой</h3>
+              <p>Сборка под Android со всеми протоколами и приложениями в профилях, обновление одной кнопкой на Windows и Android, отчёт о том, что режет сеть, DNS ядра от вашей сети.</p>
             </li>
           </ol>
 
@@ -533,14 +543,14 @@
             <article class="card ahead-col reveal">
               <p class="status cyan"><span class="live-dot"></span>Ближайшее</p>
               <ul>
-                <li><b>Быстрый DNS ядра в TUN.</b> Свой резолвер ядра теряет запросы на части сетей — переводим его на TCP.</li>
                 <li><b>Автопереключение умершего узла</b> в режиме «Автоматически» живой сменой.</li>
+                <li><b>Отчёт о сети с проверкой ваших узлов</b> их собственными протоколами и просмотром отчёта на сайте.</li>
               </ul>
             </article>
             <article class="card ahead-col reveal" style="--d:100ms">
               <p class="status violet">Дальше</p>
               <ul>
-                <li><b>Сборки под Linux и Android</b> вместе с нестандартными протоколами.</li>
+                <li><b>Сборка под Linux</b> вместе с нестандартными протоколами.</li>
                 <li><b>Kill switch для TUN на Linux</b> на правилах nftables.</li>
                 <li><b>Автонастройка сервера по SSH:</b> поднять нестандартный протокол на своей машине, не заходя на неё руками.</li>
                 <li><b>Больше нестандартных транспортов.</b></li>
@@ -570,36 +580,51 @@
             </svg>
             <div>
               <p class="kicker"><svg class="i"><use href="#i-sparkle"/></svg>Скачать</p>
-              <h2 id="dl-title">HYPER CLIENT 0.1.0-beta.9</h2>
-              <p class="dl-sub" id="dl-sub">Windows 10 и 11, x64 · выпущен 24 октября 2026</p>
+              <h2 id="dl-title">HYPER CLIENT 1.0.0</h2>
+              <p class="dl-sub" id="dl-sub">Windows и Android · выпущен 25 октября 2026</p>
             </div>
           </div>
 
+          <p class="dl-group"><svg class="i"><use href="#i-monitor"/></svg>Windows 10 и 11, x64</p>
           <div class="dl-options">
-            <a class="dl-option primary" id="dl-setup" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64-setup.exe">
+            <a class="dl-option primary" id="dl-setup" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-windows-x64-setup.exe">
               <span class="dlo-icon"><svg class="i"><use href="#i-download"/></svg></span>
-              <span class="dlo-text"><b>Установщик</b><small id="dl-setup-meta">.exe · 40,6&nbsp;МБ · рекомендуем</small></span>
+              <span class="dlo-text"><b>Установщик</b><small id="dl-setup-meta">.exe · 40,8&nbsp;МБ · рекомендуем</small></span>
               <span class="badge">для TUN</span>
             </a>
-            <a class="dl-option" id="dl-zip" href="https://github.com/AnatomikPerq/hp-client/releases/download/v0.1.0-beta.9/HyperClient-0.1.0-beta.9-windows-x64.zip">
+            <a class="dl-option" id="dl-zip" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-windows-x64.zip">
               <span class="dlo-icon"><svg class="i"><use href="#i-archive"/></svg></span>
-              <span class="dlo-text"><b>ZIP-архив</b><small id="dl-zip-meta">.zip · 60,5&nbsp;МБ · без установки</small></span>
+              <span class="dlo-text"><b>ZIP-архив</b><small id="dl-zip-meta">.zip · 60,8&nbsp;МБ · без установки</small></span>
             </a>
           </div>
 
           <p class="dl-why"><svg class="i"><use href="#i-lock"/></svg><span>Установщик кладёт программу в Program Files и один раз просит права администратора. В режиме TUN ядро запускается с повышенными правами из папки программы, и только так посторонний процесс не подложит туда свой файл. С ZIP безопаснее режим системного прокси.</span></p>
 
+          <p class="dl-group"><svg class="i"><use href="#i-phone"/></svg>Android 10 и новее</p>
+          <div class="dl-options">
+            <a class="dl-option primary" id="dl-apk" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-android-arm64-v8a.apk">
+              <span class="dlo-icon"><svg class="i"><use href="#i-download"/></svg></span>
+              <span class="dlo-text"><b>APK для телефона</b><small id="dl-apk-meta">arm64-v8a · 86,1&nbsp;МБ · почти все телефоны</small></span>
+            </a>
+            <a class="dl-option" id="dl-apk-v7a" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-android-armeabi-v7a.apk">
+              <span class="dlo-icon"><svg class="i"><use href="#i-phone"/></svg></span>
+              <span class="dlo-text"><b>Старые 32-битные</b><small id="dl-apk-v7a-meta">armeabi-v7a · 81,9&nbsp;МБ</small></span>
+            </a>
+          </div>
+          <p class="dl-why"><svg class="i"><use href="#i-lock"/></svg><span>Android один раз спросит, можно ли ставить приложения из браузера. Kill switch там системный: «Постоянная VPN» и «Блокировать соединения без VPN» в настройках VPN телефона, ссылка на них — в Настройки → Дополнительно → VPN-туннель. Для эмуляторов и Chromebook — <a id="dl-apk-x64" href="https://github.com/AnatomikPerq/hp-client/releases/download/v1.0.0/HyperClient-1.0.0-android-x86_64.apk">сборка x86_64</a>.</span></p>
+
           <div class="dl-hashes" id="dl-hashes">
             <p class="rc-label">Проверка SHA-256</p>
-            <div class="hash-row"><span class="hash-name">setup.exe</span><code id="hash-setup">eaef8474d02878a59a153f7d140d99553fdd5f5e9279ef0bbad1e3313c05d977</code><button class="copy" type="button" data-copy="#hash-setup" aria-label="Скопировать хеш установщика"><svg class="i"><use href="#i-copy"/></svg></button></div>
-            <div class="hash-row"><span class="hash-name">zip</span><code id="hash-zip">e22bdc75e5e5bf4c918d0fb488c79bef752929a7f05fb9e1252c1dbdd9990d3a</code><button class="copy" type="button" data-copy="#hash-zip" aria-label="Скопировать хеш архива"><svg class="i"><use href="#i-copy"/></svg></button></div>
-            <div class="hash-row cmd"><span class="hash-name">PowerShell</span><code id="hash-cmd">Get-FileHash .\HyperClient-0.1.0-beta.9-windows-x64-setup.exe</code><button class="copy" type="button" data-copy="#hash-cmd" aria-label="Скопировать команду"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">setup.exe</span><code id="hash-setup">48f20b946789813b7ba3170d784b1717cfe58dd51ccc191e38c1c1caf1880eca</code><button class="copy" type="button" data-copy="#hash-setup" aria-label="Скопировать хеш установщика"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">zip</span><code id="hash-zip">68316a8175127fb965edd39934d61b15698fac0e3b51d657c9ebec0f8ee625de</code><button class="copy" type="button" data-copy="#hash-zip" aria-label="Скопировать хеш архива"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row"><span class="hash-name">apk arm64</span><code id="hash-apk">c908acf7b7a4e96e6e7f625c36ff38ffd73a84142da92b79876b34becc916d1e</code><button class="copy" type="button" data-copy="#hash-apk" aria-label="Скопировать хеш APK"><svg class="i"><use href="#i-copy"/></svg></button></div>
+            <div class="hash-row cmd"><span class="hash-name">PowerShell</span><code id="hash-cmd">Get-FileHash .\HyperClient-1.0.0-windows-x64-setup.exe</code><button class="copy" type="button" data-copy="#hash-cmd" aria-label="Скопировать команду"><svg class="i"><use href="#i-copy"/></svg></button></div>
           </div>
 
           <div class="platforms">
             <span class="pf on"><svg class="i"><use href="#i-monitor"/></svg>Windows x64<em>есть</em></span>
             <span class="pf"><svg class="i"><use href="#i-terminal"/></svg>Linux<em>позже</em></span>
-            <span class="pf"><svg class="i"><use href="#i-phone"/></svg>Android<em>позже</em></span>
+            <span class="pf on"><svg class="i"><use href="#i-phone"/></svg>Android<em>есть</em></span>
             <span class="pf"><svg class="i"><use href="#i-monitor"/></svg>macOS<em>код собирается</em></span>
             <span class="pf"><svg class="i"><use href="#i-phone"/></svg>iOS<em>код собирается</em></span>
           </div>
@@ -610,7 +635,7 @@
               <li><a href="https://github.com/AnatomikPerq/hp-client/releases">Список релизов на GitHub</a></li>
             </ul>
           </details>
-          <p class="dl-update">Обновление: выйдите из клиента (трей → «Выйти») и поставьте новую версию поверх. Узлы, подписки и настройки сохранятся.</p>
+          <p class="dl-update">Обновление: клиент сам находит новую версию, а кнопка «Обновить» скачивает её, сверяет SHA-256 с релизом, ставит и подключается снова. Узлы, подписки и настройки сохранятся.</p>
         </div>
       </div>
     </section>
@@ -640,8 +665,8 @@
             <p>На главной будет «Интернет заблокирован»: нажмите на орб, чтобы переподключиться, или «Снять блокировку», чтобы выйти в сеть без VPN. Прав администратора для этого не нужно. Выключить kill switch можно в Настройки → Дополнительно → VPN-туннель.</p>
           </details>
           <details class="reveal">
-            <summary>Почему пока только Windows?<svg class="i"><use href="#i-plus"/></svg></summary>
-            <p>Кодовая база собирается под Windows, Linux, Android, iOS и macOS, но нестандартные протоколы пока собраны только под Windows x64. Сборки для других платформ появятся вместе с ними, без обещаний раньше времени.</p>
+            <summary>А Linux, macOS и iOS?<svg class="i"><use href="#i-plus"/></svg></summary>
+            <p>Сейчас есть Windows x64 и Android, обе со всеми протоколами. Кодовая база собирается и под Linux, iOS и macOS, но нестандартные протоколы там ещё не собраны и не проверены. Сборки появятся вместе с ними, без обещаний раньше времени.</p>
           </details>
           <details class="reveal">
             <summary>Что клиент знает обо мне?<svg class="i"><use href="#i-plus"/></svg></summary>

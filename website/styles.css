@@ -967,7 +967,9 @@ html.warm .nebula-a { opacity: 0.6; }
 .dl-head .kicker { margin-bottom: 8px; }
 .dl-sub { margin: 8px 0 0 !important; font-size: 15px; }
 
-.dl-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
+.dl-group { display: flex; align-items: center; gap: 10px; margin: 30px 0 0 !important; font-size: 14px; font-weight: 600; color: var(--muted-strong); }
+.dl-group .i { color: var(--cyan); font-size: 17px; }
+.dl-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .dl-option {
   position: relative; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 16px;
   border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.025); color: var(--fg);
@@ -987,7 +989,7 @@ html.warm .nebula-a { opacity: 0.6; }
 .dl-why .i { color: var(--gold); font-size: 17px; margin-top: 2px; }
 
 .dl-hashes { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
-.hash-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 34px; align-items: center; gap: 12px; padding: 6px 0; }
+.hash-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) 34px; align-items: center; gap: 12px; padding: 6px 0; }
 .hash-name { font-size: 13px; color: var(--muted); }
 .hash-row code { font-size: 12.5px; color: var(--muted-strong); overflow-wrap: anywhere; line-height: 1.45; }
 .hash-row.cmd code { color: var(--mint); }

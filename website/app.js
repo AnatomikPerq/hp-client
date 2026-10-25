@@ -14,7 +14,7 @@
   const REPO = "AnatomikPerq/hp-client";
   // Версия, которая вписана в HTML. Если на GitHub вышла новее, страница
   // подставит её сама; без сети остаётся эта.
-  const BAKED_VERSION = "0.1.0-beta.9";
+  const BAKED_VERSION = "1.0.0";
 
   /* ================= Звёздное поле ================= */
 
@@ -848,6 +848,8 @@
     const version = latest.tag.replace(/^v/, "");
     const setup = latest.assets.find((a) => /-setup\.exe$/i.test(a.name));
     const zip = latest.assets.find((a) => /\.zip$/i.test(a.name));
+    const apk = (abi) => latest.assets.find((a) => a.name.endsWith(`-android-${abi}.apk`));
+    const arm64 = apk("arm64-v8a"), v7a = apk("armeabi-v7a"), x64 = apk("x86_64");
     const hashOf = (a) => {
       if (!a) return "";
       if (a.digest.startsWith("sha256:")) return a.digest.slice(7);
@@ -857,7 +859,7 @@
 
     Demo.setVersion(version);
     $("#dl-title").textContent = `HYPER CLIENT ${version}`;
-    $("#dl-sub").textContent = `Windows 10 и 11, x64 · выпущен ${fmtDate(latest.date)}`;
+    $("#dl-sub").textContent = `${arm64 ? "Windows и Android" : "Windows 10 и 11, x64"} · выпущен ${fmtDate(latest.date)}`;
     if (setup) {
       $("#hero-download").href = setup.url;
       $("#hero-download-meta").textContent = `${short(version)} · установщик · ${fmtSize(setup.size)}`;
@@ -869,10 +871,22 @@
       $("#dl-zip").href = zip.url;
       $("#dl-zip-meta").textContent = `.zip · ${fmtSize(zip.size)} · без установки`;
     }
-    const hs = hashOf(setup), hz = hashOf(zip);
+    if (arm64) {
+      $("#hero-android").href = arm64.url;
+      $("#hero-android-meta").textContent = `APK · ${fmtSize(arm64.size)}`;
+      $("#dl-apk").href = arm64.url;
+      $("#dl-apk-meta").textContent = `arm64-v8a · ${fmtSize(arm64.size)} · почти все телефоны`;
+    }
+    if (v7a) {
+      $("#dl-apk-v7a").href = v7a.url;
+      $("#dl-apk-v7a-meta").textContent = `armeabi-v7a · ${fmtSize(v7a.size)}`;
+    }
+    if (x64) $("#dl-apk-x64").href = x64.url;
+    const hs = hashOf(setup), hz = hashOf(zip), ha = hashOf(arm64);
     if (hs) $("#hash-setup").textContent = hs;
     if (hz) $("#hash-zip").textContent = hz;
-    if (!hs && !hz) $("#dl-hashes").hidden = true;
+    if (ha) $("#hash-apk").textContent = ha;
+    if (!hs && !hz && !ha) $("#dl-hashes").hidden = true;
 
     if (version !== BAKED_VERSION) {
       const news = $("#news");
@@ -882,8 +896,8 @@
 
     $("#older-list").innerHTML = releases.map((r) => {
       const links = r.assets
-        .filter((a) => /\.(exe|zip)$/i.test(a.name))
-        .map((a) => `<a href="${esc(a.url)}">${/\.exe$/i.test(a.name) ? "setup.exe" : "zip"}</a>`)
+        .filter((a) => /\.(exe|zip)$/i.test(a.name) || a.name.endsWith("-android-arm64-v8a.apk"))
+        .map((a) => `<a href="${esc(a.url)}">${/\.exe$/i.test(a.name) ? "setup.exe" : /\.apk$/i.test(a.name) ? "apk" : "zip"}</a>`)
         .join("");
       return `<li><a href="${esc(r.url)}">${esc(r.name || r.tag)}</a><span class="od-date">${fmtDate(r.date)}</span><span class="od-links">${links}</span></li>`;
     }).join("");
