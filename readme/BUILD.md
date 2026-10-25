@@ -26,7 +26,7 @@
 | Flutter stable | `C:\Users\BADAB\flutter\stable` | приложение; `git clone --depth 1 --branch stable` |
 | Go | `C:\Program Files\Go` | libXray и ядро. `go.mod` требует go 1.27+, при `GOTOOLCHAIN=auto` нужный тулчейн скачивается сам |
 | llvm-mingw | `C:\Users\BADAB\toolchains\llvm-mingw-*-ucrt-x86_64` | `gcc` для c-shared `libXray.dll`. **gcc из w64devkit не годится**: он по умолчанию пишет объектники big-obj, которые cgo не читает («cannot parse gcc output … as ELF, Mach-O, PE») |
-| LLVM | `C:\Program Files\LLVM` | `dart run ffigen` ищет `bin\libclang.dll` строго там |
+| LLVM | `C:\Program Files\LLVM` (с 25.10 не стоит) | `tool/ffigen.dart` ищет `bin\libclang.dll` там. Без LLVM: `LIBCLANG_PATH` = `libclang.dll` из NDK (`ndk\30.0.16248370\toolchains\llvm\prebuilt\windows-x86_64\bin`), `FFIGEN_INCLUDE` = `include` из llvm-mingw; привязки выходят те же |
 | Visual Studio Build Tools | 2026 с MSVC 14.50 | `flutter build windows`; нужен workload C++ |
 | Inno Setup 6.7.3 | `C:\Users\BADAB\toolchains\inno-setup` (поставлен с `/CURRENTUSER`, без прав администратора); путь в `INNO_SETUP_PATH` | установщик (через Fastforge) |
 | Fastforge | `%LOCALAPPDATA%\Pub\Cache\bin` (`dart pub global activate fastforge`) | упаковка EXE и ZIP; каталог должен быть в `PATH` |
@@ -97,6 +97,8 @@ $env:GOTOOLCHAIN = "auto"
 $env:BUILD_NUMBER = "4"          # версия станет <marketing>+404: база 400 из config.py
 $env:INNO_SETUP_PATH = "C:\Users\BADAB\toolchains\inno-setup"
 $env:PYTHONUTF8 = "1"
+$env:LIBCLANG_PATH = "$env:LOCALAPPDATA\Android\sdk\ndk\30.0.16248370\toolchains\llvm\prebuilt\windows-x86_64\bin\libclang.dll"
+$env:FFIGEN_INCLUDE = "C:\Users\BADAB\toolchains\llvm-mingw-20260922-ucrt-x86_64\include"
 Set-Location C:\Users\BADAB\dev\hp-client
 python build_scripts/main.py HyperClient windows --windows-mode exe
 ```

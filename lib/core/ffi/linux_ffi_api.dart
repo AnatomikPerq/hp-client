@@ -265,7 +265,7 @@ class LinuxFfiApi extends BaseFfiApi {
         corePath,
         // No TUN settings: system proxy mode, which needs no DNS pinning.
         desktopCoreRunArguments(
-          dns: tun?.tunDnsIPv4 ?? '',
+          dns: tun == null ? '' : desktopNetworkDns,
           interfaceName: tun?.autoOutboundsInterface ?? '',
           configPath: inputs,
           errorFile: errorFile.path,

@@ -203,7 +203,7 @@ class WindowsExeFfiApi extends WindowsFfiApi {
       if (await stopFile.exists()) await stopFile.delete();
       await _killSwitch.arm(killSwitch);
       final arguments = desktopCoreRunArguments(
-        dns: proxyPort == null ? request.tun?.tunDnsIPv4 ?? '' : '',
+        dns: proxyPort == null && request.tun != null ? desktopNetworkDns : '',
         interfaceName: proxyPort == null
             ? request.tun?.autoOutboundsInterface ?? ''
             : '',

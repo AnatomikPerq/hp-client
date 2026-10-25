@@ -11,6 +11,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.Binder
@@ -41,6 +43,7 @@ import net.yuandev.onexray.pigeon.PerAppVPNMode
 import net.yuandev.onexray.pigeon.StartVpnRequest
 import net.yuandev.onexray.pigeon.TunJson
 import net.yuandev.onexray.pigeon.VpnStatus
+import java.net.Inet4Address
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -55,6 +58,7 @@ class OneVpnService : VpnService() {
         const val ACTION_STOP: String = "vpn_stop"
         const val ACTION_STOP_REQUEST: String = "net.yuandev.onexray.VPN_STOP_REQUEST"
 
+        private const val FALLBACK_CORE_DNS = "1.1.1.1"
         const val IPV4_ADDRESS = "198.18.0.1"
         const val IPV6_ADDRESS = "fc00::1"
         const val ACTION_VPN_STATUS: String = "net.yuandev.onexray.VPN_STATUS"
@@ -439,7 +443,32 @@ class OneVpnService : VpnService() {
     private fun configureDNS(tun: TunJson) {
         val dns = tun.tunDnsIPv4?.trim()
         require(!dns.isNullOrEmpty()) { "missing IPv4 TUN DNS" }
-        LibXray.setDNS(controller, "$dns:53")
+        // The Core's own lookups (node names, direct dials) leave outside the
+        // tunnel. The network's resolver answers them as it does for every app
+        // without the VPN; the tunnel's public one (8.8.8.8) lost a quarter of
+        // fresh-socket queries on the owner's home network (owner's decision of
+        // 25.10.2026: the network's DNS, 1.1.1.1 without one).
+        val server = underlyingDns() ?: FALLBACK_CORE_DNS
+        XLog.d("OneVpnService: Core DNS $server")
+        LibXray.setDNS(controller, "$server:53")
+    }
+
+    /** The first IPv4 resolver of a network outside this VPN, validated first. */
+    private fun underlyingDns(): String? {
+        val connectivity = getSystemService(ConnectivityManager::class.java) ?: return null
+        @Suppress("DEPRECATION")
+        val networks = connectivity.allNetworks.mapNotNull { network ->
+            val capabilities = connectivity.getNetworkCapabilities(network) ?: return@mapNotNull null
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            ) return@mapNotNull null
+            network to capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }.sortedByDescending { it.second }
+        for ((network, _) in networks) {
+            val servers = connectivity.getLinkProperties(network)?.dnsServers ?: continue
+            servers.firstOrNull { it is Inet4Address }?.hostAddress?.let { return it }
+        }
+        return null
     }
 
     private fun setIPAndDns(tun: TunJson, builder: Builder) {

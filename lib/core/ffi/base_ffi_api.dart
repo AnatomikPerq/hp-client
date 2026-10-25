@@ -28,6 +28,8 @@ import 'package:path/path.dart' as p;
 /// [killSwitch] makes a TUN Core block traffic outside the tunnel until the
 /// App disconnects; [killSwitchApp] (the App itself) may still pass. Only the
 /// elevated TUN Core can install the filters.
+///
+/// [dns] is an IP address or [desktopNetworkDns].
 List<String> desktopCoreRunArguments({
   String dns = '',
   String interfaceName = '',
@@ -49,7 +51,12 @@ List<String> desktopCoreRunArguments({
   }
   return <String>[
     'run',
-    if (dns.isNotEmpty) ...['-dns', '$dns:53', '-interface', interfaceName],
+    if (dns.isNotEmpty) ...[
+      '-dns',
+      dns == desktopNetworkDns ? dns : '$dns:53',
+      '-interface',
+      interfaceName,
+    ],
     if (killSwitch != null) ...[
       '-kill-switch',
       if (killSwitch.allowLan) '-kill-switch-lan',
@@ -64,6 +71,12 @@ List<String> desktopCoreRunArguments({
     if (readyFile != null) ...['-ready-file', readyFile],
   ];
 }
+
+/// The Core's own lookups (node names, direct dials in TUN) go to the
+/// resolver the physical interface is configured with, 1.1.1.1 without one
+/// that answers (owner's decision of 25.10.2026): the tunnel's 8.8.8.8 lost a
+/// quarter of fresh-socket queries on the owner's home network.
+const desktopNetworkDns = 'network';
 
 /// SHA-256 of exactly the bytes [BaseFfiApi.materializeRunXrayConfig] writes.
 String desktopCoreConfigSha256(String xrayJson) =>

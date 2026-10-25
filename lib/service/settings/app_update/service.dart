@@ -559,6 +559,8 @@ class _WindowsInstallHost implements AppUpdateInstallHost {
       final reconnect = await ConnectionCoordinator.instance.suspendForUpdate();
       if (reconnect) await PreferencesKey().saveAppUpdateReconnect();
       AppLog.info('exiting for the update to ${package.name}');
+      // Log lines are written asynchronously; the exit would drop them.
+      await AppLog.flush();
       exiting = true;
       await ServicesBinding.instance.exitApplication(AppExitType.required);
     } finally {

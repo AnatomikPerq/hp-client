@@ -215,7 +215,7 @@ void main() {
       expect(process.arguments!.take(5), [
         'run',
         '-dns',
-        '8.8.8.8:53',
+        'network',
         '-interface',
         'Ethernet 2',
       ]);

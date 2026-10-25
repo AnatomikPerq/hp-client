@@ -12,6 +12,17 @@ import 'package:path/path.dart' as p;
 import '../../support/test_directory.dart';
 
 void main() {
+  test('the network DNS mode passes as is', () {
+    expect(
+      desktopCoreRunArguments(
+        dns: desktopNetworkDns,
+        interfaceName: 'Ethernet',
+        configPath: r'C:\run\xray.json',
+      ).take(5),
+      ['run', '-dns', 'network', '-interface', 'Ethernet'],
+    );
+  });
+
   test('builds protected desktop Core arguments', () {
     expect(
       desktopCoreRunArguments(
