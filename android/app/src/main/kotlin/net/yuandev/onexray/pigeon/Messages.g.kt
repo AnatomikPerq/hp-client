@@ -1162,6 +1162,12 @@ interface AndroidSystemHostApi {
    * without VPN" (Android's kill switch) are turned on.
    */
   fun openVpnSettings(callback: (Result<Boolean>) -> Unit)
+  /**
+   * The UID of each installed package among [packages]; packages that are
+   * not installed are left out. The Core matches a connection's owning app
+   * by UID, so traffic profiles name apps through it.
+   */
+  fun packageUids(packages: List<String>, callback: (Result<Map<String, Long>>) -> Unit)
 
   companion object {
     /** The codec used by AndroidSystemHostApi. */
@@ -1233,6 +1239,26 @@ interface AndroidSystemHostApi {
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             api.openVpnSettings{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.onexray.AndroidSystemHostApi.packageUids$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val packagesArg = args[0] as List<String>
+            api.packageUids(packagesArg) { result: Result<Map<String, Long>> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(MessagesPigeonUtils.wrapError(error))

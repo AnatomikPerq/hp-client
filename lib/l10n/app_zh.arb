@@ -986,7 +986,7 @@
   "trafficProfilesOverlayHint": "分流配置优先于“{mode}”的规则：所列内容按配置的方向发送。",
   "trafficProfilesNotApplied": "分流配置不适用于 Raw、高级路由和提供方配置。",
   "trafficProfilesPriorityHint": "同一网站出现在多个配置中时，“经 VPN”优先于“直连”。",
-  "trafficProfilesProcessHint": "仅在电脑上识别程序：TUN 模式下识别全部程序，代理模式下仅识别使用系统代理的程序。",
+  "trafficProfilesProcessHint": "电脑上识别程序（TUN 模式下识别全部程序，代理模式下仅识别使用系统代理的程序），Android 上识别应用。",
   "trafficProfileViaVpn": "经 VPN",
   "trafficProfileDirect": "直连",
   "trafficProfileRuBlocked": "俄罗斯封锁内容",
@@ -1002,7 +1002,7 @@
   "trafficProfileDiscord": "Discord",
   "trafficProfileDiscordDescription": "网站、应用与语音频道。",
   "trafficProfileYoutube": "YouTube",
-  "trafficProfileYoutubeDescription": "网站与视频。",
+  "trafficProfileYoutubeDescription": "网站、应用与视频。",
   "trafficProfileMessengers": "即时通讯",
   "trafficProfileMessengersDescription": "Telegram、WhatsApp 与 Signal 及其应用。",
   "trafficProfileGames": "游戏",
@@ -1210,5 +1210,10 @@
   "appUpdateInstallPermission": "请在打开的窗口中允许 HYPER CLIENT 安装应用，然后再次点击“安装”。",
   "appUpdateFailed": "无法下载或安装更新。",
   "androidKillSwitchDescription": "Android 可自行阻止未经 VPN 的应用：在系统 VPN 设置中为 HYPER CLIENT 开启“始终开启的 VPN”和“屏蔽未使用 VPN 的连接”。",
-  "androidKillSwitchOpen": "打开 VPN 设置"
+  "androidKillSwitchOpen": "打开 VPN 设置",
+  "trafficProfileApps": "应用",
+  "trafficProfileAppsNone": "未选择",
+  "trafficProfilePickApps": "选择应用",
+  "trafficProfileAppsTitle": "选择此配置的应用",
+  "trafficProfileAppsNotice": "这些应用发送的所有流量都按配置的方向走。之后安装的应用从下一次连接起生效。"
 }

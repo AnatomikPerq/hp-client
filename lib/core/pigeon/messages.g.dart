@@ -1132,6 +1132,30 @@ class AndroidSystemHostApi {
     );
     return pigeonVar_replyValue! as bool;
   }
+
+  /// The UID of each installed package among [packages]; packages that are
+  /// not installed are left out. The Core matches a connection's owning app
+  /// by UID, so traffic profiles name apps through it.
+  Future<Map<String, int>> packageUids(List<String> packages) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.onexray.AndroidSystemHostApi.packageUids$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[packages],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return (pigeonVar_replyValue! as Map<Object?, Object?>).cast<String, int>();
+  }
 }
 
 class BackupHostApi {

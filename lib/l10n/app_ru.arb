@@ -986,7 +986,7 @@
   "trafficProfilesOverlayHint": "Профили важнее правил режима «{mode}»: указанное в них идёт так, как задано у профиля.",
   "trafficProfilesNotApplied": "Профили не действуют на Raw, расширенные маршруты и конфигурации провайдера.",
   "trafficProfilesPriorityHint": "Если сайт есть в нескольких профилях, «Через VPN» важнее, чем «Напрямую».",
-  "trafficProfilesProcessHint": "Программы распознаются только на компьютере: в режиме TUN — все, в режиме прокси — только те, что ходят через системный прокси.",
+  "trafficProfilesProcessHint": "Программы распознаются на компьютере (в режиме TUN — все, в режиме прокси — только те, что ходят через системный прокси), приложения — на Android.",
   "trafficProfileViaVpn": "Через VPN",
   "trafficProfileDirect": "Напрямую",
   "trafficProfileRuBlocked": "Заблокированное в России",
@@ -1002,7 +1002,7 @@
   "trafficProfileDiscord": "Discord",
   "trafficProfileDiscordDescription": "Сайт, приложение и голосовые каналы.",
   "trafficProfileYoutube": "YouTube",
-  "trafficProfileYoutubeDescription": "Сайт и видео.",
+  "trafficProfileYoutubeDescription": "Сайт, приложение и видео.",
   "trafficProfileMessengers": "Мессенджеры",
   "trafficProfileMessengersDescription": "Telegram, WhatsApp и Signal вместе с их приложениями.",
   "trafficProfileGames": "Игры",
@@ -1210,5 +1210,10 @@
   "appUpdateInstallPermission": "Разрешите HYPER CLIENT устанавливать приложения в открывшемся окне и нажмите «Установить» ещё раз.",
   "appUpdateFailed": "Не удалось скачать или установить обновление.",
   "androidKillSwitchDescription": "Android сам блокирует приложения без VPN: в системных настройках VPN включите для HYPER CLIENT «Постоянная VPN» и «Блокировать соединения без VPN».",
-  "androidKillSwitchOpen": "Открыть настройки VPN"
+  "androidKillSwitchOpen": "Открыть настройки VPN",
+  "trafficProfileApps": "Приложения",
+  "trafficProfileAppsNone": "Не выбраны",
+  "trafficProfilePickApps": "Выбрать приложения",
+  "trafficProfileAppsTitle": "Выберите приложения профиля",
+  "trafficProfileAppsNotice": "Всё, что отправляют эти приложения, идёт так, как задано в профиле. Приложение, установленное позже, учитывается со следующего подключения."
 }

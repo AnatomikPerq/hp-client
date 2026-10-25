@@ -125,6 +125,61 @@ void main() {
     expect(six.validate, throwsFormatException);
   });
 
+  test('apps round-trip and only well-formed package names pass', () {
+    final work = TrafficProfile(
+      id: 'custom-1',
+      name: 'Work',
+      action: TrafficProfileAction.proxy,
+      apps: const ['org.telegram.messenger'],
+    );
+    expect(work.validate, returnsNormally);
+    expect(TrafficProfile.fromJson(work.toJson()).apps, work.apps);
+    // Profiles saved before apps existed keep encoding the same way.
+    expect(_custom('custom-2').toJson().containsKey('apps'), isFalse);
+    expect(
+      () => work.copyWith(apps: const ['telegram']).validate(),
+      throwsFormatException,
+    );
+    expect(
+      () => work.copyWith(apps: const ['org.telegram messenger']).validate(),
+      throwsFormatException,
+    );
+  });
+
+  test('choosing other apps restarts the Core', () {
+    final settings = ConnectionSettings(
+      trafficMode: TrafficMode.smart,
+      profiles: TrafficProfileSettings(
+        enabled: const ['custom-1'],
+        custom: [
+          TrafficProfile(
+            id: 'custom-1',
+            name: 'Work',
+            action: TrafficProfileAction.proxy,
+            apps: const ['org.telegram.messenger'],
+          ),
+        ],
+      ),
+    );
+    final profile = settings.profiles.custom.single;
+    expect(
+      TrafficProfilesEditorService.sameRuntime(
+        settings,
+        settings.profiles.withCustom(
+          profile.copyWith(apps: const ['com.whatsapp']),
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      TrafficProfilesEditorService.sameRuntime(
+        settings,
+        settings.profiles.withCustom(profile.copyWith(name: 'Renamed')),
+      ),
+      isTrue,
+    );
+  });
+
   test('a profile change in a direction the mode ignores needs no restart', () {
     final selective = ConnectionSettings(
       trafficMode: TrafficMode.selective,

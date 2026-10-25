@@ -26,6 +26,10 @@ final class TrafficProfile {
   /// `/`, as Xray's `process` rule takes them. Desktop Cores only.
   final List<String> processes;
 
+  /// Android package names (`org.telegram.messenger`). The Core matches a
+  /// connection's owner by UID there, so they become UIDs when connecting.
+  final List<String> apps;
+
   TrafficProfile({
     required this.id,
     this.name = '',
@@ -34,10 +38,12 @@ final class TrafficProfile {
     Iterable<String> ips = const [],
     Iterable<String> protocols = const [],
     Iterable<String> processes = const [],
+    Iterable<String> apps = const [],
   }) : domains = List.unmodifiable(domains),
        ips = List.unmodifiable(ips),
        protocols = List.unmodifiable(protocols),
-       processes = List.unmodifiable(processes);
+       processes = List.unmodifiable(processes),
+       apps = List.unmodifiable(apps);
 
   bool get custom => id.startsWith(customPrefix);
 
@@ -51,6 +57,7 @@ final class TrafficProfile {
     ips: _strings(json['ips']),
     protocols: _strings(json['protocols']),
     processes: _strings(json['processes']),
+    apps: _strings(json['apps']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -61,6 +68,8 @@ final class TrafficProfile {
     'ips': ips,
     'protocols': protocols,
     'processes': processes,
+    // Absent until used, so profiles saved before it encode the same way.
+    if (apps.isNotEmpty) 'apps': apps,
   };
 
   TrafficProfile copyWith({
@@ -70,6 +79,7 @@ final class TrafficProfile {
     Iterable<String>? ips,
     Iterable<String>? protocols,
     Iterable<String>? processes,
+    Iterable<String>? apps,
   }) => TrafficProfile(
     id: id,
     name: name ?? this.name,
@@ -78,10 +88,15 @@ final class TrafficProfile {
     ips: ips ?? this.ips,
     protocols: protocols ?? this.protocols,
     processes: processes ?? this.processes,
+    apps: apps ?? this.apps,
   );
 
   bool get isEmpty =>
-      domains.isEmpty && ips.isEmpty && protocols.isEmpty && processes.isEmpty;
+      domains.isEmpty &&
+      ips.isEmpty &&
+      protocols.isEmpty &&
+      processes.isEmpty &&
+      apps.isEmpty;
 
   /// Checks what the App owns; whether Xray accepts each value (a geosite
   /// category, a CIDR) is decided by `testXray` when the profile is saved.
@@ -96,7 +111,7 @@ final class TrafficProfile {
     if (isEmpty) {
       throw const FormatException('A profile needs a site, address or program');
     }
-    for (final list in [domains, ips, protocols, processes]) {
+    for (final list in [domains, ips, protocols, processes, apps]) {
       if (list.length > maxEntries) {
         throw const FormatException('Too many entries in one profile');
       }
@@ -114,7 +129,14 @@ final class TrafficProfile {
     if (protocols.any((value) => !protocolValues.contains(value))) {
       throw const FormatException('Unsupported profile protocol');
     }
+    if (apps.any((value) => !packagePattern.hasMatch(value))) {
+      throw const FormatException('Invalid Android package name');
+    }
   }
+
+  static final packagePattern = RegExp(
+    r'^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$',
+  );
 
   /// One site per line. A bare host means the domain and its subdomains;
   /// Xray itself would read a bare word as a substring match.

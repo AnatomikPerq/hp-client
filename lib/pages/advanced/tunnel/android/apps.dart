@@ -117,6 +117,9 @@ class AndroidAppsController extends PageCubit<AndroidAppsPageState> {
 }
 
 class AndroidAppsPage extends StatelessWidget {
+  /// Apps of a traffic profile rather than a per-app VPN list.
+  static const profileMode = 'profile';
+
   final String mode;
   final List<String> selected;
   const AndroidAppsPage({
@@ -151,15 +154,16 @@ class AndroidAppsPage extends StatelessWidget {
                         children: [
                           Semantics(
                             header: true,
-                            child: Text(
-                              mode == 'included'
-                                  ? l.prototypeChooseAppsUseVpn
-                                  : l.prototypeChooseAppsBypassVpn,
-                              style: AppTypography.androidTitle,
-                            ),
+                            child: Text(switch (mode) {
+                              'included' => l.prototypeChooseAppsUseVpn,
+                              profileMode => l.trafficProfileAppsTitle,
+                              _ => l.prototypeChooseAppsBypassVpn,
+                            }, style: AppTypography.androidTitle),
                           ),
                           Text(
-                            l.prototypeSeparateAppListsNotice,
+                            mode == profileMode
+                                ? l.trafficProfileAppsNotice
+                                : l.prototypeSeparateAppListsNotice,
                             style: AppTypography.androidBody,
                           ),
                           const SizedBox(height: 14),

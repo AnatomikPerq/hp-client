@@ -117,6 +117,12 @@ abstract class AndroidSystemHostApi {
   /// without VPN" (Android's kill switch) are turned on.
   @asyncCallback
   bool openVpnSettings();
+
+  /// The UID of each installed package among [packages]; packages that are
+  /// not installed are left out. The Core matches a connection's owning app
+  /// by UID, so traffic profiles name apps through it.
+  @asyncCallback
+  Map<String, int> packageUids(List<String> packages);
 }
 
 class BackupLocation {

@@ -223,6 +223,7 @@ class TrafficProfilesController extends PageCubit<TrafficProfilesState> {
       ...profile.domains.map(plain),
       ...profile.ips,
       ...profile.processes,
+      ...profile.apps,
     ];
     if (values.length <= 3) return values.join(', ');
     return '${values.take(3).join(', ')} +${values.length - 3}';

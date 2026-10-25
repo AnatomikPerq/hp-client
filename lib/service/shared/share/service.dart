@@ -42,7 +42,11 @@ final class ShareService {
   Future<void> init() async {
     startAppLinks();
     _appLinksReady = onIncomingShare != null;
-    await _processAppLinks();
+    // Each link waits until its import page closes, and that page lives in
+    // the shell, which shows it only once service init has finished: a link
+    // that opened the App (or arrived during a permission prompt) used to
+    // leave an endless spinner.
+    unawaited(_processAppLinks());
   }
 
   void dispose() {

@@ -8,6 +8,7 @@ import 'package:onexray/core/model/geo_data_type.dart';
 import 'package:onexray/core/model/tun_json.dart';
 import 'package:onexray/core/pigeon/constants.dart';
 import 'package:onexray/core/pigeon/host_api.dart';
+import 'package:onexray/core/pigeon/messages.g.dart' show AndroidSystemHostApi;
 import 'package:onexray/core/pigeon/model.dart';
 import 'package:onexray/service/advanced/local_api/service.dart';
 import 'package:onexray/service/connect/compiler.dart';
@@ -147,6 +148,7 @@ class ConnectionPreparation {
   final LocalApiService _localApi;
   final Future<void> Function(Map<String, GeoDataType>) _requireDependencies;
   final Future<void> Function() _ensureRuBlocked;
+  final Future<Map<String, int>> Function(List<String> packages) _appUids;
 
   ConnectionPreparation({
     AppDatabase? db,
@@ -155,7 +157,9 @@ class ConnectionPreparation {
     LocalApiService? localApi,
     Future<void> Function(Map<String, GeoDataType>)? requireDependencies,
     Future<void> Function()? ensureRuBlocked,
+    Future<Map<String, int>> Function(List<String> packages)? appUids,
   }) : db = db ?? AppDatabase(),
+       _appUids = appUids ?? AndroidSystemHostApi().packageUids,
        _localApi = localApi ?? LocalApiService.instance,
        _requireDependencies =
            requireDependencies ?? GeoDataService().requireDependencies,
@@ -344,10 +348,25 @@ class ConnectionPreparation {
       };
       final ruBlocked = TrafficProfiles.usesRuBlocked(settings.profiles);
       if (ruBlocked) await _ensureRuBlocked();
+      // Android's Core finds a connection's app by UID; an app installed
+      // later is matched from the next connect on.
+      final packages = {
+        for (final profile in TrafficProfiles.active(settings.profiles))
+          ...profile.apps,
+      };
+      final apps = platform == ConnectionPlatform.android && packages.isNotEmpty
+          ? {
+              for (final entry in (await _appUids(
+                packages.toList()..sort(),
+              )).entries)
+                entry.key: '${entry.value}',
+            }
+          : null;
       profileContext = TrafficProfileContext(
         geositeCodes: await codes('geosite'),
         geoipCodes: await codes('geoip'),
         ruBlocked: ruBlocked,
+        apps: apps,
       );
     }
     final rawConfig = raw == null ? null : ConnectionCompiler.parseRawJson(raw);

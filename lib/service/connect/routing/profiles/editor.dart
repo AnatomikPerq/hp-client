@@ -156,10 +156,20 @@ class TrafficProfilesEditorService {
   ) {
     final allVpn = original.trafficMode == TrafficMode.allVpn;
     final selective = original.trafficMode == TrafficMode.selective;
+    // Apps stand for themselves here: which UID each has does not matter.
+    final apps = {
+      for (final settings in [original.profiles, next])
+        for (final profile in TrafficProfiles.active(settings))
+          for (final app in profile.apps) app: app,
+    };
     List<Map<String, dynamic>> rules(TrafficProfileSettings value) => [
       for (final rule in TrafficProfiles.rules(
         value,
-        context: const TrafficProfileContext(ruBlocked: true, processes: true),
+        context: TrafficProfileContext(
+          ruBlocked: true,
+          processes: true,
+          apps: apps,
+        ),
         actions: {
           if (!allVpn) TrafficProfileAction.proxy,
           if (!selective) TrafficProfileAction.direct,

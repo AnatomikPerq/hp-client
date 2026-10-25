@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:onexray/core/pigeon/host_api.dart';
 import 'package:onexray/l10n/localizations/app_localizations.dart';
 import 'package:onexray/pages/connect/routing/profiles/controller.dart';
 import 'package:onexray/pages/connect/routing/widgets.dart';
@@ -52,6 +53,7 @@ class TrafficProfileEditorController
     required String sites,
     required String addresses,
     required String programs,
+    required List<String> apps,
   }) {
     final profile = original.copyWith(
       name: name.trim(),
@@ -62,6 +64,7 @@ class TrafficProfileEditorController
         programs,
         TrafficProfile.normalizeProcess,
       ),
+      apps: apps,
     );
     final trimmed = profile.name;
     if (trimmed.isEmpty || trimmed.length > TrafficProfile.maxNameLength) {
@@ -84,9 +87,20 @@ class TrafficProfileEditorController
 
 /// Fork: one custom traffic profile. Returns the edited profile to the
 /// profiles page draft; nothing is saved until that page is saved.
+///
+/// [openApps] (Android) picks the profile's apps in place of programs.
 class TrafficProfileEditorPage extends StatefulWidget {
   final TrafficProfile profile;
-  const TrafficProfileEditorPage({super.key, required this.profile});
+  final Future<List<String>?> Function(
+    BuildContext context,
+    List<String> selected,
+  )?
+  openApps;
+  const TrafficProfileEditorPage({
+    super.key,
+    required this.profile,
+    this.openApps,
+  });
 
   @override
   State<TrafficProfileEditorPage> createState() =>
@@ -108,8 +122,42 @@ class _TrafficProfileEditorPageState extends State<TrafficProfileEditorPage> {
   late final programs = TextEditingController(
     text: widget.profile.processes.join('\n'),
   );
+  late List<String> apps = widget.profile.apps;
+  Map<String, String> appNames = const {};
 
   bool get _existing => widget.profile.name.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openApps != null && apps.isNotEmpty) unawaited(_loadAppNames());
+  }
+
+  /// Labels of the chosen apps; the picker already asked for the right to
+  /// list them, so this shows no prompt for a profile with apps.
+  Future<void> _loadAppNames() async {
+    try {
+      final installed = await AppHostApi().getInstalledApps();
+      if (!mounted) return;
+      setState(() {
+        appNames = {for (final app in installed) app.packageName: app.name};
+      });
+    } catch (_) {
+      // Package names stay as they are.
+    }
+  }
+
+  Future<void> _pickApps() async {
+    FocusScope.of(context).unfocus();
+    final picked = await widget.openApps!(context, apps);
+    if (!mounted) return;
+    // The route gives focus back to the field last edited, which brings the
+    // keyboard up over the list on the way back.
+    FocusScope.of(context).unfocus();
+    if (picked == null) return;
+    setState(() => apps = List.unmodifiable(picked..sort()));
+    unawaited(_loadAppNames());
+  }
 
   @override
   void dispose() {
@@ -128,6 +176,7 @@ class _TrafficProfileEditorPageState extends State<TrafficProfileEditorPage> {
       sites: sites.text,
       addresses: addresses.text,
       programs: programs.text,
+      apps: apps,
     );
     if (profile != null) {
       Navigator.of(context).pop<TrafficProfileEditResult>((profile: profile));
@@ -152,6 +201,7 @@ class _TrafficProfileEditorPageState extends State<TrafficProfileEditorPage> {
             final mobile =
                 MediaQuery.sizeOf(context).width <= AppLayout.mobileBreakpoint;
             final desktop = Platform.isWindows || Platform.isLinux;
+            final android = widget.openApps != null;
             return Scaffold(
               appBar: PageAppBar(
                 title: Text(
@@ -198,13 +248,18 @@ class _TrafficProfileEditorPageState extends State<TrafficProfileEditorPage> {
                           lines: 4,
                         ),
                         const SizedBox(height: 9),
-                        _label(context, l.trafficProfilePrograms),
-                        _input(
-                          context,
-                          programs,
-                          l.trafficProfileProgramsHint,
-                          lines: 4,
-                        ),
+                        if (android) ...[
+                          _label(context, l.trafficProfileApps),
+                          _apps(context),
+                        ] else ...[
+                          _label(context, l.trafficProfilePrograms),
+                          _input(
+                            context,
+                            programs,
+                            l.trafficProfileProgramsHint,
+                            lines: 4,
+                          ),
+                        ],
                         if (desktop)
                           Align(
                             alignment: AlignmentDirectional.centerStart,
@@ -281,6 +336,38 @@ class _TrafficProfileEditorPageState extends State<TrafficProfileEditorPage> {
           },
         ),
   );
+
+  Widget _apps(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final palette = ColorManager.palette(context);
+    final names = [for (final app in apps) appNames[app] ?? app]..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 4,
+      children: [
+        Text(
+          names.isEmpty ? l.trafficProfileAppsNone : names.join(', '),
+          style: AppTypography.routingInput.copyWith(
+            color: names.isEmpty ? palette.mutedForeground : palette.foreground,
+          ),
+        ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: _pickApps,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 30),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: AppTypography.actionHelp,
+            ),
+            icon: const Icon(LucideIcons.layoutGrid, size: 15),
+            label: Text(l.trafficProfilePickApps),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _label(BuildContext context, String text) => Text(
     text,

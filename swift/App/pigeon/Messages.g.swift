@@ -1033,6 +1033,10 @@ protocol AndroidSystemHostApi {
   /// The system VPN settings, where Always-on VPN and "Block connections
   /// without VPN" (Android's kill switch) are turned on.
   func openVpnSettings(completion: @escaping (Result<Bool, Error>) -> Void)
+  /// The UID of each installed package among [packages]; packages that are
+  /// not installed are left out. The Core matches a connection's owning app
+  /// by UID, so traffic profiles name apps through it.
+  func packageUids(packages: [String], completion: @escaping (Result<[String: Int64], Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1111,6 +1115,26 @@ class AndroidSystemHostApiSetup {
       }
     } else {
       openVpnSettingsChannel.setMessageHandler(nil)
+    }
+    /// The UID of each installed package among [packages]; packages that are
+    /// not installed are left out. The Core matches a connection's owning app
+    /// by UID, so traffic profiles name apps through it.
+    let packageUidsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.onexray.AndroidSystemHostApi.packageUids\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      packageUidsChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let packagesArg = args[0] as! [String]
+        api.packageUids(packages: packagesArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      packageUidsChannel.setMessageHandler(nil)
     }
   }
 }

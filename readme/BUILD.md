@@ -157,6 +157,10 @@ python build_scripts/main.py HyperClient android
 Под этими именами они и выкладываются в релиз: обновление внутри приложения
 ищет APK своего ABI по имени.
 
+Xray-core в libXray — пропатченная копия (`third_party/xray-core`,
+`replace` в `go.mod`): поиск приложения соединения на Android. Как обновить
+версию ядра — в её `PATCHES.md`.
+
 Отладочная сборка для эмулятора — `flutter build apk --debug
 --target-platform android-x64 --android-project-arg kotlin.incremental=false`
 с того же диска `P:`. Эмулятор `hc-test` (Android 16, x86_64) лежит на
@@ -164,19 +168,31 @@ python build_scripts/main.py HyperClient android
 
 ## Сборка в CI
 
-`.github/workflows/build.yml` собирает то же самое на `windows-2025`: на
-теге `v*` (тег появляется при создании релиза) и вручную через
-`workflow_dispatch`, где можно указать ветку или коммит libXray. Номер
-сборки берётся из `pubspec.yaml`, тег обязан совпадать с версией оттуда.
-Результат — артефакты запуска `windows-x64` (установщик и ZIP) и
-`provenance-windows-x64-exe`; в релиз workflow ничего не выкладывает.
-Секреты не нужны.
+`.github/workflows/build.yml` собирает то же самое: Windows на
+`windows-2025`, Android на `ubuntu-24.04` (NDK ставится `sdkmanager`,
+libclang для ffigen — из apt). Запускается на теге `v*` (тег появляется при
+создании релиза) и вручную через `workflow_dispatch`, где можно указать
+ветку или коммит libXray. Номер сборки берётся из `pubspec.yaml`, тег обязан
+совпадать с версией оттуда. Результат — артефакты запуска `windows-x64`
+(установщик и ZIP), `android` (три APK) и квитанции `provenance-*`; в релиз
+workflow ничего не выкладывает.
+
+Секреты нужны только для подписи Android ключом релиза:
+`ANDROID_KEYSTORE_BASE64` (файл `.jks` в base64), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Без них APK подписываются
+одноразовым ключом: сборка проверена, но такой APK не встанет поверх
+установленного релиза. Релизные APK собираются и подписываются локально.
 
 ## Грабли
 
 - **Прерванная сборка оставляет `pubspec.yaml` и `make_config.yaml`
   переписанными.** Скрипт правит их временно и чинит в `finally`, который
   при убийстве процесса не выполняется. После прерывания — `git status`.
+- **`gomobile: go mod tidy failed` с `TLS handshake timeout`**: во временном
+  модуле gomobile нет строки `toolchain`, и при `GOTOOLCHAIN=auto` Go
+  спрашивает у proxy.golang.org список версий (через системный прокси
+  машины, который иногда не успевает). `GOTOOLCHAIN=go1.27.3` берёт уже
+  скачанный тулчейн и обходится без сети.
 - **Переименование бинарника требует удалить `build/`**: CMake кеширует имя
   цели и потом ругается `No target "..."`.
 - **Имя ядра прописано жёстко** в `windows/app.cmake`, `linux/app.cmake`,

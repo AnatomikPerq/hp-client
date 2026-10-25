@@ -3,6 +3,7 @@ package net.yuandev.onexray.system
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -11,7 +12,7 @@ import net.yuandev.onexray.pigeon.AndroidSystemHostApi
 import net.yuandev.onexray.pigeon.AndroidUpdateInstallState
 import java.io.File
 
-/** System screens the App hands the user to: the package installer, VPN settings. */
+/** System screens the App hands the user to (the package installer, VPN settings) and package lookups. */
 class AndroidSystemApi(private val context: Context) : AndroidSystemHostApi {
     /**
      * One-click update: Dart downloads the APK into `files/update/` and checks
@@ -72,6 +73,18 @@ class AndroidSystemApi(private val context: Context) : AndroidSystemHostApi {
             false
         }
         callback(Result.success(opened))
+    }
+
+    override fun packageUids(packages: List<String>, callback: (Result<Map<String, Long>>) -> Unit) {
+        val uids = mutableMapOf<String, Long>()
+        for (name in packages) {
+            try {
+                uids[name] = context.packageManager.getApplicationInfo(name, 0).uid.toLong()
+            } catch (_: PackageManager.NameNotFoundException) {
+                // Not installed (or hidden from the App): nothing to match.
+            }
+        }
+        callback(Result.success(uids))
     }
 
     companion object {

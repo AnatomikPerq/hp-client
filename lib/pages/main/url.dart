@@ -379,7 +379,15 @@ final _pageRoutes = <_PageRoute>[
     AppPageDestination.trafficProfile,
     (_, state) => _withExtra<TrafficProfile>(
       state,
-      (profile) => TrafficProfileEditorPage(profile: profile),
+      (profile) => TrafficProfileEditorPage(
+        profile: profile,
+        openApps: AppPlatform.isAndroid
+            ? (context, selected) => context.pushScoped<List<String>>(
+                AppPageDestination.androidApps,
+                extra: (AndroidAppsPage.profileMode, selected),
+              )
+            : null,
+      ),
     ),
   ),
   _route(

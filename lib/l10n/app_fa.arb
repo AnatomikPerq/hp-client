@@ -986,7 +986,7 @@
   "trafficProfilesOverlayHint": "نمایه‌ها بر قوانین «{mode}» اولویت دارند: موارد آن‌ها همان‌طور که نمایه تعیین کرده ارسال می‌شود.",
   "trafficProfilesNotApplied": "نمایه‌ها روی پیکربندی‌های Raw، مسیرهای پیشرفته و پیکربندی‌های ارائه‌دهنده اعمال نمی‌شوند.",
   "trafficProfilesPriorityHint": "اگر سایتی در چند نمایه باشد، «از طریق VPN» بر «مستقیم» اولویت دارد.",
-  "trafficProfilesProcessHint": "برنامه‌ها فقط روی رایانه شناخته می‌شوند: در حالت TUN همه برنامه‌ها، در حالت پراکسی فقط برنامه‌هایی که از پراکسی سیستم استفاده می‌کنند.",
+  "trafficProfilesProcessHint": "برنامه‌ها روی رایانه شناخته می‌شوند (در حالت TUN همه برنامه‌ها، در حالت پراکسی فقط برنامه‌هایی که از پراکسی سیستم استفاده می‌کنند) و اپ‌ها روی اندروید.",
   "trafficProfileViaVpn": "از طریق VPN",
   "trafficProfileDirect": "مستقیم",
   "trafficProfileRuBlocked": "مسدودشده در روسیه",
@@ -1002,7 +1002,7 @@
   "trafficProfileDiscord": "Discord",
   "trafficProfileDiscordDescription": "سایت، برنامه و کانال‌های صوتی.",
   "trafficProfileYoutube": "YouTube",
-  "trafficProfileYoutubeDescription": "سایت و ویدیوها.",
+  "trafficProfileYoutubeDescription": "سایت، اپ و ویدیوها.",
   "trafficProfileMessengers": "پیام‌رسان‌ها",
   "trafficProfileMessengersDescription": "Telegram، WhatsApp و Signal همراه با برنامه‌هایشان.",
   "trafficProfileGames": "بازی‌ها",
@@ -1210,5 +1210,10 @@
   "appUpdateInstallPermission": "در پنجره باز شده به HYPER CLIENT اجازه نصب برنامه بدهید، سپس دوباره «نصب» را بزنید.",
   "appUpdateFailed": "به‌روزرسانی دانلود یا نصب نشد.",
   "androidKillSwitchDescription": "اندروید خودش برنامه‌ها را بدون VPN مسدود می‌کند: در تنظیمات VPN سیستم، «VPN همیشه روشن» و «مسدود کردن اتصال‌های بدون VPN» را برای HYPER CLIENT روشن کنید.",
-  "androidKillSwitchOpen": "باز کردن تنظیمات VPN"
+  "androidKillSwitchOpen": "باز کردن تنظیمات VPN",
+  "trafficProfileApps": "اپ‌ها",
+  "trafficProfileAppsNone": "هیچ‌کدام انتخاب نشده",
+  "trafficProfilePickApps": "انتخاب اپ‌ها",
+  "trafficProfileAppsTitle": "اپ‌های این نمایه را انتخاب کنید",
+  "trafficProfileAppsNotice": "هر چه این اپ‌ها می‌فرستند همان‌طور که نمایه می‌گوید می‌رود. اپی که بعداً نصب شود از اتصال بعدی حساب می‌شود."
 }

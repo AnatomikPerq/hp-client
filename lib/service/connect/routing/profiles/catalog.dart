@@ -15,11 +15,17 @@ final class TrafficProfileContext {
   /// The Core runs on a desktop and can look up a connection's program.
   final bool processes;
 
+  /// The `process` value of each installed Android app a profile names: its
+  /// UID, which is what the Core finds for a connection there. Null where
+  /// apps are not looked up; apps missing from it are not installed.
+  final Map<String, String>? apps;
+
   const TrafficProfileContext({
     this.geositeCodes,
     this.geoipCodes,
     this.ruBlocked = false,
     this.processes = false,
+    this.apps,
   });
 
   TrafficProfileContext withProcesses(bool value) => TrafficProfileContext(
@@ -27,6 +33,7 @@ final class TrafficProfileContext {
     geoipCodes: geoipCodes,
     ruBlocked: ruBlocked,
     processes: value,
+    apps: apps,
   );
 }
 
@@ -51,7 +58,8 @@ abstract final class TrafficProfiles {
 
   // Process names are matched exactly (Xray drops `.exe` on both sides), so
   // they follow each program's own spelling on Windows; Linux binaries
-  // without the suffix match the same entries.
+  // without the suffix match the same entries. Apps are Android packages,
+  // official clients and well-known forks.
   static final List<TrafficProfile> builtIn = List.unmodifiable([
     TrafficProfile(
       id: ruBlocked,
@@ -80,17 +88,31 @@ abstract final class TrafficProfiles {
         'Perplexity.exe',
         'Cursor.exe',
       ],
+      apps: const [
+        'com.openai.chatgpt',
+        'com.anthropic.claude',
+        'com.google.android.apps.bard',
+        'ai.perplexity.app.android',
+        'ai.x.grok',
+        'com.microsoft.copilot',
+      ],
     ),
     TrafficProfile(
       id: discord,
       action: TrafficProfileAction.proxy,
       domains: const ['geosite:DISCORD'],
       processes: const ['Discord.exe', 'DiscordPTB.exe', 'DiscordCanary.exe'],
+      apps: const ['com.discord'],
     ),
     TrafficProfile(
       id: youtube,
       action: TrafficProfileAction.proxy,
       domains: const ['geosite:YOUTUBE'],
+      apps: const [
+        'com.google.android.youtube',
+        'com.google.android.apps.youtube.music',
+        'app.revanced.android.youtube',
+      ],
     ),
     TrafficProfile(
       id: messengers,
@@ -121,6 +143,15 @@ abstract final class TrafficProfiles {
         'WhatsApp.Root.exe',
         'Signal.exe',
       ],
+      apps: const [
+        'org.telegram.messenger',
+        'org.telegram.messenger.web',
+        'org.thunderdog.challegram',
+        'org.telegram.plus',
+        'com.whatsapp',
+        'com.whatsapp.w4b',
+        'org.thoughtcrime.securesms',
+      ],
     ),
     TrafficProfile(
       id: games,
@@ -134,6 +165,11 @@ abstract final class TrafficProfiles {
         'RiotClientServices.exe',
         'EADesktop.exe',
       ],
+      apps: const [
+        'com.valvesoftware.android.steam.community',
+        'com.epicgames.portal',
+        'com.blizzard.messenger',
+      ],
     ),
     TrafficProfile(
       id: torrents,
@@ -146,6 +182,14 @@ abstract final class TrafficProfiles {
         'transmission-qt.exe',
         'tixati.exe',
         'deluge.exe',
+      ],
+      apps: const [
+        'org.proninyaroslav.libretorrent',
+        'com.delphicoder.flud',
+        'com.utorrent.client',
+        'com.bittorrent.client',
+        'hu.tagsoft.ttorrent.lite',
+        'com.biglybt.android.client',
       ],
     ),
   ]);
@@ -202,10 +246,14 @@ abstract final class TrafficProfiles {
       final protocols = <String>{
         for (final profile in matching) ...profile.protocols,
       }.toList();
-      final processes = context.processes
-          ? <String>{for (final profile in matching) ...profile.processes}
-                .toList()
-          : const <String>[];
+      final apps = context.apps;
+      final processes = <String>{
+        if (context.processes)
+          for (final profile in matching) ...profile.processes,
+        if (apps != null)
+          for (final profile in matching)
+            for (final app in profile.apps) ?apps[app],
+      }.toList();
       final via = action == TrafficProfileAction.proxy;
       XrayRoutingRule rule(String kind) => XrayRoutingRule(
         ruleTag: 'app-profiles-${action.name}-$kind',

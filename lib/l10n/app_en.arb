@@ -3214,7 +3214,7 @@
   "@trafficProfilesOverlayHint": {"placeholders": {"mode": {"type": "String"}}},
   "trafficProfilesNotApplied": "Profiles do not apply to Raw configurations, advanced routes and provider configurations.",
   "trafficProfilesPriorityHint": "When a site is in several profiles, Through VPN wins over Direct.",
-  "trafficProfilesProcessHint": "Programs are recognized on a computer only: every program in TUN mode, in proxy mode only those that use the system proxy.",
+  "trafficProfilesProcessHint": "Programs are recognized on a computer (every program in TUN mode, in proxy mode only those that use the system proxy), apps on Android.",
   "trafficProfileViaVpn": "Through VPN",
   "trafficProfileDirect": "Direct",
   "trafficProfileRuBlocked": "Blocked in Russia",
@@ -3231,7 +3231,7 @@
   "trafficProfileDiscord": "Discord",
   "trafficProfileDiscordDescription": "Site, app and voice channels.",
   "trafficProfileYoutube": "YouTube",
-  "trafficProfileYoutubeDescription": "Site and videos.",
+  "trafficProfileYoutubeDescription": "Site, app and videos.",
   "trafficProfileMessengers": "Messengers",
   "trafficProfileMessengersDescription": "Telegram, WhatsApp and Signal, with their apps.",
   "trafficProfileGames": "Games",
@@ -3638,5 +3638,10 @@
   "appUpdateInstallPermission": "Allow HYPER CLIENT to install apps in the window that opened, then press Install again.",
   "appUpdateFailed": "The update could not be downloaded or installed.",
   "androidKillSwitchDescription": "Android blocks apps without the VPN itself: in the system VPN settings turn on Always-on VPN and Block connections without VPN for HYPER CLIENT.",
-  "androidKillSwitchOpen": "Open VPN settings"
+  "androidKillSwitchOpen": "Open VPN settings",
+  "trafficProfileApps": "Apps",
+  "trafficProfileAppsNone": "None chosen",
+  "trafficProfilePickApps": "Choose apps",
+  "trafficProfileAppsTitle": "Choose the profile's apps",
+  "trafficProfileAppsNotice": "Everything these apps send goes the way the profile says. An app installed later counts from the next connection."
 }

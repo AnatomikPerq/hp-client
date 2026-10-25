@@ -19,6 +19,7 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
+import android.system.OsConstants
 import android.util.AtomicFile
 import androidx.core.content.ContextCompat
 import com.elvishew.xlog.XLog
@@ -31,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import libXray.DialerController
 import libXray.LibXray
+import libXray.ProcessFinder
 import net.yuandev.onexray.MainActivity
 import net.yuandev.onexray.R
 import net.yuandev.onexray.automation.AutomationStore
@@ -44,6 +46,8 @@ import net.yuandev.onexray.pigeon.StartVpnRequest
 import net.yuandev.onexray.pigeon.TunJson
 import net.yuandev.onexray.pigeon.VpnStatus
 import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -74,10 +78,14 @@ class OneVpnService : VpnService() {
         private var controllerInit = false
 
         @Synchronized
-        private fun initController() {
+        private fun initController(context: Context) {
             if (controllerInit) return
             LibXray.registerDialerController(controller)
             LibXray.registerListenerController(controller)
+            LibXray.registerProcessFinder(
+                ConnectionOwnerFinder(context.getSystemService(ConnectivityManager::class.java)),
+                Build.VERSION.SDK_INT.toLong(),
+            )
             controllerInit = true
         }
     }
@@ -178,6 +186,39 @@ class OneVpnService : VpnService() {
         override fun protectFd(p0: Long): Boolean {
             val socket = p0.toInt()
             return vpn.get()?.protect(socket) == true
+        }
+    }
+
+    /**
+     * The UID of the app behind a tunnel connection, for the Core's `process`
+     * rules (apps in traffic profiles). Only the active VPN app may ask, and
+     * the tunnel side of the connection is the app's own socket.
+     */
+    private class ConnectionOwnerFinder(
+        private val connectivity: ConnectivityManager,
+    ) : ProcessFinder {
+        override fun findProcessByConnection(
+            network: String,
+            srcIP: String,
+            srcPort: Long,
+            destIP: String,
+            destPort: Long,
+        ): Long {
+            val protocol = when (network) {
+                "tcp" -> OsConstants.IPPROTO_TCP
+                "udp" -> OsConstants.IPPROTO_UDP
+                else -> return -1
+            }
+            return try {
+                connectivity.getConnectionOwnerUid(
+                    protocol,
+                    InetSocketAddress(InetAddress.getByName(srcIP), srcPort.toInt()),
+                    InetSocketAddress(InetAddress.getByName(destIP), destPort.toInt()),
+                ).toLong()
+            } catch (error: Exception) {
+                XLog.w("Connection owner lookup failed: ${error.javaClass.simpleName}")
+                -1
+            }
         }
     }
 
@@ -535,7 +576,7 @@ class OneVpnService : VpnService() {
     ) {
         scope.launch {
             try {
-                initController()
+                initController(applicationContext)
                 if (generation != startGeneration.get() || tunnel !== establishedTunnel) {
                     return@launch
                 }

@@ -60,7 +60,9 @@ GPL-3.0. Это производная работа, поэтому клиент
 
 Встроенное ядро — [Xray-core](https://github.com/XTLS/Xray-core),
 MPL-2.0, и обёртка [libXray](https://github.com/XTLS/libXray), MIT.
-Обе совместимы с GPL-3.0 при такой поставке.
+Обе совместимы с GPL-3.0 при такой поставке. Xray-core собирается из
+изменённой копии `libXray/third_party/xray-core`: изменённые файлы остаются
+под MPL-2.0, список изменений — в её `PATCHES.md`.
 
 ## Графика
 

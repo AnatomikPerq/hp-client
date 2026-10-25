@@ -269,6 +269,49 @@ void main() {
     );
   });
 
+  test(
+    'Android apps become the UIDs the Core matches, desktop names do not',
+    () {
+      final android = _compile(
+        _settings(TrafficMode.selective, [
+          TrafficProfiles.messengers,
+          TrafficProfiles.torrents,
+        ]),
+        options: _options(platform: ConnectionPlatform.android),
+        context: const TrafficProfileContext(
+          geositeCodes: {'PRIVATE', 'TELEGRAM'},
+          geoipCodes: {'PRIVATE'},
+          // WhatsApp is not installed; a torrent app is, but Selective
+          // leaves everything direct anyway.
+          apps: {
+            'org.telegram.messenger': '10123',
+            'org.thunderdog.challegram': '10456',
+            'org.proninyaroslav.libretorrent': '10789',
+          },
+        ),
+      );
+      expect(_rule(android, 'app-profiles-proxy-process')['process'], [
+        '10123',
+        '10456',
+      ]);
+      expect(_tags(android), isNot(contains('app-profiles-direct-process')));
+      final smart = _compile(
+        _settings(TrafficMode.smart, [TrafficProfiles.torrents]),
+        options: _options(platform: ConnectionPlatform.android),
+        context: const TrafficProfileContext(
+          apps: {'org.proninyaroslav.libretorrent': '10789'},
+        ),
+      );
+      expect(_rule(smart, 'app-profiles-direct-process')['process'], ['10789']);
+      final tags = _tags(smart);
+      expect(tags, isNot(contains('app-profiles-lan-ip')));
+      expect(
+        tags.indexOf('app-profiles-direct-protocol'),
+        lessThan(tags.indexOf('app-profiles-direct-process')),
+      );
+    },
+  );
+
   test('missing categories and lists drop out of built-in profiles', () {
     final config = _compile(
       _settings(TrafficMode.smart, [
