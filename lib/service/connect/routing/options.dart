@@ -71,6 +71,12 @@ final class RoutingDnsSettings {
   static const directTag = 'app-dns-direct';
   static const defaultResolvers = [RoutingDnsResolver(address: defaultAddress)];
 
+  /// Xray's `localhost` server: Go's default resolver of the Core process,
+  /// which a desktop TUN Core sets to the network's own DNS
+  /// (`desktopNetworkDns`). Runtime only (`ConnectionCompiler`): a user's
+  /// resolver must stay a routed remote address ([RoutingDnsResolver.validate]).
+  static const networkResolver = RoutingDnsResolver(address: 'localhost');
+
   final List<RoutingDnsResolver> _proxyResolvers;
   final List<RoutingDnsResolver> _directResolvers;
   final bool disableCache;
@@ -99,6 +105,12 @@ final class RoutingDnsSettings {
   bool get defaultProxyResolvers =>
       effectiveProxyResolvers.length == 1 &&
       effectiveProxyResolvers.single.address.trim() == defaultAddress;
+
+  /// Whether the direct resolvers are still the App default, which the
+  /// network's own DNS replaces in a desktop TUN (`ConnectionCompiler`).
+  bool get defaultDirectResolvers =>
+      effectiveDirectResolvers.length == 1 &&
+      effectiveDirectResolvers.single.address.trim() == defaultAddress;
 
   factory RoutingDnsSettings.fromJson(Map<String, dynamic> json) =>
       RoutingDnsSettings(

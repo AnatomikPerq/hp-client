@@ -187,6 +187,11 @@ class RuntimeOptions {
 
   /// `tunIn` is a private or user-facing SOCKS inbound instead of a TUN.
   bool get usesLoopbackInbound => usesWindowsSystemVpn || systemProxy;
+
+  /// The Core runs with `-dns network` (`desktopNetworkDns`): its Go resolver
+  /// asks the physical interface's own DNS. The FFI layers pass it in exactly
+  /// these modes (Windows EXE and Linux TUN); MSIX gets a fixed address.
+  bool get coreUsesNetworkDns => requiresInterface && !usesWindowsSystemVpn;
 }
 
 class CompiledConnection {
@@ -525,7 +530,8 @@ class ConnectionCompiler {
       selectionSettings.validate();
       sniffing.validate(fakeDns: fakeDns);
       final dns = RoutingDns.compile(
-        settings: dnsSettings,
+        // After validation: `localhost` is a runtime resolver only.
+        settings: _withNetworkDns(dnsSettings, options),
         rules: rules,
         directEnabled: directDns,
         fakeDns: fakeDns,
@@ -676,6 +682,33 @@ class ConnectionCompiler {
     return servers.isEmpty
         ? settings
         : settings.copyWith(proxyResolvers: servers);
+  }
+
+  /// Fork: in a desktop TUN direct names resolve through the network's own
+  /// DNS, the resolver the Core picked for itself with `-dns network`,
+  /// reached as Xray's `localhost` server (libXray installs that resolver as
+  /// Go's default, and `localhost` asks Go's). The App's 8.8.8.8 knows no
+  /// names of the local network: an office's `*.local` sites answered
+  /// NXDOMAIN and did not open in TUN while they did in proxy mode (26.10),
+  /// and it lost a quarter of fresh-socket queries on the owner's home
+  /// network (ROADMAP «TUN на хосте 22.10»). No public resolver stays behind
+  /// it: the Core already falls back to 1.1.1.1 when the network has none
+  /// that answers, and a second server that loses a query turns the merged
+  /// NXDOMAIN of an unknown name into an error the dns outbound answers with
+  /// nothing. Needs libXray's Xray-core patch that makes `localhost` report
+  /// an unknown name as NXDOMAIN (`third_party/xray-core/PATCHES.md`). Only
+  /// while the user kept the default direct resolver; an address they chose
+  /// wins.
+  static RoutingDnsSettings _withNetworkDns(
+    RoutingDnsSettings settings,
+    RuntimeOptions options,
+  ) {
+    if (!options.coreUsesNetworkDns || !settings.defaultDirectResolvers) {
+      return settings;
+    }
+    return settings.copyWith(
+      directResolvers: const [RoutingDnsSettings.networkResolver],
+    );
   }
 
   static Map<String, dynamic> _node(ResolvedServer node, String tag) {

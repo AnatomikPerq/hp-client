@@ -43,6 +43,7 @@ RuntimeOptions options({
   int lanProxyPort = defaultLanProxyPort,
   String lanProxyUser = 'hyper',
   String lanProxyPassword = 'lan-secret',
+  bool systemProxy = false,
 }) => RuntimeOptions(
   platform: platform,
   windowsMode: windowsMode,
@@ -57,6 +58,7 @@ RuntimeOptions options({
   lanProxyPort: lanProxyPort,
   lanProxyUser: lanProxyUser,
   lanProxyPassword: lanProxyPassword,
+  systemProxy: systemProxy,
 );
 
 ResolvedServer node(int id, {String? address}) => ResolvedServer(
@@ -1574,6 +1576,79 @@ void main() {
       RoutingDnsSettings.defaultAddress,
     ]);
     expect(proxyDns([node(1)]), [RoutingDnsSettings.defaultAddress]);
+  });
+
+  test('a desktop TUN resolves direct names through the network DNS', () {
+    List<String> directDns(
+      RuntimeOptions runtime, {
+      SmartRoutingSettings? smart,
+      TrafficMode mode = TrafficMode.smart,
+    }) {
+      final config = ConnectionCompiler.compile(
+        settings: ConnectionSettings(
+          trafficMode: mode,
+          smart: smart ?? SmartRoutingSettings(),
+        ),
+        entries: [node(1)],
+        regions: catalog,
+        options: runtime,
+      ).config;
+      return [
+        for (final server in config['dns']['servers'] as List)
+          if (server['tag'] == RoutingDnsSettings.directTag)
+            server['address'] as String,
+      ];
+    }
+
+    const network = 'localhost';
+    final windowsTun = options(
+      platform: ConnectionPlatform.windows,
+      interfaceName: 'Ethernet',
+    );
+    final direct = directDns(windowsTun);
+    expect(direct, isNotEmpty);
+    expect(direct.toSet(), {network});
+    expect(
+      directDns(
+        options(platform: ConnectionPlatform.linux, interfaceName: 'eth0'),
+      ).toSet(),
+      {network},
+    );
+    // Selective resolves every unmatched name directly, through the same DNS.
+    final selective = ConnectionCompiler.compile(
+      settings: ConnectionSettings(trafficMode: TrafficMode.selective),
+      entries: [node(1)],
+      regions: catalog,
+      options: windowsTun,
+    ).config;
+    final last = (selective['dns']['servers'] as List).last;
+    expect(last['tag'], RoutingDnsSettings.directTag);
+    expect(last['address'], network);
+
+    // No Core resolver to reach: proxy mode, MSIX and phones keep 8.8.8.8.
+    for (final runtime in [
+      options(platform: ConnectionPlatform.windows, systemProxy: true),
+      options(
+        platform: ConnectionPlatform.windows,
+        windowsMode: WindowsMode.msix,
+        interfaceName: 'Ethernet',
+      ),
+      options(),
+    ]) {
+      expect(directDns(runtime).toSet(), {RoutingDnsSettings.defaultAddress});
+    }
+    // A resolver the user chose wins.
+    expect(
+      directDns(
+        windowsTun,
+        smart: SmartRoutingSettings(
+          dns: RoutingDnsSettings(
+            directResolvers: [RoutingDnsResolver(address: '77.88.8.8')],
+          ),
+        ),
+      ).toSet(),
+      {'77.88.8.8'},
+    );
   });
 
   test(
